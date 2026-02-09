@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: pss_db_dev
+    environment:
+      POSTGRES_DB: pixelstarships_dev
+      POSTGRES_USER: pss_user
+      POSTGRES_PASSWORD: pss_password
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - pss_dev_network
+
+  # Backend FastAPI (modo desarrollo)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: pss_backend_dev
+    environment:
+      - DATABASE_URL=postgresql://pss_user:pss_password@db:5432/pixelstarships_dev
+      - ALLOWED_HOSTS=http://localhost:3000,http://frontend,http://127.0.0.1:3000
+      - PSS_API_BASE_URL=https://api.pixelstarships.com
+      - DEBUG=true
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+    networks:
+      - pss_dev_network
+    volumes:
+      - ./backend:/app
+      - /app/venv  # Evitar sobreescribir venv local
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend React (modo desarrollo)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: pss_frontend_dev
+    environment:
+      - REACT_APP_API_URL=http://localhost:8001
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    networks:
+      - pss_dev_network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Evitar sobreescribir node_modules
+    command: npm start
+
+volumes:
+  postgres_dev_data:
+
+networks:
+  pss_dev_network:
+    driver: bridge
