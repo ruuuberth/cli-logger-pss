@@ -6,21 +6,93 @@ Proyecto en Python para conectar a la API de PixelStarships, guardar las respues
 
 Este proyecto está optimizado para usar Docker Compose, que proporciona un entorno completo y aislado.
 
-### Inicio Rápido
+### 📋 Requisitos Previos
+- Docker 20.10+ 
+- Docker Compose V2 (docker compose)
+- Git
 
-#### Producción
+### 🚀 Pasos para Ejecutar el Proyecto
+
+#### 1) Clonar y Navegar al Proyecto
 ```bash
-./scripts/start-prod.sh
+git clone <repository-url>
+cd "Logger PSS"
 ```
 
-#### Desarrollo
+#### 2) Configurar Variables de Entorno
 ```bash
-./scripts/start-dev.sh
+# Producción
+cp .env.example .env
+
+# Desarrollo (opcional)
+cp .env.dev.example .env.dev
 ```
 
-#### Limpieza
+#### 3) Iniciar el Proyecto
+
+Opción A: Producción (Recomendada)
 ```bash
-./scripts/cleanup.sh
+# Construir e iniciar servicios
+docker compose up -d --build
+
+# Verificar estado
+docker compose ps
+
+# Ver logs
+docker compose logs -f
+```
+
+Opción B: Desarrollo (con Hot Reload)
+```bash
+# Construir e iniciar servicios de desarrollo
+docker compose -f docker-compose.dev.yml up -d --build
+
+# Verificar estado
+docker compose -f docker-compose.dev.yml ps
+
+# Ver logs
+docker compose -f docker-compose.dev.yml logs -f
+```
+
+#### 4) Acceder a la Aplicación
+
+Producción:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+Desarrollo:
+- Frontend: http://localhost:3001
+- Backend API: http://localhost:8001
+- API Docs: http://localhost:8001/docs
+
+#### 5) Detener el Proyecto
+```bash
+# Producción
+docker compose down
+
+# Desarrollo
+docker compose -f docker-compose.dev.yml down
+```
+
+### 🔧 Comandos Útiles
+
+```bash
+# Reconstruir imágenes
+docker compose build --no-cache
+
+# Reiniciar un servicio
+docker compose restart backend
+
+# Ver logs de un servicio
+docker compose logs -f backend
+
+# Acceder a un contenedor
+docker compose exec backend bash
+
+# Limpiar todo (contenedores, imágenes, volúmenes)
+docker compose down -v --rmi all
+docker system prune -f
 ```
 
 ## 📁 Estructura del Proyecto
