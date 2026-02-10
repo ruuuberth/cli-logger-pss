@@ -1,13 +1,17 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 import asyncio
-from pssapi import PssApiClient
+# Robust import: allow running without the external dependency for debugging
+try:
+    from pssapi import PssApiClient  # type: ignore
+except Exception:
+    PssApiClient = None  # type: ignore
 from app.models.pss_models import ItemDesign, ShipDesign, CrewDesign
 
 class PSSService:
     def __init__(self, db: Session):
         self.db = db
-        self.client = PssApiClient()
+        self.client = PssApiClient() if PssApiClient is not None else None
     
     async def get_item_designs(self) -> List[Dict[str, Any]]:
         """Obtener y cachear diseños de items"""
@@ -18,6 +22,8 @@ class PSSService:
                 return [self._serialize_item_design(item) for item in cached_items]
             
             # Si no hay caché, obtener de la API
+            if self.client is None:
+                return []
             item_designs = await self.client.item_service.list_item_designs()
             
             # Guardar en base de datos
@@ -52,6 +58,8 @@ class PSSService:
                 return self._serialize_item_design(cached_item)
             
             # Si no está en caché, obtener de API
+            if self.client is None:
+                return None
             item_design = await self.client.item_service.get_item_design(item_id)
             if item_design:
                 db_item = ItemDesign(
@@ -80,6 +88,8 @@ class PSSService:
             if cached_ships:
                 return [self._serialize_ship_design(ship) for ship in cached_ships]
             
+            if self.client is None:
+                return []
             ship_designs = await self.client.ship_service.list_ship_designs()
             
             for design in ship_designs:
@@ -110,6 +120,8 @@ class PSSService:
             if cached_ship:
                 return self._serialize_ship_design(cached_ship)
             
+            if self.client is None:
+                return None
             ship_design = await self.client.ship_service.get_ship_design(ship_id)
             if ship_design:
                 db_ship = ShipDesign(
@@ -137,6 +149,8 @@ class PSSService:
             if cached_crews:
                 return [self._serialize_crew_design(crew) for crew in cached_crews]
             
+            if self.client is None:
+                return []
             crew_designs = await self.client.crew_service.list_crew_designs()
             
             for design in crew_designs:
@@ -168,6 +182,8 @@ class PSSService:
             if cached_crew:
                 return self._serialize_crew_design(cached_crew)
             
+            if self.client is None:
+                return None
             crew_design = await self.client.crew_service.get_crew_design(crew_id)
             if crew_design:
                 db_crew = CrewDesign(
