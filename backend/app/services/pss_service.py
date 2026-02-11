@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-import asyncio
 # Robust import: allow running without the external dependency for debugging
 try:
     from pssapi import PssApiClient  # type: ignore
@@ -40,7 +39,7 @@ class PSSService:
                 self.db.add(db_item)
             
             self.db.commit()
-            return [self._serialize_item_design(design) for design in item_designs]
+            return [self._serialize_item_design(item) for item in self.db.query(ItemDesign).all()]
             
         except Exception as e:
             print(f"Error getting item designs: {e}")
@@ -73,7 +72,8 @@ class PSSService:
                 )
                 self.db.add(db_item)
                 self.db.commit()
-                return self._serialize_item_design(item_design)
+                self.db.refresh(db_item)
+                return self._serialize_item_design(db_item)
             
             return None
             
@@ -104,7 +104,7 @@ class PSSService:
                 self.db.add(db_ship)
             
             self.db.commit()
-            return [self._serialize_ship_design(design) for design in ship_designs]
+            return [self._serialize_ship_design(ship) for ship in self.db.query(ShipDesign).all()]
             
         except Exception as e:
             print(f"Error getting ship designs: {e}")
@@ -134,7 +134,8 @@ class PSSService:
                 )
                 self.db.add(db_ship)
                 self.db.commit()
-                return self._serialize_ship_design(ship_design)
+                self.db.refresh(db_ship)
+                return self._serialize_ship_design(db_ship)
             
             return None
             
@@ -166,7 +167,7 @@ class PSSService:
                 self.db.add(db_crew)
             
             self.db.commit()
-            return [self._serialize_crew_design(design) for design in crew_designs]
+            return [self._serialize_crew_design(crew) for crew in self.db.query(CrewDesign).all()]
             
         except Exception as e:
             print(f"Error getting crew designs: {e}")
@@ -197,7 +198,8 @@ class PSSService:
                 )
                 self.db.add(db_crew)
                 self.db.commit()
-                return self._serialize_crew_design(crew_design)
+                self.db.refresh(db_crew)
+                return self._serialize_crew_design(db_crew)
             
             return None
             
