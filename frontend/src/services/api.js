@@ -60,6 +60,19 @@ const requestWithCache = (key, url) => {
 export const pssApi = {
   clearCache: () => responseCache.clear(),
 
+  // Auth
+  loginWithEmail: (email, password, deviceKey = null) =>
+    api.post('/api/v1/auth/login-email', {
+      email,
+      password,
+      device_key: deviceKey,
+    }),
+  loginWithRefreshToken: (refreshToken, deviceKey = null) =>
+    api.post('/api/v1/auth/login-refresh', {
+      refresh_token: refreshToken,
+      device_key: deviceKey,
+    }),
+
   // Items
   getItems: () => requestWithCache('items-designs', '/api/v1/items/designs'),
   getItem: (id) => api.get(`/api/v1/items/designs/${id}`),
