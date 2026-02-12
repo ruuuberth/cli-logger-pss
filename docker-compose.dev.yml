@@ -26,6 +26,7 @@ services:
       - DATABASE_URL=postgresql://pss_user:pss_password@db:5432/pixelstarships_dev
       - ALLOWED_HOSTS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://frontend
       - PSS_API_BASE_URL=https://api.pixelstarships.com
+      - PSS_CHECKSUM_KEY=${PSS_CHECKSUM_KEY:-}
       - DEBUG=true
     ports:
       - "8001:8000"
