@@ -1,2 +1,2 @@
 """Endoints package"""
-from . import battles, crews, items, ships
+from . import auth, battles, crews, items, ships
