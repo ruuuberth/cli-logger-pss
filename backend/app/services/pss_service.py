@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import date, datetime, timezone
 from importlib.util import find_spec
 from typing import Any, Dict, List, Optional
@@ -274,24 +275,114 @@ class PSSService:
         }
 
     def _serialize_crew_design(self, crew: CrewDesign) -> Dict[str, Any]:
+        raw = crew.raw_data if isinstance(crew.raw_data, dict) else {}
         return {
             "id": crew.crew_design_id,
             "name": crew.name,
             "description": crew.description,
             "race": crew.race,
             "role": crew.role,
-            "stats": crew.stats,
+            "stats": self._extract_crew_stats(crew.stats, raw),
+            "rarity": self._first_raw_value(
+                raw,
+                "rarity",
+                "rarity_type",
+                "character_rarity",
+                "character_design_rarity",
+            ),
+            "collection": self._first_raw_value(raw, "collection", "collection_name"),
+            "special_ability": self._first_raw_value(
+                raw,
+                "special_ability",
+                "special_ability_type",
+                "ability_type",
+                "ability",
+            ),
+            "progression_type": self._first_raw_value(
+                raw,
+                "progression_type",
+                "character_progression_type",
+            ),
+            "equipment_mask": self._first_raw_value(
+                raw,
+                "equipment_mask",
+                "equipment_slot_mask",
+            ),
             "created_at": crew.created_at.isoformat() if crew.created_at else None,
         }
 
-    def _extract_stats(self, obj: Any) -> Dict[str, Any]:
+    def _extract_stats(self, obj: Any, raw_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         stats: Dict[str, Any] = {}
-        stat_attributes = ["attack", "defense", "health", "speed", "critical", "dodge"]
+        stat_attributes = [
+            "attack",
+            "defense",
+            "health",
+            "speed",
+            "critical",
+            "dodge",
+            # Common crew stats
+            "hp",
+            "pilot",
+            "repair",
+            "weapon",
+            "science",
+            "engine",
+            "research",
+            "stamina",
+            "ability",
+            "fire_resistance",
+            "walk_speed",
+            "run_speed",
+        ]
 
         for attr in stat_attributes:
             if hasattr(obj, attr):
                 stats[attr] = getattr(obj, attr)
+        if raw_data:
+            for attr in stat_attributes:
+                if attr in stats:
+                    continue
+                value = self._first_raw_value(raw_data, attr)
+                if isinstance(value, (int, float)):
+                    stats[attr] = value
         return stats
+
+    def _extract_crew_stats(self, base_stats: Any, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        stats = dict(base_stats) if isinstance(base_stats, dict) else {}
+        candidate_pairs = [
+            ("hp", ("hp", "health", "final_hp")),
+            ("pilot", ("pilot",)),
+            ("attack", ("attack",)),
+            ("repair", ("repair",)),
+            ("weapon", ("weapon",)),
+            ("science", ("science",)),
+            ("engine", ("engine",)),
+            ("research", ("research",)),
+            ("ability", ("ability", "ability_power")),
+            ("fire_resistance", ("fire_resistance",)),
+            ("walk_speed", ("walk_speed",)),
+            ("run_speed", ("run_speed",)),
+        ]
+        for output_key, aliases in candidate_pairs:
+            if output_key in stats:
+                continue
+            value = self._first_raw_value(raw_data, *aliases)
+            if isinstance(value, (int, float)):
+                stats[output_key] = value
+        return stats
+
+    def _normalize_key(self, key: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", key.lower())
+
+    def _first_raw_value(self, raw_data: Dict[str, Any], *aliases: str) -> Any:
+        if not raw_data:
+            return None
+        normalized = {self._normalize_key(str(k)): v for k, v in raw_data.items()}
+        for alias in aliases:
+            value = normalized.get(self._normalize_key(alias))
+            if value is not None:
+                return value
+        return None
 
     def _extract_raw_data(self, obj: Any) -> Dict[str, Any]:
         obj_dict = getattr(obj, "__dict__", None)
