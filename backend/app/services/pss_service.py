@@ -1,9 +1,12 @@
 import logging
 import re
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from importlib.util import find_spec
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,6 +19,14 @@ else:
     PssApiClient = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+class PSSFeatureNotSupportedError(Exception):
+    pass
+
+
+class PSSAuthenticationError(Exception):
+    pass
 
 
 class PSSService:
