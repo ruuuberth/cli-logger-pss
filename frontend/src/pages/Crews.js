@@ -56,7 +56,7 @@ const Crews = () => {
         setCrews(response.data.data || []);
         setError(null);
       } catch (err) {
-        setError('Error al cargar la tripulación');
+        setError('Error al cargar la tripulacion');
         console.error('Crews error:', err);
       } finally {
         setLoading(false);
@@ -106,7 +106,7 @@ const Crews = () => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="400px">
-        <Typography>Cargando tripulación...</Typography>
+        <Typography>Cargando tripulacion...</Typography>
       </Box>
     );
   }

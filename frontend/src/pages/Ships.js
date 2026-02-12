@@ -106,8 +106,8 @@ const Ships = () => {
       <Typography variant="h4" gutterBottom>
         Ships - PixelStarships
       </Typography>
-      
-      <Box sx={{ mb: 3 }}>
+
+      <Box sx={{ mb: 2 }}>
         <TextField
           fullWidth
           label="Buscar naves..."

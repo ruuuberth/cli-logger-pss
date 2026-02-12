@@ -119,8 +119,8 @@ const Items = () => {
       <Typography variant="h4" gutterBottom>
         Items - PixelStarships
       </Typography>
-      
-      <Box sx={{ mb: 3 }}>
+
+      <Box sx={{ mb: 2 }}>
         <TextField
           fullWidth
           label="Buscar items..."
