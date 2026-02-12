@@ -264,7 +264,14 @@ class PSSService:
             logger.exception("event=crew_design_error crew_id=%s", crew_id)
             return None
 
-    async def get_user_recent_battles(self, username: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def get_user_recent_battles(
+        self,
+        username: str,
+        limit: int = 10,
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        device_key: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         normalized_username = username.strip()
         if not normalized_username:
             return []
