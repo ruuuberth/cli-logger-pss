@@ -315,11 +315,287 @@ class PSSService:
                     battle_args,
                 )
 
-            battle_rows = self._unwrap_collection(battles)[:safe_limit]
-            return [self._serialize_user_battle(row, normalized_username) for row in battle_rows]
+            battle_rows = self._unwrap_collection(battles)
+            if battle_rows:
+                return [self._serialize_user_battle(row, normalized_username) for row in battle_rows[:safe_limit]]
+
+            token_for_http = (access_token or "").strip() or None
+            if token_for_http is None and (refresh_token or "").strip():
+                try:
+                    token_data = await self.login_with_refresh_token(
+                        refresh_token=refresh_token or "",
+                        device_key=device_key,
+                    )
+                    token_for_http = token_data["access_token"]
+                except (PSSFeatureNotSupportedError, PSSAuthenticationError):
+                    # If exchange is not available, we still try the provided refresh token directly.
+                    token_for_http = (refresh_token or "").strip() or None
+
+            http_battles = await self._fetch_battles_via_http(
+                normalized_username,
+                user_id,
+                safe_limit,
+                access_token=token_for_http,
+            )
+            if http_battles:
+                return http_battles
+
+            available_methods = self._collect_battle_related_methods()
+            raise PSSFeatureNotSupportedError(
+                "No se encontro un metodo compatible para obtener historial de batallas en esta version de pssapi. "
+                f"Metodos detectados: {available_methods}"
+            )
+        except PSSFeatureNotSupportedError:
+            raise
         except Exception:
             logger.exception("event=user_recent_battles_error username=%s", normalized_username)
             return []
+
+    async def login_with_email_password(
+        self, email: str, password: str, device_key: Optional[str] = None
+    ) -> Dict[str, Any]:
+        normalized_email = email.strip()
+        if not normalized_email or not password:
+            raise PSSAuthenticationError("Email y password son obligatorios.")
+
+        checksum_key = settings.PSS_CHECKSUM_KEY.strip()
+        if not checksum_key:
+            raise PSSFeatureNotSupportedError(
+                "Falta configurar PSS_CHECKSUM_KEY en el backend para habilitar login por email/password."
+            )
+
+        client = self._ensure_client()
+        if client is None:
+            raise PSSFeatureNotSupportedError("No se pudo inicializar el cliente de pssapi.")
+
+        user_service = self._get_service("user_service")
+        if user_service is None:
+            raise PSSFeatureNotSupportedError("No se encontro user_service en pssapi.")
+
+        chosen_device_key = (device_key or "").strip() or str(uuid4())
+
+        try:
+            now = datetime.now(timezone.utc)
+            checksum = user_service.utils.create_device_login_checksum(
+                chosen_device_key,
+                client.device_type,
+                now,
+                checksum_key,
+            )
+            authorization = await user_service.user_email_password_authorize(
+                access_token="00000000-0000-0000-0000-000000000000",
+                checksum=checksum,
+                client_date_time=now,
+                device_key=chosen_device_key,
+                email=normalized_email,
+                is_web=True,
+                language_key=str(client.language_key),
+                password=password,
+            )
+        except Exception as e:
+            raise PSSAuthenticationError(f"No fue posible autorizar el usuario: {e}") from e
+
+        refresh_token = getattr(authorization, "refresh_token", None)
+        auth_error = getattr(authorization, "error_message", None)
+        if auth_error:
+            raise PSSAuthenticationError(auth_error)
+        if not refresh_token:
+            raise PSSAuthenticationError("La autorizacion no devolvio refresh_token.")
+
+        try:
+            login_now = datetime.now(timezone.utc)
+            login_checksum = user_service.utils.create_device_login_checksum(
+                chosen_device_key,
+                client.device_type,
+                login_now,
+                checksum_key,
+            )
+            user_login = await user_service.device_login(
+                checksum=login_checksum,
+                client_date_time=login_now,
+                device_key=chosen_device_key,
+                device_type=client.device_type,
+                refresh_token=refresh_token,
+            )
+        except Exception as e:
+            raise PSSAuthenticationError(f"No fue posible obtener access_token: {e}") from e
+
+        access_token = getattr(user_login, "access_token", None)
+        user = getattr(user_login, "user", None) or getattr(authorization, "user", None)
+        if not access_token:
+            raise PSSAuthenticationError("El login no devolvio access_token.")
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "device_key": chosen_device_key,
+            "user_id": self._first_attr(user, "id", "user_id"),
+            "username": self._first_attr(user, "name", "username"),
+        }
+
+    async def login_with_refresh_token(
+        self,
+        refresh_token: str,
+        device_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        normalized_refresh_token = refresh_token.strip()
+        if not normalized_refresh_token:
+            raise PSSAuthenticationError("refresh_token es obligatorio.")
+
+        checksum_key = settings.PSS_CHECKSUM_KEY.strip()
+        if not checksum_key:
+            raise PSSFeatureNotSupportedError(
+                "Falta configurar PSS_CHECKSUM_KEY en el backend para convertir refresh_token en access_token."
+            )
+
+        client = self._ensure_client()
+        if client is None:
+            raise PSSFeatureNotSupportedError("No se pudo inicializar el cliente de pssapi.")
+
+        user_service = self._get_service("user_service")
+        if user_service is None:
+            raise PSSFeatureNotSupportedError("No se encontro user_service en pssapi.")
+
+        chosen_device_key = (device_key or "").strip() or str(uuid4())
+
+        try:
+            login_now = datetime.now(timezone.utc)
+            login_checksum = user_service.utils.create_device_login_checksum(
+                chosen_device_key,
+                client.device_type,
+                login_now,
+                checksum_key,
+            )
+            user_login = await user_service.device_login(
+                checksum=login_checksum,
+                client_date_time=login_now,
+                device_key=chosen_device_key,
+                device_type=client.device_type,
+                refresh_token=normalized_refresh_token,
+            )
+        except Exception as e:
+            raise PSSAuthenticationError(f"No fue posible obtener access_token: {e}") from e
+
+        access_token = getattr(user_login, "access_token", None)
+        user = getattr(user_login, "user", None)
+        if not access_token:
+            raise PSSAuthenticationError("El login con refresh_token no devolvio access_token.")
+
+        return {
+            "access_token": access_token,
+            "refresh_token": normalized_refresh_token,
+            "device_key": chosen_device_key,
+            "user_id": self._first_attr(user, "id", "user_id"),
+            "username": self._first_attr(user, "name", "username"),
+        }
+
+    async def _fetch_battles_via_http(
+        self,
+        username: str,
+        user_id: Optional[int],
+        limit: int,
+        access_token: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        base_url = str(settings.PSS_API_BASE_URL).rstrip("/")
+        normalized_token = (access_token or "").strip()
+
+        param_options: List[Dict[str, Any]] = [
+            {"take": limit, "username": username},
+        ]
+        if user_id is not None:
+            param_options.insert(0, {"take": limit, "userId": user_id})
+        if normalized_token:
+            param_options = [{**params, "accessToken": normalized_token} for params in param_options] + param_options
+
+        endpoints = ["BattleService/ListBattles"]
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for endpoint in endpoints:
+                url = f"{base_url}/{endpoint}"
+                for params in param_options:
+                    try:
+                        response = await client.get(url, params=params)
+                    except Exception:
+                        continue
+                    if response.status_code != 200:
+                        continue
+                    parsed = self._parse_battle_xml_response(response.text, username)
+                    if parsed:
+                        return parsed[:limit]
+        return []
+
+    def _parse_battle_xml_response(self, xml_text: str, username: str) -> List[Dict[str, Any]]:
+        if not xml_text or "errorMessage=" in xml_text:
+            return []
+
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return []
+
+        battle_nodes = [node for node in root.iter() if node.tag.lower().endswith("battle")]
+        parsed: List[Dict[str, Any]] = []
+        for node in battle_nodes:
+            raw_data = {str(key): value for key, value in node.attrib.items()}
+            created_at = self._first_raw_value(
+                raw_data,
+                "battleenddate",
+                "battlestartdate",
+                "createdat",
+                "startdate",
+                "enddate",
+            )
+            parsed.append(
+                {
+                    "id": self._first_raw_value(raw_data, "battleid", "id"),
+                    "player_name": self._first_raw_value(raw_data, "playername", "username", "captainname")
+                    or username,
+                    "opponent_name": self._first_raw_value(
+                        raw_data,
+                        "opponentname",
+                        "defendername",
+                        "attackername",
+                        "enemyname",
+                    ),
+                    "battle_type": self._first_raw_value(raw_data, "battletype", "type", "battlemode"),
+                    "result": self._first_raw_value(raw_data, "result", "outcome", "winner", "iswin"),
+                    "trophy_change": self._first_raw_value(
+                        raw_data,
+                        "trophychange",
+                        "ratingchange",
+                        "starschange",
+                        "trophiesdelta",
+                    ),
+                    "created_at": created_at,
+                    "raw_data": raw_data,
+                }
+            )
+        return parsed
+
+    def _collect_battle_related_methods(self) -> Dict[str, List[str]]:
+        client = self._ensure_client()
+        if client is None:
+            return {}
+
+        output: Dict[str, List[str]] = {}
+        for attr_name in dir(client):
+            if not attr_name.endswith("_service"):
+                continue
+            service = getattr(client, attr_name, None)
+            if service is None:
+                continue
+            method_names = [
+                name
+                for name in dir(service)
+                if not name.startswith("_")
+                and callable(getattr(service, name, None))
+                and any(
+                    token in name.lower()
+                    for token in ("battle", "pvp", "combat", "history")
+                )
+            ]
+            if method_names:
+                output[attr_name] = sorted(method_names)
+        return output
 
     def _serialize_item_design(self, item: ItemDesign) -> Dict[str, Any]:
         return {
