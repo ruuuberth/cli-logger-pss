@@ -94,6 +94,17 @@ def test_crews_designs_endpoint_returns_rows():
         payload = asyncio.run(get_crew_designs(refresh=False, ttl_seconds=None, db=db))
         assert payload["count"] > 0
         assert isinstance(payload["data"], list)
-        assert {"id", "name", "race", "role", "stats"}.issubset(payload["data"][0].keys())
+        assert {
+            "id",
+            "name",
+            "race",
+            "role",
+            "stats",
+            "rarity",
+            "collection",
+            "special_ability",
+            "progression_type",
+            "equipment_mask",
+        }.issubset(payload["data"][0].keys())
     finally:
         db.close()
