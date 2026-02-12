@@ -36,10 +36,16 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./pss_logger.db"
     
     # CORS
-    ALLOWED_HOSTS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    ALLOWED_HOSTS: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
     
     # PixelStarships API
     PSS_API_BASE_URL: str = "https://api.pixelstarships.com"
+    DESIGNS_CACHE_TTL_SECONDS: int = 86400
 
     @classmethod
     def settings_customise_sources(
