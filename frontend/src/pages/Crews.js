@@ -1,26 +1,52 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Paper, 
-  Typography, 
-  Box, 
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import {
   Alert,
+  Box,
+  Chip,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
   TextField,
-  Chip
+  Typography,
 } from '@mui/material';
 import { pssApi } from '../services/api';
 
+const useDebouncedValue = (value, delay = 250) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
+const compactStats = (stats = {}) => {
+  const entries = Object.entries(stats);
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const visible = entries.slice(0, 3).map(([stat, value]) => `${stat}: ${value}`);
+  if (entries.length > 3) {
+    visible.push(`+${entries.length - 3} mas`);
+  }
+  return visible;
+};
+
 const Crews = () => {
   const [crews, setCrews] = useState([]);
-  const [filteredCrews, setFilteredCrews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   useEffect(() => {
     const fetchCrews = async () => {
@@ -40,23 +66,39 @@ const Crews = () => {
     fetchCrews();
   }, []);
 
-  useEffect(() => {
-    const filtered = crews.filter(crew =>
-      (crew.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (crew.race || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (crew.role || "").toLowerCase().includes(searchTerm.toLowerCase())
+  const deferredSearch = useDeferredValue(searchTerm);
+  const debouncedSearch = useDebouncedValue(deferredSearch, 250);
+
+  const filteredCrews = useMemo(() => {
+    const term = debouncedSearch.trim().toLowerCase();
+    if (!term) {
+      return crews;
+    }
+
+    return crews.filter((crew) =>
+      `${crew.name || ''} ${crew.race || ''} ${crew.role || ''}`
+        .toLowerCase()
+        .includes(term)
     );
-    setFilteredCrews(filtered);
-  }, [crews, searchTerm]);
+  }, [crews, debouncedSearch]);
+
+  const paginatedCrews = useMemo(() => {
+    const start = page * rowsPerPage;
+    return filteredCrews.slice(start, start + rowsPerPage);
+  }, [filteredCrews, page, rowsPerPage]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch]);
 
   const getRoleColor = (role) => {
     const colors = {
-      'Captain': 'error',
-      'Pilot': 'primary',
-      'Engineer': 'success',
-      'Scientist': 'info',
-      'Medic': 'warning',
-      'Gunner': 'secondary'
+      Captain: 'error',
+      Pilot: 'primary',
+      Engineer: 'success',
+      Scientist: 'info',
+      Medic: 'warning',
+      Gunner: 'secondary',
     };
     return colors[role] || 'default';
   };
@@ -78,58 +120,68 @@ const Crews = () => {
       <Typography variant="h4" gutterBottom>
         Crews - PixelStarships
       </Typography>
-      
-      <Box sx={{ mb: 3 }}>
+
+      <Box sx={{ mb: 2 }}>
         <TextField
           fullWidth
-          label="Buscar tripulación..."
+          label="Buscar tripulacion..."
           variant="outlined"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Nombre</TableCell>
-              <TableCell>Raza</TableCell>
-              <TableCell>Rol</TableCell>
-              <TableCell>Estadísticas</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredCrews.map((crew) => (
-              <TableRow key={crew.id}>
-                <TableCell>{crew.id}</TableCell>
-                <TableCell>{crew.name}</TableCell>
-                <TableCell>{crew.race}</TableCell>
-                <TableCell>
-                  <Chip 
-                    label={crew.role} 
-                    color={getRoleColor(crew.role)}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {Object.entries(crew.stats || {}).map(([stat, value]) => (
-                      <Chip
-                        key={stat}
-                        label={`${stat}: ${value}`}
-                        size="small"
-                        variant="outlined"
-                      />
-                    ))}
-                  </Box>
-                </TableCell>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Mostrando {filteredCrews.length} resultados
+      </Typography>
+
+      <Paper>
+        <TableContainer sx={{ maxHeight: 620 }}>
+          <Table stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Nombre</TableCell>
+                <TableCell>Raza</TableCell>
+                <TableCell>Rol</TableCell>
+                <TableCell>Estadisticas</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {paginatedCrews.map((crew) => (
+                <TableRow key={crew.id} hover>
+                  <TableCell>{crew.id}</TableCell>
+                  <TableCell>{crew.name}</TableCell>
+                  <TableCell>{crew.race}</TableCell>
+                  <TableCell>
+                    <Chip label={crew.role} color={getRoleColor(crew.role)} size="small" />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {compactStats(crew.stats).map((entry) => (
+                        <Chip key={`${crew.id}-${entry}`} label={entry} size="small" variant="outlined" />
+                      ))}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        <TablePagination
+          component="div"
+          count={filteredCrews.length}
+          page={page}
+          onPageChange={(_, nextPage) => setPage(nextPage)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(parseInt(event.target.value, 10));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+        />
+      </Paper>
     </Box>
   );
 };
