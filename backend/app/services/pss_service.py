@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-# Robust import: allow running without the external dependency for debugging
-try:
+from importlib.util import find_spec
+
+if find_spec("pssapi") is not None:
     from pssapi import PssApiClient  # type: ignore
-except Exception:
+else:
     PssApiClient = None  # type: ignore
 from app.models.pss_models import ItemDesign, ShipDesign, CrewDesign
 
