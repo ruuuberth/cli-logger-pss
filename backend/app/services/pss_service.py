@@ -253,6 +253,63 @@ class PSSService:
             logger.exception("event=crew_design_error crew_id=%s", crew_id)
             return None
 
+    async def get_user_recent_battles(self, username: str, limit: int = 10) -> List[Dict[str, Any]]:
+        normalized_username = username.strip()
+        if not normalized_username:
+            return []
+
+        safe_limit = max(1, min(limit, 50))
+
+        try:
+            if self._ensure_client() is None:
+                return []
+
+            user_service = self._get_service("user_service")
+            battle_service = self._get_service("battle_service", "pvp_service")
+            if user_service is None and battle_service is None:
+                return []
+
+            user_id = await self._resolve_user_id(normalized_username, user_service)
+            battle_args = self._build_battle_arg_options(normalized_username, user_id, safe_limit)
+
+            battles: Any = None
+            if battle_service is not None:
+                battles = await self._call_async_with_arg_options(
+                    battle_service,
+                    [
+                        "list_user_battles",
+                        "get_user_battles",
+                        "list_recent_battles",
+                        "get_recent_battles",
+                        "list_battle_history",
+                        "get_battle_history",
+                        "list_battles_by_user",
+                        "list_battles_for_user",
+                        "search_battles",
+                    ],
+                    battle_args,
+                )
+
+            if battles is None and user_service is not None:
+                battles = await self._call_async_with_arg_options(
+                    user_service,
+                    [
+                        "list_user_battles",
+                        "get_user_battles",
+                        "list_recent_battles",
+                        "get_recent_battles",
+                        "list_battle_history",
+                        "get_battle_history",
+                    ],
+                    battle_args,
+                )
+
+            battle_rows = self._unwrap_collection(battles)[:safe_limit]
+            return [self._serialize_user_battle(row, normalized_username) for row in battle_rows]
+        except Exception:
+            logger.exception("event=user_recent_battles_error username=%s", normalized_username)
+            return []
+
     def _serialize_item_design(self, item: ItemDesign) -> Dict[str, Any]:
         return {
             "id": item.item_design_id,
@@ -464,6 +521,144 @@ class PSSService:
         )
         return None
 
+    async def _call_async_with_arg_options(
+        self,
+        service: Any,
+        method_names: List[str],
+        arg_options: List[tuple[Any, ...]],
+    ) -> Any:
+        for method_name in method_names:
+            method = getattr(service, method_name, None)
+            if method is None:
+                continue
+            for args in arg_options:
+                try:
+                    result = method(*args)
+                    if hasattr(result, "__await__"):
+                        result = await result
+                except TypeError:
+                    continue
+                except Exception:
+                    logger.exception(
+                        "event=pss_method_call_error service=%s method=%s",
+                        service.__class__.__name__,
+                        method_name,
+                    )
+                    continue
+                if result is not None:
+                    return result
+
+        logger.warning(
+            "event=pss_method_missing service=%s methods=%s",
+            service.__class__.__name__,
+            ",".join(method_names),
+        )
+        return None
+
+    async def _resolve_user_id(self, username: str, user_service: Any) -> Optional[int]:
+        if user_service is None:
+            return None
+
+        user_data = await self._call_async_with_arg_options(
+            user_service,
+            [
+                "get_user_by_name",
+                "get_user",
+                "search_user",
+                "search_users",
+                "list_users",
+                "list_all_users",
+            ],
+            [(username,), (username, 1), (username, 0, 1)],
+        )
+        user_candidate = self._first_record(user_data)
+        if user_candidate is None:
+            return None
+
+        for key in ("id", "user_id", "player_id", "captain_id"):
+            value = self._first_value(user_candidate, key)
+            if isinstance(value, int):
+                return value
+            if isinstance(value, str) and value.isdigit():
+                return int(value)
+        return None
+
+    def _build_battle_arg_options(
+        self,
+        username: str,
+        user_id: Optional[int],
+        limit: int,
+    ) -> List[tuple[Any, ...]]:
+        options: List[tuple[Any, ...]] = [
+            (username, limit),
+            (username,),
+            (username, 0, limit),
+            (limit, username),
+            (None, username, limit),
+        ]
+        if user_id is not None:
+            options.extend(
+                [
+                    (user_id, limit),
+                    (user_id,),
+                    (user_id, 0, limit),
+                    (limit, user_id),
+                    (None, user_id, limit),
+                ]
+            )
+        return options
+
+    def _first_value(self, value: Any, *keys: str) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            for key in keys:
+                if key in value and value[key] is not None:
+                    return value[key]
+            return None
+        for key in keys:
+            attr = getattr(value, key, None)
+            if attr is not None:
+                return attr
+        return None
+
+    def _first_record(self, value: Any) -> Any:
+        rows = self._unwrap_collection(value)
+        if rows:
+            return rows[0]
+        if isinstance(value, dict):
+            for key in ("user", "player", "data", "result"):
+                candidate = value.get(key)
+                rows = self._unwrap_collection(candidate)
+                if rows:
+                    return rows[0]
+                if candidate is not None and not isinstance(candidate, (list, tuple, set)):
+                    return candidate
+        if value is not None and not isinstance(value, (list, tuple, set)):
+            return value
+        return None
+
+    def _unwrap_collection(self, value: Any) -> List[Any]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, tuple):
+            return list(value)
+        if isinstance(value, set):
+            return list(value)
+        if isinstance(value, dict):
+            for key in ("battles", "users", "players", "rows", "results", "records", "data", "items"):
+                candidate = value.get(key)
+                if isinstance(candidate, list):
+                    return candidate
+                if isinstance(candidate, tuple):
+                    return list(candidate)
+                if isinstance(candidate, set):
+                    return list(candidate)
+            return [value]
+        return [value]
+
     def _find_design_by_id(self, designs: Any, target_id: int, id_attrs: tuple[str, ...]) -> Any:
         if not designs:
             return None
@@ -480,36 +675,100 @@ class PSSService:
                 return value
         return None
 
+    def _serialize_user_battle(self, battle: Any, username: str) -> Dict[str, Any]:
+        raw_data = self._extract_raw_data(battle)
+
+        battle_id = self._first_attr(battle, "battle_id", "id")
+        if battle_id is None:
+            battle_id = self._first_raw_value(raw_data, "battle_id", "id")
+
+        created_at = self._first_attr(
+            battle,
+            "battle_end_date",
+            "battle_start_date",
+            "created_at",
+            "start_date",
+            "end_date",
+        )
+        if created_at is None:
+            created_at = self._first_raw_value(
+                raw_data,
+                "battle_end_date",
+                "battle_start_date",
+                "created_at",
+                "start_date",
+                "end_date",
+                "timestamp",
+            )
+
+        return {
+            "id": battle_id,
+            "player_name": self._first_raw_value(raw_data, "player_name", "username", "captain_name")
+            or username,
+            "opponent_name": self._first_raw_value(
+                raw_data,
+                "opponent_name",
+                "defender_name",
+                "attacker_name",
+                "enemy_name",
+            ),
+            "battle_type": self._first_raw_value(
+                raw_data,
+                "battle_type",
+                "type",
+                "battle_mode",
+            ),
+            "result": self._first_raw_value(
+                raw_data,
+                "result",
+                "outcome",
+                "winner",
+                "is_win",
+            ),
+            "trophy_change": self._first_raw_value(
+                raw_data,
+                "trophy_change",
+                "rating_change",
+                "stars_change",
+                "trophies_delta",
+            ),
+            "created_at": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+            "raw_data": raw_data,
+        }
+
     def _item_row(self, design: Any) -> Dict[str, Any]:
+        raw_data = self._extract_raw_data(design)
         return {
             "item_design_id": self._first_attr(design, "item_design_id", "id"),
             "name": self._first_attr(design, "item_design_name", "name") or "",
             "description": self._first_attr(design, "description") or "",
             "rarity": self._first_attr(design, "rarity") or "",
             "item_type": self._first_attr(design, "item_type") or "",
-            "stats": self._extract_stats(design),
-            "raw_data": self._extract_raw_data(design),
+            "stats": self._extract_stats(design, raw_data),
+            "raw_data": raw_data,
         }
 
     def _ship_row(self, design: Any) -> Dict[str, Any]:
+        raw_data = self._extract_raw_data(design)
         return {
             "ship_design_id": self._first_attr(design, "ship_design_id", "id"),
             "name": self._first_attr(design, "ship_design_name", "name") or "",
             "description": self._first_attr(design, "description") or "",
             "class_type": self._first_attr(design, "class_type") or "",
-            "stats": self._extract_stats(design),
-            "raw_data": self._extract_raw_data(design),
+            "stats": self._extract_stats(design, raw_data),
+            "raw_data": raw_data,
         }
 
     def _crew_row(self, design: Any) -> Dict[str, Any]:
+        raw_data = self._extract_raw_data(design)
         return {
             "crew_design_id": self._first_attr(design, "crew_design_id", "character_design_id", "id"),
             "name": self._first_attr(design, "crew_design_name", "character_design_name", "name") or "",
             "description": self._first_attr(design, "description", "character_design_description") or "",
             "race": self._first_attr(design, "race") or "",
             "role": self._first_attr(design, "role") or "",
-            "stats": self._extract_stats(design),
-            "raw_data": self._extract_raw_data(design),
+            "stats": self._extract_stats(design, raw_data),
+            "raw_data": raw_data,
         }
 
     def _upsert_rows(self, model: Any, rows: List[Dict[str, Any]], key_column: str) -> None:
