@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from importlib.util import find_spec
+from datetime import date, datetime
 
 if find_spec("pssapi") is not None:
     from pssapi import PssApiClient  # type: ignore
@@ -35,7 +36,7 @@ class PSSService:
                     rarity=getattr(design, 'rarity', ''),
                     item_type=getattr(design, 'item_type', ''),
                     stats=self._extract_stats(design),
-                    raw_data=design.__dict__
+                    raw_data=self._extract_raw_data(design)
                 )
                 self.db.add(db_item)
             
@@ -69,7 +70,7 @@ class PSSService:
                     rarity=getattr(item_design, 'rarity', ''),
                     item_type=getattr(item_design, 'item_type', ''),
                     stats=self._extract_stats(item_design),
-                    raw_data=item_design.__dict__
+                    raw_data=self._extract_raw_data(item_design)
                 )
                 self.db.add(db_item)
                 self.db.commit()
@@ -100,7 +101,7 @@ class PSSService:
                     description=getattr(design, 'description', ''),
                     class_type=getattr(design, 'class_type', ''),
                     stats=self._extract_stats(design),
-                    raw_data=design.__dict__
+                    raw_data=self._extract_raw_data(design)
                 )
                 self.db.add(db_ship)
             
@@ -131,7 +132,7 @@ class PSSService:
                     description=getattr(ship_design, 'description', ''),
                     class_type=getattr(ship_design, 'class_type', ''),
                     stats=self._extract_stats(ship_design),
-                    raw_data=ship_design.__dict__
+                    raw_data=self._extract_raw_data(ship_design)
                 )
                 self.db.add(db_ship)
                 self.db.commit()
@@ -163,7 +164,7 @@ class PSSService:
                     race=getattr(design, 'race', ''),
                     role=getattr(design, 'role', ''),
                     stats=self._extract_stats(design),
-                    raw_data=design.__dict__
+                    raw_data=self._extract_raw_data(design)
                 )
                 self.db.add(db_crew)
             
@@ -195,7 +196,7 @@ class PSSService:
                     race=getattr(crew_design, 'race', ''),
                     role=getattr(crew_design, 'role', ''),
                     stats=self._extract_stats(crew_design),
-                    raw_data=crew_design.__dict__
+                    raw_data=self._extract_raw_data(crew_design)
                 )
                 self.db.add(db_crew)
                 self.db.commit()
@@ -250,3 +251,51 @@ class PSSService:
                 stats[attr] = getattr(obj, attr)
         
         return stats
+
+    def _extract_raw_data(self, obj: Any) -> Dict[str, Any]:
+        """Convertir objetos del cliente PSS a una estructura serializable para JSON."""
+        # pssapi puede exponer __dict__ como método en vez de atributo.
+        obj_dict = getattr(obj, "__dict__", None)
+        if callable(obj_dict):
+            try:
+                return self._to_jsonable(obj_dict())
+            except Exception:
+                pass
+        elif isinstance(obj_dict, dict):
+            return self._to_jsonable(obj_dict)
+
+        try:
+            return self._to_jsonable(vars(obj))
+        except TypeError:
+            return self._to_jsonable(obj)
+
+    def _to_jsonable(self, value: Any) -> Any:
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+
+        if isinstance(value, dict):
+            return {
+                str(k): self._to_jsonable(v)
+                for k, v in value.items()
+                if not callable(v)
+            }
+
+        if isinstance(value, (list, tuple, set)):
+            return [self._to_jsonable(v) for v in value]
+
+        if callable(value):
+            return str(value)
+
+        nested_dict = getattr(value, "__dict__", None)
+        if callable(nested_dict):
+            try:
+                return self._to_jsonable(nested_dict())
+            except Exception:
+                return str(value)
+        if isinstance(nested_dict, dict):
+            return self._to_jsonable(nested_dict)
+
+        return str(value)
