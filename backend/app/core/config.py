@@ -1,5 +1,16 @@
-from pydantic_settings import BaseSettings
+from pydantic.fields import FieldInfo
+from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource
 from typing import List
+
+
+class CsvEnvSettingsSource(EnvSettingsSource):
+    def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
+        if field_name == "ALLOWED_HOSTS" and isinstance(value, str):
+            cleaned_value = value.strip()
+            if cleaned_value.startswith("["):
+                return super().prepare_field_value(field_name, field, value, value_is_complex)
+            return [host.strip() for host in cleaned_value.split(",") if host.strip()]
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "PixelStarships Logger"
@@ -14,6 +25,22 @@ class Settings(BaseSettings):
     
     # PixelStarships API
     PSS_API_BASE_URL: str = "https://api.pixelstarships.com"
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ):
+        return (
+            init_settings,
+            CsvEnvSettingsSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
     
     class Config:
         env_file = ".env"

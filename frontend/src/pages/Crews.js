@@ -42,9 +42,9 @@ const Crews = () => {
 
   useEffect(() => {
     const filtered = crews.filter(crew =>
-      crew.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      crew.race.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      crew.role.toLowerCase().includes(searchTerm.toLowerCase())
+      (crew.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (crew.race || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (crew.role || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredCrews(filtered);
   }, [crews, searchTerm]);

@@ -42,8 +42,8 @@ const Ships = () => {
 
   useEffect(() => {
     const filtered = ships.filter(ship =>
-      ship.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ship.class_type.toLowerCase().includes(searchTerm.toLowerCase())
+      (ship.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (ship.class_type || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredShips(filtered);
   }, [ships, searchTerm]);

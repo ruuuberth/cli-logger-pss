@@ -12,6 +12,8 @@ async def get_crew_designs(db: Session = Depends(get_db)):
         pss_service = PSSService(db)
         designs = await pss_service.get_crew_designs()
         return {"data": designs, "count": len(designs)}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -24,5 +26,7 @@ async def get_crew_design(crew_id: int, db: Session = Depends(get_db)):
         if not design:
             raise HTTPException(status_code=404, detail="Crew design not found")
         return {"data": design}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

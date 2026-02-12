@@ -42,9 +42,9 @@ const Items = () => {
 
   useEffect(() => {
     const filtered = items.filter(item =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.rarity.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.item_type.toLowerCase().includes(searchTerm.toLowerCase())
+      (item.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.rarity || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.item_type || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredItems(filtered);
   }, [items, searchTerm]);
