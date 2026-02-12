@@ -27,18 +27,14 @@ const useDebouncedValue = (value, delay = 250) => {
   return debouncedValue;
 };
 
-const compactStats = (stats = {}) => {
-  const entries = Object.entries(stats);
-  if (entries.length === 0) {
-    return [];
-  }
-
-  const visible = entries.slice(0, 3).map(([stat, value]) => `${stat}: ${value}`);
-  if (entries.length > 3) {
-    visible.push(`+${entries.length - 3} mas`);
-  }
-  return visible;
-};
+const getMetaEntries = (crew = {}) =>
+  [
+    crew.rarity ? `Rareza: ${crew.rarity}` : null,
+    crew.collection ? `Coleccion: ${crew.collection}` : null,
+    crew.special_ability ? `Habilidad: ${crew.special_ability}` : null,
+    crew.progression_type ? `Progresion: ${crew.progression_type}` : null,
+    crew.equipment_mask ? `Equip: ${crew.equipment_mask}` : null,
+  ].filter(Boolean);
 
 const Crews = () => {
   const [crews, setCrews] = useState([]);
@@ -76,7 +72,9 @@ const Crews = () => {
     }
 
     return crews.filter((crew) =>
-      `${crew.name || ''} ${crew.race || ''} ${crew.role || ''}`
+      `${crew.name || ''} ${crew.race || ''} ${crew.role || ''} ${crew.rarity || ''} ${
+        crew.collection || ''
+      } ${crew.special_ability || ''} ${crew.progression_type || ''} ${crew.equipment_mask || ''}`
         .toLowerCase()
         .includes(term)
     );
@@ -137,34 +135,58 @@ const Crews = () => {
 
       <Paper>
         <TableContainer sx={{ maxHeight: 620 }}>
-          <Table stickyHeader>
+          <Table stickyHeader sx={{ minWidth: 900 }}>
             <TableHead>
               <TableRow>
                 <TableCell>ID</TableCell>
                 <TableCell>Nombre</TableCell>
                 <TableCell>Raza</TableCell>
                 <TableCell>Rol</TableCell>
+                <TableCell>Meta</TableCell>
                 <TableCell>Estadisticas</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {paginatedCrews.map((crew) => (
-                <TableRow key={crew.id} hover>
-                  <TableCell>{crew.id}</TableCell>
-                  <TableCell>{crew.name}</TableCell>
-                  <TableCell>{crew.race}</TableCell>
-                  <TableCell>
-                    <Chip label={crew.role} color={getRoleColor(crew.role)} size="small" />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {compactStats(crew.stats).map((entry) => (
-                        <Chip key={`${crew.id}-${entry}`} label={entry} size="small" variant="outlined" />
-                      ))}
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {paginatedCrews.map((crew) => {
+                const metaEntries = getMetaEntries(crew);
+                const statEntries = Object.entries(crew.stats || {});
+
+                return (
+                  <TableRow key={crew.id} hover>
+                    <TableCell>{crew.id}</TableCell>
+                    <TableCell>{crew.name || '-'}</TableCell>
+                    <TableCell>{crew.race || '-'}</TableCell>
+                    <TableCell>
+                      <Chip label={crew.role || 'N/A'} color={getRoleColor(crew.role)} size="small" />
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {metaEntries.map((entry) => (
+                          <Chip key={`${crew.id}-${entry}`} label={entry} size="small" variant="outlined" />
+                        ))}
+                        {metaEntries.length === 0 ? (
+                          <Chip label="Sin meta" size="small" variant="outlined" />
+                        ) : null}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {statEntries.map(([stat, value]) => (
+                          <Chip
+                            key={`${crew.id}-${stat}`}
+                            label={`${stat}: ${value}`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                        {statEntries.length === 0 ? (
+                          <Chip label="Sin estadisticas" size="small" variant="outlined" />
+                        ) : null}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
