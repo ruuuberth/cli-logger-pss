@@ -1,23 +1,75 @@
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
 });
 
+const responseCache = new Map();
+
+const getCachedResponse = (key) => {
+  const entry = responseCache.get(key);
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.status === 'pending') {
+    return entry.promise;
+  }
+
+  if (Date.now() - entry.timestamp < CACHE_TTL_MS) {
+    return Promise.resolve(entry.response);
+  }
+
+  responseCache.delete(key);
+  return null;
+};
+
+const requestWithCache = (key, url) => {
+  const cached = getCachedResponse(key);
+  if (cached) {
+    return cached;
+  }
+
+  const requestPromise = api
+    .get(url)
+    .then((response) => {
+      responseCache.set(key, {
+        status: 'resolved',
+        timestamp: Date.now(),
+        response,
+      });
+      return response;
+    })
+    .catch((error) => {
+      responseCache.delete(key);
+      throw error;
+    });
+
+  responseCache.set(key, {
+    status: 'pending',
+    promise: requestPromise,
+  });
+
+  return requestPromise;
+};
+
 export const pssApi = {
+  clearCache: () => responseCache.clear(),
+
   // Items
-  getItems: () => api.get('/api/v1/items/designs'),
+  getItems: () => requestWithCache('items-designs', '/api/v1/items/designs'),
   getItem: (id) => api.get(`/api/v1/items/designs/${id}`),
-  
+
   // Ships
-  getShips: () => api.get('/api/v1/ships/designs'),
+  getShips: () => requestWithCache('ships-designs', '/api/v1/ships/designs'),
   getShip: (id) => api.get(`/api/v1/ships/designs/${id}`),
-  
+
   // Crews
-  getCrews: () => api.get('/api/v1/crews/designs'),
+  getCrews: () => requestWithCache('crews-designs', '/api/v1/crews/designs'),
   getCrew: (id) => api.get(`/api/v1/crews/designs/${id}`),
 };
 
