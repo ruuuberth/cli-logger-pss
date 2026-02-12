@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.services.pss_service import PSSService
 from app.models.database import get_db
@@ -6,11 +7,20 @@ from app.models.database import get_db
 router = APIRouter()
 
 @router.get("/designs")
-async def get_item_designs(db: Session = Depends(get_db)):
+async def get_item_designs(
+    refresh: bool = Query(False, description="Forzar refresh desde la API remota"),
+    ttl_seconds: Optional[int] = Query(
+        None, ge=0, description="TTL de cache en segundos para esta petición"
+    ),
+    db: Session = Depends(get_db)
+):
     """Obtener todos los diseños de items de PixelStarships"""
     try:
         pss_service = PSSService(db)
-        designs = await pss_service.get_item_designs()
+        designs = await pss_service.get_item_designs(
+            force_refresh=refresh,
+            ttl_seconds=ttl_seconds,
+        )
         return {"data": designs, "count": len(designs)}
     except HTTPException:
         raise
