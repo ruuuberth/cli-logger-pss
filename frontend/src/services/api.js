@@ -71,6 +71,20 @@ export const pssApi = {
   // Crews
   getCrews: () => requestWithCache('crews-designs', '/api/v1/crews/designs'),
   getCrew: (id) => api.get(`/api/v1/crews/designs/${id}`),
+
+  // Battles
+  getUserBattles: (username, limit = 10) => {
+    const normalizedUsername = (username || '').trim();
+    if (!normalizedUsername) {
+      return Promise.reject(new Error('username is required'));
+    }
+    const normalizedLimit = Math.min(50, Math.max(1, Number(limit) || 10));
+    const encodedUsername = encodeURIComponent(normalizedUsername);
+    return requestWithCache(
+      `battles-${encodedUsername}-${normalizedLimit}`,
+      `/api/v1/battles/recent?username=${encodedUsername}&limit=${normalizedLimit}`
+    );
+  },
 };
 
 export default api;

@@ -11,6 +11,7 @@ const Navbar = () => {
     { label: 'Items', path: '/items' },
     { label: 'Ships', path: '/ships' },
     { label: 'Crews', path: '/crews' },
+    { label: 'Battles', path: '/battles' },
   ];
 
   return (

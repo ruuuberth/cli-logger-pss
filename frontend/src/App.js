@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Items from './pages/Items';
 import Ships from './pages/Ships';
 import Crews from './pages/Crews';
+import Battles from './pages/Battles';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/items" element={<Items />} />
           <Route path="/ships" element={<Ships />} />
           <Route path="/crews" element={<Crews />} />
+          <Route path="/battles" element={<Battles />} />
         </Routes>
       </Container>
     </Box>
