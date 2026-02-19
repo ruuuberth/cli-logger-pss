@@ -1109,6 +1109,36 @@ class PSSService:
             return max(0, ttl_seconds)
         return max(0, settings.DESIGNS_CACHE_TTL_SECONDS)
 
+    def _resolve_battle_report_ttl(self, ttl_seconds: Optional[int]) -> int:
+        if ttl_seconds is not None:
+            return max(0, ttl_seconds)
+        return max(0, settings.BATTLE_REPORT_CACHE_TTL_SECONDS)
+
+    def _set_cached_battle_report(self, battle_id: int, payload: Dict[str, Any]) -> None:
+        self._battle_report_cache[battle_id] = {
+            "cached_at": datetime.now(timezone.utc),
+            "payload": payload,
+        }
+
+    def _get_cached_battle_report(self, battle_id: int, ttl_seconds: int) -> Optional[Dict[str, Any]]:
+        cached = self._battle_report_cache.get(battle_id)
+        if not cached:
+            return None
+
+        cached_at = cached.get("cached_at")
+        payload = cached.get("payload")
+        if not isinstance(cached_at, datetime) or not isinstance(payload, dict):
+            self._battle_report_cache.pop(battle_id, None)
+            return None
+
+        if ttl_seconds > 0:
+            age_seconds = (datetime.now(timezone.utc) - cached_at).total_seconds()
+            if age_seconds > ttl_seconds:
+                self._battle_report_cache.pop(battle_id, None)
+                return None
+
+        return payload
+
     def _is_cache_fresh(self, records: List[Any], ttl_seconds: int) -> bool:
         if ttl_seconds <= 0 or not records:
             return False
