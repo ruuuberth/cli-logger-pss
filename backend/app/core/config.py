@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     # PixelStarships API
     PSS_API_BASE_URL: str = "https://api.pixelstarships.com"
     DESIGNS_CACHE_TTL_SECONDS: int = 86400
+    BATTLE_REPORT_CACHE_TTL_SECONDS: int = 3600
     PSS_CHECKSUM_KEY: str = ""
 
     @classmethod
