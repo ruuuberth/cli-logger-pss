@@ -100,34 +100,37 @@ export const pssApi = {
     const tokenQuery = accessToken && accessToken.trim().length > 0
       ? `&access_token=${encodeURIComponent(accessToken.trim())}`
       : '';
-    const refreshQuery = refreshToken && refreshToken.trim().length > 0
-      ? `&refresh_token=${encodeURIComponent(refreshToken.trim())}`
-      : '';
-    const deviceQuery = deviceKey && deviceKey.trim().length > 0
-      ? `&device_key=${encodeURIComponent(deviceKey.trim())}`
-      : '';
     const forceRefreshQuery = forceRefresh ? '&force_refresh=true' : '';
     const ttlQuery = Number.isInteger(Number(ttlSeconds)) && Number(ttlSeconds) >= 0
       ? `&ttl_seconds=${Number(ttlSeconds)}`
       : '';
 
-    const query = `/api/v1/battles/report?battle_id=${normalizedBattleId}${tokenQuery}${refreshQuery}${deviceQuery}${forceRefreshQuery}${ttlQuery}`;
+    const query = `/api/v1/battles/report?battle_id=${normalizedBattleId}${tokenQuery}${forceRefreshQuery}${ttlQuery}`;
     if (forceRefresh) {
       return api.get(query);
     }
 
     return requestWithCache(
-      `battle-report-${normalizedBattleId}-${tokenQuery}-${refreshQuery}-${deviceQuery}-${ttlQuery}`,
+      `battle-report-${normalizedBattleId}-${tokenQuery}-${ttlQuery}`,
       query
     );
   },
 
-  getStoredBattles: (limit = 200, offset = 0) => {
+  getStoredBattles: (limit = 200, offset = 0, search = '', hasReport = null) => {
     const normalizedLimit = Math.min(1000, Math.max(1, Number(limit) || 200));
     const normalizedOffset = Math.max(0, Number(offset) || 0);
+    const normalizedSearch = String(search || '').trim();
+    const searchQuery = normalizedSearch.length > 0
+      ? `&search=${encodeURIComponent(normalizedSearch)}`
+      : '';
+    const hasReportQuery = hasReport === true
+      ? '&has_report=true'
+      : hasReport === false
+        ? '&has_report=false'
+        : '';
     return requestWithCache(
-      `stored-battles-${normalizedLimit}-${normalizedOffset}`,
-      `/api/v1/battles/stored?limit=${normalizedLimit}&offset=${normalizedOffset}`
+      `stored-battles-${normalizedLimit}-${normalizedOffset}-${normalizedSearch}-${hasReportQuery}`,
+      `/api/v1/battles/stored?limit=${normalizedLimit}&offset=${normalizedOffset}${searchQuery}${hasReportQuery}`
     );
   },
 };

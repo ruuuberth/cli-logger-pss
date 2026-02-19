@@ -5,12 +5,14 @@ import {
   Button,
   Checkbox,
   FormControlLabel,
+  MenuItem,
   Paper,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -20,49 +22,82 @@ import { pssApi } from '../services/api';
 
 const STORAGE_KEYS = {
   accessToken: 'pss_auth_access_token',
-  refreshToken: 'pss_auth_refresh_token',
-  deviceKey: 'pss_auth_device_key',
+  lastBattleAccessToken: 'pss_battles_last_access_token',
 };
 
 const Battles = () => {
-  const [username, setUsername] = useState('');
-  const [limit, setLimit] = useState(10);
   const [battleId, setBattleId] = useState('');
   const [accessToken, setAccessToken] = useState('');
-  const [refreshToken, setRefreshToken] = useState('');
-  const [deviceKey, setDeviceKey] = useState('');
   const [forceRefresh, setForceRefresh] = useState(false);
   const [ttlSeconds, setTtlSeconds] = useState('');
-  const [loadingBattles, setLoadingBattles] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
-  const [battles, setBattles] = useState([]);
   const [storedBattles, setStoredBattles] = useState([]);
+  const [storedTotal, setStoredTotal] = useState(0);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [loadingStored, setLoadingStored] = useState(false);
+  const [storedPage, setStoredPage] = useState(0);
+  const [storedRowsPerPage, setStoredRowsPerPage] = useState(25);
+  const [storedSearchInput, setStoredSearchInput] = useState('');
+  const [storedSearchApplied, setStoredSearchApplied] = useState('');
+  const [storedHasReportInput, setStoredHasReportInput] = useState('all');
+  const [storedHasReportApplied, setStoredHasReportApplied] = useState('all');
 
   useEffect(() => {
-    setAccessToken(localStorage.getItem(STORAGE_KEYS.accessToken) || '');
-    setRefreshToken(localStorage.getItem(STORAGE_KEYS.refreshToken) || '');
-    setDeviceKey(localStorage.getItem(STORAGE_KEYS.deviceKey) || '');
+    const lastBattleToken = localStorage.getItem(STORAGE_KEYS.lastBattleAccessToken) || '';
+    const authToken = localStorage.getItem(STORAGE_KEYS.accessToken) || '';
+    setAccessToken(lastBattleToken || authToken);
   }, []);
 
-  const loadStoredBattles = async () => {
+  const persistLastAccessToken = (token) => {
+    const normalized = String(token || '').trim();
+    if (!normalized) {
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.lastBattleAccessToken, normalized);
+    localStorage.setItem(STORAGE_KEYS.accessToken, normalized);
+  };
+
+  const loadStoredBattles = async (opts = {}) => {
+    const nextPage = Number.isInteger(opts.page) ? opts.page : storedPage;
+    const nextRowsPerPage = Number.isInteger(opts.rowsPerPage) ? opts.rowsPerPage : storedRowsPerPage;
+    const nextSearchApplied = opts.searchApplied !== undefined ? opts.searchApplied : storedSearchApplied;
+    const nextHasReportApplied = opts.hasReportApplied !== undefined ? opts.hasReportApplied : storedHasReportApplied;
+    const nextOffset = nextPage * nextRowsPerPage;
+    const nextHasReport =
+      nextHasReportApplied === 'with'
+        ? true
+        : nextHasReportApplied === 'without'
+          ? false
+          : null;
+
     try {
       setLoadingStored(true);
-      const response = await pssApi.getStoredBattles(300, 0);
+      const response = await pssApi.getStoredBattles(
+        nextRowsPerPage,
+        nextOffset,
+        nextSearchApplied,
+        nextHasReport
+      );
       setStoredBattles(response?.data?.data || []);
+      setStoredTotal(Number(response?.data?.total) || 0);
     } catch (err) {
       const detail = err?.response?.data?.detail;
       setError(detail || 'No se pudo cargar el indice de batallas almacenadas.');
       setStoredBattles([]);
+      setStoredTotal(0);
     } finally {
       setLoadingStored(false);
     }
   };
 
   useEffect(() => {
-    loadStoredBattles();
+    loadStoredBattles({
+      page: storedPage,
+      rowsPerPage: storedRowsPerPage,
+      searchApplied: storedSearchApplied,
+      hasReportApplied: storedHasReportApplied,
+    });
   }, []);
 
   const resolvedBattleId = useMemo(() => {
@@ -109,6 +144,40 @@ const Battles = () => {
     setBattleId(String(id));
   };
 
+  const handleApplyStoredFilters = async () => {
+    setStoredPage(0);
+    setStoredSearchApplied(storedSearchInput.trim());
+    setStoredHasReportApplied(storedHasReportInput);
+    await loadStoredBattles({
+      page: 0,
+      rowsPerPage: storedRowsPerPage,
+      searchApplied: storedSearchInput.trim(),
+      hasReportApplied: storedHasReportInput,
+    });
+  };
+
+  const handleStoredPageChange = async (_, nextPage) => {
+    setStoredPage(nextPage);
+    await loadStoredBattles({
+      page: nextPage,
+      rowsPerPage: storedRowsPerPage,
+      searchApplied: storedSearchApplied,
+      hasReportApplied: storedHasReportApplied,
+    });
+  };
+
+  const handleStoredRowsPerPageChange = async (event) => {
+    const nextRows = parseInt(event.target.value, 10) || 25;
+    setStoredRowsPerPage(nextRows);
+    setStoredPage(0);
+    await loadStoredBattles({
+      page: 0,
+      rowsPerPage: nextRows,
+      searchApplied: storedSearchApplied,
+      hasReportApplied: storedHasReportApplied,
+    });
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
@@ -116,75 +185,91 @@ const Battles = () => {
       </Typography>
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Token y parametros
-        </Typography>
-
-        <Stack spacing={2}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <TextField
-              label="Access token"
-              value={accessToken}
-              onChange={(event) => setAccessToken(event.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Refresh token"
-              value={refreshToken}
-              onChange={(event) => setRefreshToken(event.target.value)}
-              fullWidth
-            />
-          </Stack>
-          <TextField
-            label="Device key (opcional)"
-            value={deviceKey}
-            onChange={(event) => setDeviceKey(event.target.value)}
-            fullWidth
-          />
-        </Stack>
-      </Paper>
-
-      <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} alignItems={{ md: 'center' }}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             IDs almacenados (persistentes)
           </Typography>
-          <Button variant="outlined" onClick={loadStoredBattles} disabled={loadingStored}>
+          <Button
+            variant="outlined"
+            onClick={() =>
+              loadStoredBattles({
+                page: storedPage,
+                rowsPerPage: storedRowsPerPage,
+                searchApplied: storedSearchApplied,
+                hasReportApplied: storedHasReportApplied,
+              })
+            }
+            disabled={loadingStored}
+          >
             {loadingStored ? 'Actualizando...' : 'Actualizar indice'}
           </Button>
         </Stack>
 
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
+          <TextField
+            label="Filtro (battle id / jugador / oponente)"
+            value={storedSearchInput}
+            onChange={(event) => setStoredSearchInput(event.target.value)}
+            fullWidth
+          />
+          <TextField
+            select
+            label="Reporte XML"
+            value={storedHasReportInput}
+            onChange={(event) => setStoredHasReportInput(event.target.value)}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="all">Todos</MenuItem>
+            <MenuItem value="with">Con reporte</MenuItem>
+            <MenuItem value="without">Sin reporte</MenuItem>
+          </TextField>
+          <Button variant="contained" onClick={handleApplyStoredFilters} disabled={loadingStored}>
+            Aplicar filtros
+          </Button>
+        </Stack>
+
         {storedBattles.length > 0 ? (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Battle ID</TableCell>
-                <TableCell>Jugador</TableCell>
-                <TableCell>Oponente</TableCell>
-                <TableCell>Resultado</TableCell>
-                <TableCell>Tipo</TableCell>
-                <TableCell>Reporte XML</TableCell>
-                <TableCell align="right">Accion</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {storedBattles.map((row) => (
-                <TableRow key={row.battle_id}>
-                  <TableCell>{row.battle_id}</TableCell>
-                  <TableCell>{row.player_name || '-'}</TableCell>
-                  <TableCell>{row.opponent_name || '-'}</TableCell>
-                  <TableCell>{row.result || '-'}</TableCell>
-                  <TableCell>{row.battle_type || '-'}</TableCell>
-                  <TableCell>{row.has_report ? 'Si' : 'No'}</TableCell>
-                  <TableCell align="right">
-                    <Button size="small" onClick={() => handleUseBattleId(row.battle_id)}>
-                      usar
-                    </Button>
-                  </TableCell>
+          <>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Battle ID</TableCell>
+                  <TableCell>Jugador</TableCell>
+                  <TableCell>Oponente</TableCell>
+                  <TableCell>Resultado</TableCell>
+                  <TableCell>Tipo</TableCell>
+                  <TableCell>Reporte XML</TableCell>
+                  <TableCell align="right">Accion</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {storedBattles.map((row) => (
+                  <TableRow key={row.battle_id}>
+                    <TableCell>{row.battle_id}</TableCell>
+                    <TableCell>{row.player_name || '-'}</TableCell>
+                    <TableCell>{row.opponent_name || '-'}</TableCell>
+                    <TableCell>{row.result || '-'}</TableCell>
+                    <TableCell>{row.battle_type || '-'}</TableCell>
+                    <TableCell>{row.has_report ? 'Si' : 'No'}</TableCell>
+                    <TableCell align="right">
+                      <Button size="small" onClick={() => handleUseBattleId(row.battle_id)}>
+                        usar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <TablePagination
+              component="div"
+              count={storedTotal}
+              page={storedPage}
+              onPageChange={handleStoredPageChange}
+              rowsPerPage={storedRowsPerPage}
+              onRowsPerPageChange={handleStoredRowsPerPageChange}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+            />
+          </>
         ) : (
           <Typography variant="body2" color="text.secondary">
             Aun no hay IDs almacenados.
@@ -192,58 +277,20 @@ const Battles = () => {
         )}
       </Paper>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Batallas recientes
-        </Typography>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-          <TextField
-            label="Username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            fullWidth
-          />
-          <TextField
-            label="Limit"
-            type="number"
-            value={limit}
-            onChange={(event) => setLimit(event.target.value)}
-            inputProps={{ min: 1, max: 50 }}
-            sx={{ minWidth: 120 }}
-          />
-          <Button variant="contained" onClick={handleFetchBattles} disabled={loadingBattles}>
-            {loadingBattles ? 'Cargando...' : 'Cargar batallas'}
-          </Button>
-        </Stack>
-
-        {battles.length > 0 ? (
-          <Stack spacing={1}>
-            {battles.map((battle, index) => (
-              <Paper key={`${battle.id || 'battle'}-${index}`} variant="outlined" sx={{ p: 1.5 }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
-                  <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                    #{battle.id || '-'} | {battle.player_name || '-'} vs {battle.opponent_name || '-'} | {battle.result || '-'}
-                  </Typography>
-                  <Button size="small" onClick={() => handleUseBattleId(battle.id)}>
-                    usar battle id
-                  </Button>
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            Sin resultados cargados.
-          </Typography>
-        )}
-      </Paper>
-
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          Reporte XML (GetBattle3)
+          Obtener reporte de batalla
         </Typography>
 
         <Stack spacing={2}>
+          <TextField
+            label="Access token"
+            value={accessToken}
+            onChange={(event) => setAccessToken(event.target.value)}
+            helperText="Solo es necesario si el reporte aun no existe en el indice. Se guarda automaticamente como ultimo token usado."
+            fullWidth
+          />
+
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
             <TextField
               label="Battle ID"
