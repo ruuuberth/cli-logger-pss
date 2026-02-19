@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.pss_models import CrewDesign, ItemDesign, ShipDesign
+from app.models.pss_models import BattleIndex, BattleReport, CrewDesign, ItemDesign, ShipDesign
 
 if find_spec("pssapi") is not None:
     from pssapi import PssApiClient  # type: ignore
@@ -532,6 +532,64 @@ class PSSService:
                         return parsed[:limit]
         return []
 
+    async def _fetch_battle_report_xml_via_http(
+        self,
+        battle_id: int,
+        access_token: str,
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        base_url = str(settings.PSS_API_BASE_URL).rstrip("/")
+        params = {"battleId": battle_id, "accessToken": access_token}
+        headers = {
+            "Accept": "*/*",
+            "User-Agent": "UnityPlayer/6000.0.66f2 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)",
+            "X-Unity-Version": "6000.0.66f2",
+        }
+        endpoints = [
+            "BattleService/GetBattle3",
+            "BattleService/GetBattle2",
+            "BattleService/GetBattle",
+        ]
+
+        last_error: Optional[str] = None
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            for endpoint in endpoints:
+                url = f"{base_url}/{endpoint}"
+                try:
+                    response = await client.get(url, params=params, headers=headers)
+                except Exception:
+                    continue
+                if response.status_code != 200:
+                    continue
+
+                xml_text = (response.text or "").strip()
+                if not xml_text:
+                    continue
+                if "errorMessage=" in xml_text:
+                    parsed_error = self._extract_xml_error_message(xml_text)
+                    if parsed_error:
+                        last_error = parsed_error
+                    else:
+                        last_error = "La API devolvio un error al solicitar el reporte de batalla."
+                    continue
+                if not xml_text.startswith("<"):
+                    continue
+                return xml_text, endpoint, None
+        return None, None, last_error
+
+    def _extract_xml_error_message(self, xml_text: str) -> Optional[str]:
+        if not xml_text:
+            return None
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return None
+
+        for key in ("errorMessage", "error", "message"):
+            value = root.attrib.get(key)
+            if value:
+                return str(value)
+        return None
+
     def _parse_battle_xml_response(self, xml_text: str, username: str) -> List[Dict[str, Any]]:
         if not xml_text or "errorMessage=" in xml_text:
             return []
@@ -579,6 +637,42 @@ class PSSService:
                 }
             )
         return parsed
+
+    def _parse_battle_report_summary(self, xml_text: str, battle_id: int) -> Dict[str, Any]:
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return {
+                "battle_id": battle_id,
+                "player_name": None,
+                "opponent_name": None,
+                "battle_type": None,
+                "result": None,
+                "battle_start_date": None,
+                "battle_end_date": None,
+                "raw_data": {},
+            }
+
+        battle_nodes = [node for node in root.iter() if node.tag.lower().endswith("battle")]
+        node = battle_nodes[0] if battle_nodes else root
+        raw_data = {str(key): value for key, value in node.attrib.items()}
+
+        return {
+            "battle_id": self._first_raw_value(raw_data, "battleid", "battle_id", "id") or battle_id,
+            "player_name": self._first_raw_value(raw_data, "playername", "username", "captainname"),
+            "opponent_name": self._first_raw_value(
+                raw_data,
+                "opponentname",
+                "defendername",
+                "attackername",
+                "enemyname",
+            ),
+            "battle_type": self._first_raw_value(raw_data, "battletype", "type", "battlemode"),
+            "result": self._first_raw_value(raw_data, "result", "outcome", "winner", "iswin"),
+            "battle_start_date": self._first_raw_value(raw_data, "battlestartdate", "startdate"),
+            "battle_end_date": self._first_raw_value(raw_data, "battleenddate", "enddate"),
+            "raw_data": raw_data,
+        }
 
     def _collect_battle_related_methods(self) -> Dict[str, List[str]]:
         client = self._ensure_client()
@@ -1031,6 +1125,68 @@ class PSSService:
             "created_at": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
             "raw_data": raw_data,
         }
+
+    def _serialize_battle_report(
+        self,
+        report: BattleReport,
+        source: str,
+    ) -> Dict[str, Any]:
+        return {
+            "battle_id": report.battle_id,
+            "player_name": report.player_name,
+            "opponent_name": report.opponent_name,
+            "battle_type": report.battle_type,
+            "result": report.result,
+            "battle_start_date": report.battle_start_date,
+            "battle_end_date": report.battle_end_date,
+            "xml_report": report.xml_report,
+            "summary_data": report.summary_data if isinstance(report.summary_data, dict) else {},
+            "source_endpoint": report.source_endpoint,
+            "source": source,
+            "fetched_at": report.fetched_at.isoformat() if report.fetched_at else None,
+            "updated_at": report.updated_at.isoformat() if report.updated_at else None,
+        }
+
+    def _persist_battle_index_rows(self, battles: List[Dict[str, Any]]) -> None:
+        if not battles:
+            return
+
+        rows: List[Dict[str, Any]] = []
+        now = datetime.now(timezone.utc)
+        for battle in battles:
+            battle_id = battle.get("id")
+            if battle_id is None:
+                battle_id = battle.get("battle_id")
+            if isinstance(battle_id, str):
+                if not battle_id.isdigit():
+                    continue
+                battle_id = int(battle_id)
+            if not isinstance(battle_id, int) or battle_id <= 0:
+                continue
+
+            rows.append(
+                {
+                    "battle_id": battle_id,
+                    "player_name": str(battle.get("player_name") or "")[:255],
+                    "opponent_name": str(battle.get("opponent_name") or "")[:255],
+                    "battle_type": str(battle.get("battle_type") or "")[:100],
+                    "result": str(battle.get("result") or "")[:100],
+                    "trophy_change": str(battle.get("trophy_change") or "")[:100],
+                    "created_at_value": str(battle.get("created_at") or "")[:100],
+                    "last_seen_at": now,
+                    "snapshot_data": battle.get("raw_data") if isinstance(battle.get("raw_data"), dict) else {},
+                }
+            )
+
+        if not rows:
+            return
+
+        try:
+            self._upsert_rows(BattleIndex, rows, "battle_id")
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("event=battle_index_upsert_error count=%s", len(rows))
 
     def _item_row(self, design: Any) -> Dict[str, Any]:
         raw_data = self._extract_raw_data(design)
