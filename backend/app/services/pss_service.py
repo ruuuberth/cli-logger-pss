@@ -326,7 +326,9 @@ class PSSService:
 
             battle_rows = self._unwrap_collection(battles)
             if battle_rows:
-                return [self._serialize_user_battle(row, normalized_username) for row in battle_rows[:safe_limit]]
+                payload = [self._serialize_user_battle(row, normalized_username) for row in battle_rows[:safe_limit]]
+                self._persist_battle_index_rows(payload)
+                return payload
 
             token_for_http = (access_token or "").strip() or None
             if token_for_http is None and (refresh_token or "").strip():
@@ -347,6 +349,7 @@ class PSSService:
                 access_token=token_for_http,
             )
             if http_battles:
+                self._persist_battle_index_rows(http_battles)
                 return http_battles
 
             available_methods = self._collect_battle_related_methods()
