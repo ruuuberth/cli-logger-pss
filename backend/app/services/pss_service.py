@@ -498,6 +498,155 @@ class PSSService:
             "username": self._first_attr(user, "name", "username"),
         }
 
+    async def get_battle_report(
+        self,
+        battle_id: int,
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        device_key: Optional[str] = None,
+        force_refresh: bool = False,
+        ttl_seconds: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        if battle_id <= 0:
+            raise ValueError("battle_id debe ser mayor que 0.")
+
+        ttl = self._resolve_battle_report_ttl(ttl_seconds)
+        cached_db = self.db.query(BattleReport).filter(BattleReport.battle_id == battle_id).first()
+
+        if not force_refresh:
+            memory_hit = self._get_cached_battle_report(battle_id, ttl)
+            if memory_hit is not None:
+                return memory_hit
+            if cached_db is not None:
+                payload = self._serialize_battle_report(cached_db, source="database")
+                self._set_cached_battle_report(battle_id, payload)
+                return payload
+
+        token_for_http = (access_token or "").strip() or None
+        if token_for_http is None and (refresh_token or "").strip():
+            try:
+                token_data = await self.login_with_refresh_token(
+                    refresh_token=refresh_token or "",
+                    device_key=device_key,
+                )
+                token_for_http = token_data["access_token"]
+            except (PSSFeatureNotSupportedError, PSSAuthenticationError):
+                token_for_http = (refresh_token or "").strip() or None
+
+        if token_for_http is None:
+            if cached_db is not None:
+                payload = self._serialize_battle_report(cached_db, source="database")
+                self._set_cached_battle_report(battle_id, payload)
+                return payload
+            raise PSSAuthenticationError(
+                "Se requiere access_token (o refresh_token convertible) para descargar BattleService/GetBattle3."
+            )
+
+        xml_report, source_endpoint, remote_error = await self._fetch_battle_report_xml_via_http(
+            battle_id=battle_id,
+            access_token=token_for_http,
+        )
+        if not xml_report:
+            if remote_error:
+                if "authorize access token" in remote_error.lower():
+                    raise PSSAuthenticationError(remote_error)
+                raise PSSFeatureNotSupportedError(remote_error)
+            if cached_db is not None:
+                payload = self._serialize_battle_report(cached_db, source="database")
+                self._set_cached_battle_report(battle_id, payload)
+                return payload
+            raise PSSFeatureNotSupportedError(
+                "No fue posible obtener el reporte de batalla desde la API remota."
+            )
+
+        summary = self._parse_battle_report_summary(xml_report, battle_id)
+        row = {
+            "battle_id": battle_id,
+            "player_name": summary.get("player_name"),
+            "opponent_name": summary.get("opponent_name"),
+            "battle_type": summary.get("battle_type"),
+            "result": summary.get("result"),
+            "battle_start_date": summary.get("battle_start_date"),
+            "battle_end_date": summary.get("battle_end_date"),
+            "xml_report": xml_report,
+            "summary_data": summary.get("raw_data"),
+            "source_endpoint": source_endpoint,
+            "fetched_at": datetime.now(timezone.utc),
+        }
+
+        try:
+            self._upsert_rows(BattleReport, [row], "battle_id")
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("event=battle_report_upsert_error battle_id=%s", battle_id)
+            raise
+
+        saved = self.db.query(BattleReport).filter(BattleReport.battle_id == battle_id).first()
+        if saved is None:
+            raise PSSFeatureNotSupportedError("No fue posible persistir el reporte de batalla.")
+
+        payload = self._serialize_battle_report(saved, source="api")
+        self._persist_battle_index_rows(
+            [
+                {
+                    "id": payload.get("battle_id"),
+                    "player_name": payload.get("player_name"),
+                    "opponent_name": payload.get("opponent_name"),
+                    "battle_type": payload.get("battle_type"),
+                    "result": payload.get("result"),
+                    "created_at": payload.get("battle_end_date") or payload.get("battle_start_date"),
+                    "raw_data": payload.get("summary_data") or {},
+                }
+            ]
+        )
+        self._set_cached_battle_report(battle_id, payload)
+        return payload
+
+    def list_stored_battle_ids(self, limit: int = 200, offset: int = 0) -> Dict[str, Any]:
+        safe_limit = max(1, min(limit, 1000))
+        safe_offset = max(0, offset)
+
+        rows = (
+            self.db.query(BattleIndex)
+            .order_by(BattleIndex.last_seen_at.desc(), BattleIndex.battle_id.desc())
+            .offset(safe_offset)
+            .limit(safe_limit)
+            .all()
+        )
+        total = self.db.query(BattleIndex).count()
+
+        payload: List[Dict[str, Any]] = []
+        for row in rows:
+            has_report = (
+                self.db.query(BattleReport)
+                .filter(BattleReport.battle_id == row.battle_id)
+                .first()
+                is not None
+            )
+            payload.append(
+                {
+                    "battle_id": row.battle_id,
+                    "player_name": row.player_name,
+                    "opponent_name": row.opponent_name,
+                    "battle_type": row.battle_type,
+                    "result": row.result,
+                    "trophy_change": row.trophy_change,
+                    "created_at": row.created_at_value,
+                    "first_seen_at": row.first_seen_at.isoformat() if row.first_seen_at else None,
+                    "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+                    "has_report": has_report,
+                }
+            )
+
+        return {
+            "data": payload,
+            "count": len(payload),
+            "total": total,
+            "limit": safe_limit,
+            "offset": safe_offset,
+        }
+
     async def _fetch_battles_via_http(
         self,
         username: str,
