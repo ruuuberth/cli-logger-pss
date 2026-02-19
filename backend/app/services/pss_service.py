@@ -30,6 +30,8 @@ class PSSAuthenticationError(Exception):
 
 
 class PSSService:
+    _battle_report_cache: Dict[int, Dict[str, Any]] = {}
+
     def __init__(self, db: Session):
         self.db = db
         self._client: Any = None
