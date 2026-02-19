@@ -94,7 +94,7 @@ def test_battle_report_endpoint_returns_501_when_not_supported(monkeypatch):
 
 
 def test_stored_battles_endpoint_returns_payload(monkeypatch):
-    def _fake_list_stored_battle_ids(self, limit=200, offset=0):
+    def _fake_list_stored_battle_ids(self, limit=200, offset=0, search=None, has_report=None):
         return {
             "data": [
                 {
@@ -114,7 +114,9 @@ def test_stored_battles_endpoint_returns_payload(monkeypatch):
 
     db = _build_test_session()
     try:
-        payload = asyncio.run(get_stored_battle_ids(limit=100, offset=0, db=db))
+        payload = asyncio.run(
+            get_stored_battle_ids(limit=100, offset=0, search="Test", has_report=True, db=db)
+        )
         assert payload["count"] == 1
         assert payload["data"][0]["battle_id"] == 2762417
         assert payload["data"][0]["has_report"] is True

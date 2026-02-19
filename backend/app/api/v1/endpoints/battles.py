@@ -49,12 +49,25 @@ async def get_battle_report(
 async def get_stored_battle_ids(
     limit: int = Query(200, ge=1, le=1000, description="Cantidad maxima de IDs de batalla a retornar"),
     offset: int = Query(0, ge=0, description="Offset para paginacion"),
+    search: str | None = Query(
+        None,
+        description="Filtro por battle_id, jugador, oponente, resultado o tipo",
+    ),
+    has_report: bool | None = Query(
+        None,
+        description="Filtrar por disponibilidad de reporte XML (true/false)",
+    ),
     db: Session = Depends(get_db),
 ):
     """Listar IDs de batallas almacenados localmente para inspeccion rapida."""
     try:
         pss_service = PSSService(db)
-        return pss_service.list_stored_battle_ids(limit=limit, offset=offset)
+        return pss_service.list_stored_battle_ids(
+            limit=limit,
+            offset=offset,
+            search=search,
+            has_report=has_report,
+        )
     except HTTPException:
         raise
     except Exception as e:

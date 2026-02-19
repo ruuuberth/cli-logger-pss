@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -498,41 +498,80 @@ class PSSService:
         self._set_cached_battle_report(battle_id, payload)
         return payload
 
-    def list_stored_battle_ids(self, limit: int = 200, offset: int = 0) -> Dict[str, Any]:
+    def list_stored_battle_ids(
+        self,
+        limit: int = 200,
+        offset: int = 0,
+        search: Optional[str] = None,
+        has_report: Optional[bool] = None,
+    ) -> Dict[str, Any]:
         safe_limit = max(1, min(limit, 1000))
         safe_offset = max(0, offset)
+        normalized_search = (search or "").strip()
 
+        query = self.db.query(BattleIndex, BattleReport.battle_id, BattleReport.xml_report).outerjoin(
+            BattleReport, BattleReport.battle_id == BattleIndex.battle_id
+        )
+
+        if normalized_search:
+            token = f"%{normalized_search}%"
+            query = query.filter(
+                or_(
+                    cast(BattleIndex.battle_id, String).ilike(token),
+                    BattleIndex.player_name.ilike(token),
+                    BattleIndex.opponent_name.ilike(token),
+                    BattleIndex.result.ilike(token),
+                    BattleIndex.battle_type.ilike(token),
+                )
+            )
+        if has_report is True:
+            query = query.filter(BattleReport.battle_id.isnot(None))
+        elif has_report is False:
+            query = query.filter(BattleReport.battle_id.is_(None))
+
+        total = query.count()
         rows = (
-            self.db.query(BattleIndex)
-            .order_by(BattleIndex.last_seen_at.desc(), BattleIndex.battle_id.desc())
+            query.order_by(BattleIndex.last_seen_at.desc(), BattleIndex.battle_id.desc())
             .offset(safe_offset)
             .limit(safe_limit)
             .all()
         )
-        total = self.db.query(BattleIndex).count()
 
         payload: List[Dict[str, Any]] = []
-        for row in rows:
-            has_report = (
-                self.db.query(BattleReport)
-                .filter(BattleReport.battle_id == row.battle_id)
-                .first()
-                is not None
-            )
+        updated_index = False
+        for index_row, report_battle_id, report_xml in rows:
+            row_has_report = report_battle_id is not None
+            if row_has_report and report_xml and (not index_row.player_name or not index_row.opponent_name):
+                summary = self._parse_battle_report_summary(report_xml, index_row.battle_id)
+                parsed_player = str(summary.get("player_name") or "").strip()
+                parsed_opponent = str(summary.get("opponent_name") or "").strip()
+                if parsed_player and not index_row.player_name:
+                    index_row.player_name = parsed_player[:255]
+                    updated_index = True
+                if parsed_opponent and not index_row.opponent_name:
+                    index_row.opponent_name = parsed_opponent[:255]
+                    updated_index = True
+
             payload.append(
                 {
-                    "battle_id": row.battle_id,
-                    "player_name": row.player_name,
-                    "opponent_name": row.opponent_name,
-                    "battle_type": row.battle_type,
-                    "result": row.result,
-                    "trophy_change": row.trophy_change,
-                    "created_at": row.created_at_value,
-                    "first_seen_at": row.first_seen_at.isoformat() if row.first_seen_at else None,
-                    "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
-                    "has_report": has_report,
+                    "battle_id": index_row.battle_id,
+                    "player_name": index_row.player_name,
+                    "opponent_name": index_row.opponent_name,
+                    "battle_type": index_row.battle_type,
+                    "result": index_row.result,
+                    "trophy_change": index_row.trophy_change,
+                    "created_at": index_row.created_at_value,
+                    "first_seen_at": index_row.first_seen_at.isoformat() if index_row.first_seen_at else None,
+                    "last_seen_at": index_row.last_seen_at.isoformat() if index_row.last_seen_at else None,
+                    "has_report": row_has_report,
                 }
             )
+        if updated_index:
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                logger.exception("event=battle_index_enrich_commit_error")
 
         return {
             "data": payload,
