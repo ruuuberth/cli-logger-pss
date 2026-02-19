@@ -70,34 +70,6 @@ const Battles = () => {
     return value;
   }, [battleId]);
 
-  const handleFetchBattles = async () => {
-    if (!username.trim()) {
-      setError('Ingresa un username.');
-      return;
-    }
-
-    try {
-      setError(null);
-      setLoadingBattles(true);
-      const response = await pssApi.getUserBattles(
-        username.trim(),
-        Number(limit) || 10,
-        accessToken.trim() || null,
-        refreshToken.trim() || null,
-        deviceKey.trim() || null
-      );
-      const rows = response?.data?.data || [];
-      setBattles(rows);
-      loadStoredBattles();
-    } catch (err) {
-      const detail = err?.response?.data?.detail;
-      setError(detail || 'No se pudieron cargar batallas recientes.');
-      setBattles([]);
-    } finally {
-      setLoadingBattles(false);
-    }
-  };
-
   const handleFetchReport = async () => {
     if (!resolvedBattleId) {
       setError('Ingresa battle id.');
@@ -110,13 +82,17 @@ const Battles = () => {
       const response = await pssApi.getBattleReport(
         resolvedBattleId,
         accessToken.trim() || null,
-        refreshToken.trim() || null,
-        deviceKey.trim() || null,
         forceRefresh,
         ttlSeconds === '' ? null : ttlSeconds
       );
+      persistLastAccessToken(accessToken);
       setReport(response?.data?.data || null);
-      loadStoredBattles();
+      loadStoredBattles({
+        page: storedPage,
+        rowsPerPage: storedRowsPerPage,
+        searchApplied: storedSearchApplied,
+        hasReportApplied: storedHasReportApplied,
+      });
     } catch (err) {
       const detail = err?.response?.data?.detail;
       setError(detail || 'No se pudo obtener el reporte de batalla.');

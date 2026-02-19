@@ -86,33 +86,9 @@ export const pssApi = {
   getCrew: (id) => api.get(`/api/v1/crews/designs/${id}`),
 
   // Battles
-  getUserBattles: (username, limit = 10, accessToken = null, refreshToken = null, deviceKey = null) => {
-    const normalizedUsername = (username || '').trim();
-    if (!normalizedUsername) {
-      return Promise.reject(new Error('username is required'));
-    }
-    const normalizedLimit = Math.min(50, Math.max(1, Number(limit) || 10));
-    const encodedUsername = encodeURIComponent(normalizedUsername);
-    const tokenQuery = accessToken && accessToken.trim().length > 0
-      ? `&access_token=${encodeURIComponent(accessToken.trim())}`
-      : '';
-    const refreshQuery = refreshToken && refreshToken.trim().length > 0
-      ? `&refresh_token=${encodeURIComponent(refreshToken.trim())}`
-      : '';
-    const deviceQuery = deviceKey && deviceKey.trim().length > 0
-      ? `&device_key=${encodeURIComponent(deviceKey.trim())}`
-      : '';
-    return requestWithCache(
-      `battles-${encodedUsername}-${normalizedLimit}-${tokenQuery}-${refreshQuery}-${deviceQuery}`,
-      `/api/v1/battles/recent?username=${encodedUsername}&limit=${normalizedLimit}${tokenQuery}${refreshQuery}${deviceQuery}`
-    );
-  },
-
   getBattleReport: (
     battleId,
     accessToken = null,
-    refreshToken = null,
-    deviceKey = null,
     forceRefresh = false,
     ttlSeconds = null
   ) => {
