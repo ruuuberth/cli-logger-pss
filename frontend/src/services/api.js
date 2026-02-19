@@ -107,6 +107,53 @@ export const pssApi = {
       `/api/v1/battles/recent?username=${encodedUsername}&limit=${normalizedLimit}${tokenQuery}${refreshQuery}${deviceQuery}`
     );
   },
+
+  getBattleReport: (
+    battleId,
+    accessToken = null,
+    refreshToken = null,
+    deviceKey = null,
+    forceRefresh = false,
+    ttlSeconds = null
+  ) => {
+    const normalizedBattleId = Number(battleId);
+    if (!Number.isInteger(normalizedBattleId) || normalizedBattleId <= 0) {
+      return Promise.reject(new Error('battleId must be a positive integer'));
+    }
+
+    const tokenQuery = accessToken && accessToken.trim().length > 0
+      ? `&access_token=${encodeURIComponent(accessToken.trim())}`
+      : '';
+    const refreshQuery = refreshToken && refreshToken.trim().length > 0
+      ? `&refresh_token=${encodeURIComponent(refreshToken.trim())}`
+      : '';
+    const deviceQuery = deviceKey && deviceKey.trim().length > 0
+      ? `&device_key=${encodeURIComponent(deviceKey.trim())}`
+      : '';
+    const forceRefreshQuery = forceRefresh ? '&force_refresh=true' : '';
+    const ttlQuery = Number.isInteger(Number(ttlSeconds)) && Number(ttlSeconds) >= 0
+      ? `&ttl_seconds=${Number(ttlSeconds)}`
+      : '';
+
+    const query = `/api/v1/battles/report?battle_id=${normalizedBattleId}${tokenQuery}${refreshQuery}${deviceQuery}${forceRefreshQuery}${ttlQuery}`;
+    if (forceRefresh) {
+      return api.get(query);
+    }
+
+    return requestWithCache(
+      `battle-report-${normalizedBattleId}-${tokenQuery}-${refreshQuery}-${deviceQuery}-${ttlQuery}`,
+      query
+    );
+  },
+
+  getStoredBattles: (limit = 200, offset = 0) => {
+    const normalizedLimit = Math.min(1000, Math.max(1, Number(limit) || 200));
+    const normalizedOffset = Math.max(0, Number(offset) || 0);
+    return requestWithCache(
+      `stored-battles-${normalizedLimit}-${normalizedOffset}`,
+      `/api/v1/battles/stored?limit=${normalizedLimit}&offset=${normalizedOffset}`
+    );
+  },
 };
 
 export default api;
