@@ -618,11 +618,48 @@ class PSSService:
         battle_nodes = [node for node in root.iter() if node.tag.lower().endswith("battle")]
         node = battle_nodes[0] if battle_nodes else root
         raw_data = {str(key): value for key, value in node.attrib.items()}
+        aggregated = self._collect_xml_attribute_values(root)
+
+        player_name = self._first_xml_value(
+            aggregated,
+            "playername",
+            "captainname",
+            "username",
+            "attackername",
+            "attackerusername",
+            "attackercaptainname",
+            "attackingcaptainname",
+            "user1name",
+        )
+        opponent_name = self._first_xml_value(
+            aggregated,
+            "opponentname",
+            "enemyname",
+            "defendername",
+            "defenderusername",
+            "defendercaptainname",
+            "defendingcaptainname",
+            "targetname",
+            "user2name",
+        )
+        if not player_name or not opponent_name:
+            candidates = self._collect_name_candidates(aggregated)
+            if candidates:
+                if not player_name:
+                    player_name = candidates[0]
+                if not opponent_name and len(candidates) > 1:
+                    for candidate in candidates[1:]:
+                        if candidate != player_name:
+                            opponent_name = candidate
+                            break
+                if not opponent_name and len(candidates) == 1:
+                    opponent_name = candidates[0]
 
         return {
             "battle_id": self._first_raw_value(raw_data, "battleid", "battle_id", "id") or battle_id,
-            "player_name": self._first_raw_value(raw_data, "playername", "username", "captainname"),
-            "opponent_name": self._first_raw_value(
+            "player_name": player_name or self._first_raw_value(raw_data, "playername", "username", "captainname"),
+            "opponent_name": opponent_name
+            or self._first_raw_value(
                 raw_data,
                 "opponentname",
                 "defendername",
@@ -633,34 +670,8 @@ class PSSService:
             "result": self._first_raw_value(raw_data, "result", "outcome", "winner", "iswin"),
             "battle_start_date": self._first_raw_value(raw_data, "battlestartdate", "startdate"),
             "battle_end_date": self._first_raw_value(raw_data, "battleenddate", "enddate"),
-            "raw_data": raw_data,
+            "raw_data": {**raw_data, "_xml_keys": sorted(list(aggregated.keys()))[:200]},
         }
-
-    def _collect_battle_related_methods(self) -> Dict[str, List[str]]:
-        client = self._ensure_client()
-        if client is None:
-            return {}
-
-        output: Dict[str, List[str]] = {}
-        for attr_name in dir(client):
-            if not attr_name.endswith("_service"):
-                continue
-            service = getattr(client, attr_name, None)
-            if service is None:
-                continue
-            method_names = [
-                name
-                for name in dir(service)
-                if not name.startswith("_")
-                and callable(getattr(service, name, None))
-                and any(
-                    token in name.lower()
-                    for token in ("battle", "pvp", "combat", "history")
-                )
-            ]
-            if method_names:
-                output[attr_name] = sorted(method_names)
-        return output
 
     def _serialize_item_design(self, item: ItemDesign) -> Dict[str, Any]:
         return {
@@ -1032,6 +1043,44 @@ class PSSService:
         except Exception:
             self.db.rollback()
             logger.exception("event=battle_index_upsert_error count=%s", len(rows))
+
+    def _collect_xml_attribute_values(self, root: ET.Element) -> Dict[str, List[str]]:
+        output: Dict[str, List[str]] = {}
+        for node in root.iter():
+            for key, raw_value in node.attrib.items():
+                norm_key = self._normalize_key(str(key))
+                value = str(raw_value).strip()
+                if not norm_key or not value:
+                    continue
+                output.setdefault(norm_key, [])
+                if value not in output[norm_key]:
+                    output[norm_key].append(value)
+        return output
+
+    def _first_xml_value(self, aggregated: Dict[str, List[str]], *keys: str) -> Optional[str]:
+        for key in keys:
+            values = aggregated.get(self._normalize_key(key), [])
+            for value in values:
+                text = str(value).strip()
+                if text:
+                    return text
+        return None
+
+    def _collect_name_candidates(self, aggregated: Dict[str, List[str]]) -> List[str]:
+        candidates: List[str] = []
+        ignore_tokens = ("ship", "room", "item", "design", "ability", "fleet", "alliance")
+        for key, values in aggregated.items():
+            if "name" not in key and key not in {"username", "captainname"}:
+                continue
+            if any(token in key for token in ignore_tokens):
+                continue
+            for value in values:
+                text = str(value).strip()
+                if not text:
+                    continue
+                if text not in candidates:
+                    candidates.append(text)
+        return candidates
 
     def _item_row(self, design: Any) -> Dict[str, Any]:
         raw_data = self._extract_raw_data(design)
