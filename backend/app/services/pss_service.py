@@ -408,8 +408,6 @@ class PSSService:
         self,
         battle_id: int,
         access_token: Optional[str] = None,
-        refresh_token: Optional[str] = None,
-        device_key: Optional[str] = None,
         force_refresh: bool = False,
         ttl_seconds: Optional[int] = None,
     ) -> Dict[str, Any]:
@@ -429,15 +427,6 @@ class PSSService:
                 return payload
 
         token_for_http = (access_token or "").strip() or None
-        if token_for_http is None and (refresh_token or "").strip():
-            try:
-                token_data = await self.login_with_refresh_token(
-                    refresh_token=refresh_token or "",
-                    device_key=device_key,
-                )
-                token_for_http = token_data["access_token"]
-            except (PSSFeatureNotSupportedError, PSSAuthenticationError):
-                token_for_http = (refresh_token or "").strip() or None
 
         if token_for_http is None:
             if cached_db is not None:
@@ -445,7 +434,7 @@ class PSSService:
                 self._set_cached_battle_report(battle_id, payload)
                 return payload
             raise PSSAuthenticationError(
-                "Se requiere access_token (o refresh_token convertible) para descargar BattleService/GetBattle3."
+                "Se requiere access_token para descargar BattleService/GetBattle3."
             )
 
         xml_report, source_endpoint, remote_error = await self._fetch_battle_report_xml_via_http(

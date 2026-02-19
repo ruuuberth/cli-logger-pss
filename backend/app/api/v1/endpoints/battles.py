@@ -14,14 +14,6 @@ async def get_battle_report(
         None,
         description="Access token para descargar el reporte XML desde API oficial",
     ),
-    refresh_token: str | None = Query(
-        None,
-        description="Refresh token opcional; se intentara convertir a access token si es posible",
-    ),
-    device_key: str | None = Query(
-        None,
-        description="Device key opcional para conversion de refresh token",
-    ),
     force_refresh: bool = Query(
         False,
         description="Si es true, obliga descarga remota e ignora cache (memoria/DB) cuando sea posible",
@@ -39,8 +31,6 @@ async def get_battle_report(
         report = await pss_service.get_battle_report(
             battle_id=battle_id,
             access_token=access_token,
-            refresh_token=refresh_token,
-            device_key=device_key,
             force_refresh=force_refresh,
             ttl_seconds=ttl_seconds,
         )

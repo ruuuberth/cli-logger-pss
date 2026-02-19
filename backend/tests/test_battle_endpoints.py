@@ -56,8 +56,6 @@ def test_battle_report_endpoint_returns_401_when_auth_fails(monkeypatch):
         self,
         battle_id,
         access_token=None,
-        refresh_token=None,
-        device_key=None,
         force_refresh=False,
         ttl_seconds=None,
     ):
@@ -79,8 +77,6 @@ def test_battle_report_endpoint_returns_501_when_not_supported(monkeypatch):
         self,
         battle_id,
         access_token=None,
-        refresh_token=None,
-        device_key=None,
         force_refresh=False,
         ttl_seconds=None,
     ):
