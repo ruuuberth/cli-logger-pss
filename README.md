@@ -14,9 +14,10 @@ Proyecto migrado a una app nativa multiplataforma centrada en Python.
 cd native_app
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 cp ../.env.dev.example .env
-python app/main.py
+pss-native
+# alternativa: python -m app.main
 ```
 
 ## Compilar distribución

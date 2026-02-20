@@ -18,12 +18,13 @@ cd "Logger PSS"
 cd native_app
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## 3) Ejecutar app en desarrollo
 ```bash
-python app/main.py
+pss-native
+# alternativa: python -m app.main
 ```
 
 La app abrirá una ventana nativa (PySide6).

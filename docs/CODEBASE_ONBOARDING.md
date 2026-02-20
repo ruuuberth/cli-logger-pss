@@ -54,7 +54,8 @@ Legacy web/backend se conserva en `archive/deprecated/` solo como referencia.
 ```bash
 # Ejecutar app
 cd native_app
-python app/main.py
+pss-native
+# alternativa: python -m app.main
 
 # Build local
 cd native_app

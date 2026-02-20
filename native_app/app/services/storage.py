@@ -25,10 +25,12 @@ class Storage:
                     source_dir TEXT,
                     relative_path TEXT NOT NULL,
                     file_name TEXT NOT NULL,
+                    file_ext TEXT,
                     file_size INTEGER NOT NULL,
                     content_hash TEXT UNIQUE NOT NULL,
                     content_text TEXT NOT NULL,
-                    imported_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    imported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT
                 )
                 """
             )

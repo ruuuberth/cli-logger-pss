@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -11,23 +12,35 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from app.services.catalog_service import CatalogService
 from app.services.game_data import GameFile, detect_game_directory, scan_game_files
 from app.services.storage import Storage
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, storage: Storage):
+    def __init__(self, storage: Storage, catalog_service: CatalogService):
         super().__init__()
         self.storage = storage
+        self.catalog_service = catalog_service
         self.current_dir: Path | None = None
         self.current_files: list[GameFile] = []
 
         self.setWindowTitle("PixelStarships Logger Native")
-        self.resize(1100, 720)
+        self.resize(1200, 760)
+
+        tabs = QTabWidget()
+        tabs.addTab(self._build_import_tab(), "Importacion local")
+        tabs.addTab(self._build_catalog_tab(), "Catalogos")
+        self.setCentralWidget(tabs)
+
+    def _build_import_tab(self) -> QWidget:
+        tab = QWidget()
+        content = QVBoxLayout()
 
         self.status_label = QLabel("Directorio: -")
         self.files_label = QLabel("Archivos: 0")
@@ -44,9 +57,9 @@ class MainWindow(QMainWindow):
         self.import_button = QPushButton("Importar a SQLite")
         self.import_button.clicked.connect(self.import_files)
 
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Archivo", "Ruta relativa", "Tamano (bytes)"])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.import_table = QTableWidget(0, 3)
+        self.import_table.setHorizontalHeaderLabels(["Archivo", "Ruta relativa", "Tamano (bytes)"])
+        self.import_table.horizontalHeader().setStretchLastSection(True)
 
         top_buttons = QHBoxLayout()
         top_buttons.addWidget(self.detect_button)
@@ -54,15 +67,44 @@ class MainWindow(QMainWindow):
         top_buttons.addWidget(self.scan_button)
         top_buttons.addWidget(self.import_button)
 
-        content = QVBoxLayout()
         content.addLayout(top_buttons)
         content.addWidget(self.status_label)
         content.addWidget(self.files_label)
-        content.addWidget(self.table)
+        content.addWidget(self.import_table)
+        tab.setLayout(content)
+        return tab
 
-        root = QWidget()
-        root.setLayout(content)
-        self.setCentralWidget(root)
+    def _build_catalog_tab(self) -> QWidget:
+        tab = QWidget()
+        content = QVBoxLayout()
+
+        self.catalog_status_label = QLabel("Entidad: -")
+        self.catalog_count_label = QLabel("Registros: 0")
+        self.force_refresh_checkbox = QCheckBox("Forzar refresco desde API oficial")
+
+        self.load_items_button = QPushButton("Cargar Items")
+        self.load_items_button.clicked.connect(lambda: self.load_catalog("items"))
+        self.load_ships_button = QPushButton("Cargar Ships")
+        self.load_ships_button.clicked.connect(lambda: self.load_catalog("ships"))
+        self.load_crews_button = QPushButton("Cargar Crews")
+        self.load_crews_button.clicked.connect(lambda: self.load_catalog("crews"))
+
+        self.catalog_table = QTableWidget(0, 5)
+        self.catalog_table.setHorizontalHeaderLabels(["ID", "Nombre", "Tipo/Rol", "Rarity/Race", "Descripcion"])
+        self.catalog_table.horizontalHeader().setStretchLastSection(True)
+
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.load_items_button)
+        buttons.addWidget(self.load_ships_button)
+        buttons.addWidget(self.load_crews_button)
+        buttons.addWidget(self.force_refresh_checkbox)
+
+        content.addLayout(buttons)
+        content.addWidget(self.catalog_status_label)
+        content.addWidget(self.catalog_count_label)
+        content.addWidget(self.catalog_table)
+        tab.setLayout(content)
+        return tab
 
     def detect_directory(self) -> None:
         detected = detect_game_directory()
@@ -87,7 +129,7 @@ class MainWindow(QMainWindow):
         files = scan_game_files(self.current_dir)
         self.current_files = files
         self.files_label.setText(f"Archivos: {len(files)}")
-        self._render_table(files)
+        self._render_import_table(files)
 
         if not files:
             QMessageBox.information(self, "Sin resultados", "No se encontraron archivos exportables en la carpeta seleccionada.")
@@ -107,9 +149,54 @@ class MainWindow(QMainWindow):
             f"Total: {result['total']} | Nuevos: {result['imported']} | Actualizados: {result['updated']}",
         )
 
-    def _render_table(self, files: list[GameFile]) -> None:
-        self.table.setRowCount(len(files))
+    def load_catalog(self, entity: str) -> None:
+        force_refresh = self.force_refresh_checkbox.isChecked()
+        self.catalog_status_label.setText(f"Entidad: {entity} | Cargando...")
+
+        try:
+            if entity == "items":
+                rows = self.catalog_service.get_items(force_refresh=force_refresh)
+            elif entity == "ships":
+                rows = self.catalog_service.get_ships(force_refresh=force_refresh)
+            elif entity == "crews":
+                rows = self.catalog_service.get_crews(force_refresh=force_refresh)
+            else:
+                rows = []
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", f"No se pudo cargar {entity}: {exc}")
+            self.catalog_status_label.setText(f"Entidad: {entity} | Error")
+            return
+
+        self.catalog_status_label.setText(f"Entidad: {entity}")
+        self.catalog_count_label.setText(f"Registros: {len(rows)}")
+        self._render_catalog_table(entity, rows)
+
+    def _render_import_table(self, files: list[GameFile]) -> None:
+        self.import_table.setRowCount(len(files))
         for idx, game_file in enumerate(files):
-            self.table.setItem(idx, 0, QTableWidgetItem(game_file.name))
-            self.table.setItem(idx, 1, QTableWidgetItem(game_file.relative_path))
-            self.table.setItem(idx, 2, QTableWidgetItem(str(game_file.size)))
+            self.import_table.setItem(idx, 0, QTableWidgetItem(game_file.name))
+            self.import_table.setItem(idx, 1, QTableWidgetItem(game_file.relative_path))
+            self.import_table.setItem(idx, 2, QTableWidgetItem(str(game_file.size)))
+
+    def _render_catalog_table(self, entity: str, rows: list[dict]) -> None:
+        self.catalog_table.setRowCount(len(rows))
+
+        for idx, row in enumerate(rows):
+            if entity == "items":
+                col_id = row.get("item_design_id")
+                col_type = row.get("item_type")
+                col_meta = row.get("rarity")
+            elif entity == "ships":
+                col_id = row.get("ship_design_id")
+                col_type = row.get("class_type")
+                col_meta = row.get("rarity")
+            else:
+                col_id = row.get("crew_design_id")
+                col_type = row.get("role")
+                col_meta = row.get("race")
+
+            self.catalog_table.setItem(idx, 0, QTableWidgetItem(str(col_id or "-")))
+            self.catalog_table.setItem(idx, 1, QTableWidgetItem(str(row.get("name") or "-")))
+            self.catalog_table.setItem(idx, 2, QTableWidgetItem(str(col_type or "-")))
+            self.catalog_table.setItem(idx, 3, QTableWidgetItem(str(col_meta or "-")))
+            self.catalog_table.setItem(idx, 4, QTableWidgetItem(str(row.get("description") or "-")))
