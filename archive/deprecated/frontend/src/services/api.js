@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+  (typeof window !== 'undefined' && window.pssDesktop?.apiBaseUrl) ||
+  process.env.REACT_APP_API_URL ||
+  'http://localhost:8000';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const api = axios.create({
@@ -59,6 +62,28 @@ const requestWithCache = (key, url) => {
 
 export const pssApi = {
   clearCache: () => responseCache.clear(),
+
+  importGameFiles: ({ sourceDir, files }) => {
+    const formData = new FormData();
+    if (sourceDir) {
+      formData.append('source_dir', sourceDir);
+    }
+
+    files.forEach((file) => {
+      const payload = file.file || file;
+      const filename = file.name || payload?.name || 'game-data.txt';
+      formData.append('files', payload, filename);
+      formData.append(
+        'relative_paths',
+        file.relativePath || payload?.webkitRelativePath || filename
+      );
+    });
+
+    return api.post('/api/v1/local-data/import-game-files', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
+  },
 
   // Auth
   loginWithEmail: (email, password, deviceKey = null) =>

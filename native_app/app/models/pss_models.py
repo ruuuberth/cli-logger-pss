@@ -77,3 +77,18 @@ class BattleIndex(Base):
     first_seen_at = Column(DateTime(timezone=True), server_default=func.now())
     last_seen_at = Column(DateTime(timezone=True), server_default=func.now())
     snapshot_data = Column(JSON)
+
+
+class ImportedGameFile(Base):
+    __tablename__ = "imported_game_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_dir = Column(String(1024))
+    relative_path = Column(String(2048), index=True)
+    file_name = Column(String(255), nullable=False)
+    file_ext = Column(String(32))
+    file_size = Column(Integer, nullable=False)
+    content_hash = Column(String(64), unique=True, index=True, nullable=False)
+    content_text = Column(Text, nullable=False)
+    imported_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

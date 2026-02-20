@@ -10,6 +10,7 @@ const Navbar = () => {
     { label: 'Dashboard', path: '/' },
     { label: 'Auth', path: '/auth' },
     { label: 'Battles', path: '/battles' },
+    { label: 'Game Data', path: '/game-data' },
     { label: 'Items', path: '/items' },
     { label: 'Ships', path: '/ships' },
     { label: 'Crews', path: '/crews' },

@@ -8,6 +8,7 @@ import Ships from './pages/Ships';
 import Crews from './pages/Crews';
 import Battles from './pages/Battles';
 import Auth from './pages/Auth';
+import GameData from './pages/GameData';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/crews" element={<Crews />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/battles" element={<Battles />} />
+          <Route path="/game-data" element={<GameData />} />
         </Routes>
       </Container>
     </Box>

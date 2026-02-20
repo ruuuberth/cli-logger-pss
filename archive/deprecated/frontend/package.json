@@ -11,7 +11,9 @@
     "eject": "react-scripts eject",
     "electron": "electron .",
     "electron-dev": "concurrently \"npm start\" \"wait-on http://localhost:3000 && electron .\"",
+    "desktop:build-backend": "bash ./scripts/build-native-backend.sh",
     "electron-pack": "electron-builder",
+    "desktop:pack": "npm run desktop:build-backend && npm run electron-pack",
     "preelectron-pack": "npm run build"
   },
   "dependencies": {
@@ -40,7 +42,17 @@
     },
     "files": [
       "build/**/*",
-      "public/electron.js"
+      "public/electron.js",
+      "public/preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "native-backend/dist",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
     ]
   },
   "browserslist": {
