@@ -1,101 +1,65 @@
-# Onboarding técnico del código base
+# Onboarding Técnico (Native App)
 
 ## 1) Visión general
 
-Logger-PSS es una aplicación full stack para consultar datos de Pixel Starships, cachearlos en base de datos y visualizarlos en una interfaz web.
+`Logger PSS` es ahora una app nativa de escritorio, multiplataforma, centrada en Python.
 
-Arquitectura de alto nivel:
+Arquitectura vigente:
+- **UI nativa**: PySide6 (`native_app/app/ui/main_window.py`)
+- **Lógica de negocio**: servicios Python (`native_app/app/services/`)
+- **Persistencia local**: SQLite
+- **Modelos/config**: `native_app/app/models/` y `native_app/app/core/`
 
-- **Frontend (React + MUI)**: interfaz de usuario con páginas para dashboard, ítems, naves y tripulación.
-- **Backend (FastAPI)**: API REST que encapsula la lógica de consulta y caché.
-- **Persistencia (SQLAlchemy + PostgreSQL/SQLite)**: guarda diseños ya consultados para reducir llamadas externas.
-- **Orquestación (Docker Compose)**: ejecuta frontend, backend, base de datos y Redis en local.
+Legacy web/backend se conserva en `archive/deprecated/` solo como referencia.
 
-## 2) Estructura por carpetas
+## 2) Estructura clave
 
-- `frontend/`: cliente React, rutas y componentes visuales.
-- `backend/`: servicio FastAPI, modelos y endpoints.
-- `docs/`: guías de instalación y uso con Docker.
-- `docker-compose.yml` / `docker-compose.dev.yml`: despliegue local en modo prod/dev.
+- `native_app/app/main.py`: entrypoint de la app.
+- `native_app/app/ui/main_window.py`: ventana principal y acciones del usuario.
+- `native_app/app/services/game_data.py`: detección/escaneo de carpeta del juego.
+- `native_app/app/services/storage.py`: importación y guardado en SQLite.
+- `native_app/app/services/pss_service.py`: lógica de dominio migrada.
+- `native_app/app/models/*.py`: modelos y acceso de datos.
+- `native_app/app/core/config.py`: configuración central.
 
-## 3) Cómo fluye una petición (request lifecycle)
+## 3) Flujo funcional principal
 
-Ejemplo: cargar ítems en la página de Items.
+1. Usuario abre app nativa.
+2. Detecta automáticamente carpeta `SavySoda/Pixel Starships` o la selecciona manualmente.
+3. App escanea archivos exportables.
+4. App importa contenido a SQLite local.
+5. Datos quedan disponibles para siguientes vistas/consultas.
 
-1. `frontend/src/pages/Items.js` llama a `pssApi.getItems()` al montar el componente.
-2. `frontend/src/services/api.js` hace `GET /api/v1/items/designs`.
-3. `backend/app/api/v1/endpoints/items.py` recibe la request y crea `PSSService`.
-4. `backend/app/services/pss_service.py`:
-   - primero busca cache en DB (`ItemDesign`),
-   - si no existe, consulta API externa (`pssapi`),
-   - guarda el resultado en DB,
-   - devuelve datos serializados.
-5. El frontend renderiza la tabla y aplica búsqueda local por texto.
+## 4) Decisiones técnicas actuales
 
-El mismo patrón aplica para naves y tripulaciones.
+- Se prioriza app nativa única (sin separación frontend/backend HTTP).
+- Se mantiene compatibilidad con lógica previa migrando módulos de dominio.
+- Se preserva historial técnico en `archive/deprecated/` para trazabilidad.
 
-## 4) Componentes clave que debes entender
+## 5) Riesgos/deuda actual
 
-### Backend
+- Persistencia duplicada a consolidar (`sqlite3` directo + modelos SQLAlchemy).
+- `pss_service.py` aún requiere integración completa a UI.
+- Falta pipeline CI/CD multi-OS para releases automáticos.
 
-- **Entrada de app**: `backend/app/main.py`
-  - Configura FastAPI, CORS y monta el router v1.
-- **Configuración**: `backend/app/core/config.py`
-  - Define variables como `DATABASE_URL`, `API_V1_STR` y hosts permitidos.
-- **Router de API**: `backend/app/api/v1/api.py`
-  - Agrega rutas de `items`, `ships` y `crews`.
-- **Endpoints**: `backend/app/api/v1/endpoints/*.py`
-  - Son delgados: delegan casi todo al servicio.
-- **Servicio de dominio**: `backend/app/services/pss_service.py`
-  - Orquesta cache + llamada externa + serialización.
-- **Modelos y DB**:
-  - `backend/app/models/database.py`: engine, sesión y dependencia `get_db`.
-  - `backend/app/models/pss_models.py`: tablas `ItemDesign`, `ShipDesign`, `CrewDesign`.
+## 6) Siguiente ruta recomendada
 
-### Frontend
+1. Unificar capa de persistencia.
+2. Conectar pantallas nativas a `pss_service` (items/ships/crews/battles).
+3. Añadir tests de servicios críticos.
+4. Madurar build de distribución para Windows/Linux/macOS.
 
-- **Bootstrap app**: `frontend/src/index.js`
-  - Configura tema MUI y router.
-- **Ruteo principal**: `frontend/src/App.js`
-  - Mapea `/`, `/items`, `/ships`, `/crews`.
-- **Cliente HTTP**: `frontend/src/services/api.js`
-  - Centraliza `axios` y base URL.
-- **Páginas**: `frontend/src/pages/*.js`
-  - Dashboard para conteos; tablas filtrables para entidades.
-- **Navegación**: `frontend/src/components/Navbar.js`
+## 7) Comandos útiles
 
-## 5) Decisiones técnicas importantes
+```bash
+# Ejecutar app
+cd native_app
+python app/main.py
 
-- **Cache read-through en backend**: primero DB, luego API externa.
-- **Endpoints simples y capa de servicio fuerte**: facilita mantenimiento.
-- **Serialización manual**: controla formato de respuesta al frontend.
-- **Frontend sin estado global complejo**: usa `useState/useEffect` local por página.
-- **Configuración por entorno**: backend usa `.env`; frontend usa `REACT_APP_API_URL`.
+# Build local
+cd native_app
+./scripts/build.sh
 
-## 6) Riesgos / deuda técnica a vigilar
-
-- Manejo de errores genérico (`except Exception`) en endpoints puede ocultar errores de negocio.
-- Llamadas asíncronas a API externa con persistencia síncrona en SQLAlchemy clásico.
-- No hay capa de esquemas Pydantic para respuestas tipadas en endpoints.
-- Búsqueda y paginación se hacen en cliente; puede escalar mal con datasets grandes.
-- El import de `pssapi` es tolerante a fallo y retorna vacío, útil para desarrollo pero puede esconder errores de integración.
-
-## 7) Qué aprender después (ruta recomendada para alguien nuevo)
-
-1. **FastAPI fundamentals**
-   - Dependency Injection (`Depends`), routers y manejo de errores HTTP.
-2. **SQLAlchemy ORM**
-   - Sesiones, modelos, ciclos de vida y migraciones (idealmente añadir Alembic).
-3. **React hooks + MUI**
-   - Patrones de carga de datos (`useEffect`) y composición de UI.
-4. **Docker Compose del repo**
-   - Entender diferencias entre archivos `docker-compose.yml` y `docker-compose.dev.yml`.
-5. **Calidad y observabilidad**
-   - Añadir tests (backend + frontend), logging estructurado y métricas básicas.
-
-## 8) Primeras tareas de onboarding sugeridas
-
-- Levantar entorno dev con `docker compose -f docker-compose.dev.yml up --build`.
-- Recorrer `/docs` y probar endpoints en `/docs` de FastAPI.
-- Agregar un endpoint pequeño nuevo (ej. estadísticas agregadas) para entender el flujo end-to-end.
-- Implementar pruebas mínimas en backend para un endpoint de `items`.
+# Crear rama desde Main-NativeApp
+./scripts/new-branch.sh feat mi-cambio
+```

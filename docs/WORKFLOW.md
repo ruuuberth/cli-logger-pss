@@ -1,27 +1,32 @@
 # Workflow (Main-NativeApp)
 
-## Branch policy
-- Base branch: `Main-NativeApp`
-- Feature branches: `feat/<topic>`
-- Fix branches: `fix/<topic>`
-- Refactor branches: `refactor/<topic>`
-- Docs branches: `docs/<topic>`
+## Rama base
+- Base única: `Main-NativeApp`
 
-## Daily flow
+## Convención de ramas
+- `feat/<topic>`
+- `fix/<topic>`
+- `refactor/<topic>`
+- `docs/<topic>`
+- `chore/<topic>`
+
+## Flujo diario
 1. `git checkout Main-NativeApp`
 2. `git pull`
 3. `./scripts/new-branch.sh feat my-change`
-4. Work and commit
-5. `git push -u origin <your-branch>`
-6. Open PR to `Main-NativeApp`
+4. Implementar cambios
+5. Commit(s) con scope claro
+6. `git push -u origin <branch>`
+7. Abrir PR hacia `Main-NativeApp`
 
-## Commit style
-- `feat(native-ui): add battle import table`
-- `fix(storage): avoid duplicate hash inserts`
-- `refactor(service): split pss sync module`
-- `docs(workflow): clarify branch naming`
+## Estilo de commit sugerido
+- `feat(native-ui): add ships table`
+- `fix(import): skip oversized files`
+- `refactor(storage): centralize db access`
+- `docs(installation): update native setup`
 
-## Rules
-- One main objective per PR.
-- Keep PRs small and reviewable.
-- Do not commit generated local artifacts.
+## Reglas de PR
+- Un objetivo principal por PR.
+- No incluir artefactos generados (`__pycache__`, builds locales).
+- Actualizar docs si cambió comportamiento.
+- Verificar arranque local de app nativa antes de merge.

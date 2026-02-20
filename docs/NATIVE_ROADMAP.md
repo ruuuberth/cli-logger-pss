@@ -1,52 +1,41 @@
 # Native Migration Roadmap
 
 ## Objetivo
-Consolidar `native_app/` como única aplicación activa, eliminando dependencias de arquitectura web/backend HTTP.
+Consolidar `native_app/` como única aplicación activa y cerrar la etapa legacy web/backend.
 
-## Estado Actual
-- UI nativa base en `native_app/app/ui/main_window.py`
-- Servicios de importación local en `native_app/app/services/game_data.py` y `native_app/app/services/storage.py`
-- Código legacy movido a `archive/deprecated/`
+## Estado actual
+- Núcleo nativo operativo: `native_app/app/main.py`
+- UI base funcional: `native_app/app/ui/main_window.py`
+- Importación local: `native_app/app/services/game_data.py` + `storage.py`
 - Servicios de dominio migrados: `native_app/app/services/pss_service.py`
+- Legacy archivado en `archive/deprecated/`
 
-## Fase 1: Estabilización del núcleo nativo
-1. Unificar persistencia:
-   - decidir si `sqlite3` directo o SQLAlchemy como única capa.
-2. Limpiar modelos:
-   - separar tablas activas de tablas legacy no usadas.
-3. Centralizar configuración:
-   - rutas de DB, logs, cache y entorno desktop en `native_app/app/core/config.py`.
+## Fase 1: Núcleo de datos
+1. Definir una sola capa de persistencia (`sqlite3` o SQLAlchemy).
+2. Ajustar modelos activos para uso nativo.
+3. Centralizar paths/config en `native_app/app/core/config.py`.
 
-## Fase 2: Integración funcional completa
-1. Conectar UI a `pss_service`:
-   - items, ships, crews, batallas desde la app nativa.
-2. Reemplazar flujos incompletos:
-   - importación local y consultas API oficial en una misma interfaz.
-3. Manejo de errores y estados:
-   - timeouts, errores de red, reintentos, feedback al usuario.
+## Fase 2: Integración de funcionalidades
+1. Integrar `pss_service` con UI para items/ships/crews/battles.
+2. Unificar importación local + sincronización API oficial.
+3. Mejorar manejo de errores (red, timeouts, respuestas vacías).
 
-## Fase 3: UX nativa moderna
-1. Mejorar estructura visual:
-   - navegación por secciones, layout responsive desktop.
-2. Tabla y filtros:
-   - búsqueda, ordenamiento, paginación local.
-3. Historial y sincronización:
-   - vista de imports previos y última actualización de datos.
+## Fase 3: UX nativa
+1. Navegación por secciones (tabs/sidebar).
+2. Tablas con filtros, búsqueda y paginación.
+3. Vistas de historial de importación y estado de sincronización.
 
-## Fase 4: Distribución de producción
-1. Pipeline de build:
-   - PyInstaller/Nuitka por plataforma.
-2. Artefactos:
-   - Windows (`.exe`), Linux (AppImage/binario), macOS (`.app`).
-3. Post-build:
-   - smoke test automático de arranque y DB.
+## Fase 4: Calidad
+1. Tests de servicios críticos.
+2. Smoke tests de arranque + DB.
+3. Validaciones de integridad de datos importados.
 
-## Fase 5: Cierre de legacy
-1. Congelar `archive/deprecated` como solo lectura.
-2. Eliminar referencias legacy en docs/scripts.
-3. Etiquetar release `native-v1`.
+## Fase 5: Distribución
+1. Estándar de build con `native_app/scripts/build.sh`.
+2. Empaquetado por OS (Windows/Linux/macOS).
+3. Versionado y publicación de artefactos.
 
-## Próximas 3 tareas recomendadas
-1. Definir capa de persistencia única (`sqlite3` vs SQLAlchemy).
-2. Conectar `pss_service` a una pantalla nativa de consulta (Items/Ships/Crews).
-3. Agregar script de build multi-OS reproducible.
+## Fase 6: Cierre legacy
+1. Mantener `archive/deprecated/` como referencia histórica.
+2. Eliminar referencias legacy restantes en docs/scripts.
+3. Tag de release base: `native-v1`.
