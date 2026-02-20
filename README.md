@@ -15,6 +15,7 @@ cd native_app
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp ../.env.dev.example .env
 python app/main.py
 ```
 
@@ -28,6 +29,20 @@ cd native_app
 Salida esperada:
 - Linux/macOS: `native_app/dist/pss-logger-native`
 - Windows: `native_app/dist/pss-logger-native.exe`
+
+## Variables de entorno
+
+- Ejemplo base: `.env.example`
+- Ejemplo desarrollo: `.env.dev.example`
+- Recomendado para correr la app local:
+  - `cd native_app && cp ../.env.dev.example .env`
+
+Variables principales:
+- `DATABASE_URL`
+- `PSS_API_BASE_URL`
+- `PSS_CHECKSUM_KEY`
+- `DESIGNS_CACHE_TTL_SECONDS`
+- `BATTLE_REPORT_CACHE_TTL_SECONDS`
 
 ## Funciones implementadas en la app nativa
 
