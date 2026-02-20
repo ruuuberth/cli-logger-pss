@@ -61,6 +61,6 @@ pss-native
 cd native_app
 ./scripts/build.sh
 
-# Crear rama desde Main-NativeApp
+# Crear rama desde main
 ./scripts/new-branch.sh feat mi-cambio
 ```

@@ -9,12 +9,12 @@
 - [ ] chore
 
 ## Scope
-- Base branch: `Main-NativeApp`
+- Base branch: `main`
 - Related issue/task: 
 
 ## Checklist
-- [ ] Branch created from `Main-NativeApp`
-- [ ] App runs locally (`python app/main.py`)
+- [ ] Branch created from `main`
+- [ ] App runs locally (`python -m app.main`)
 - [ ] Build script validated (`native_app/scripts/build.sh`) if applicable
 - [ ] No temporary artifacts committed (`__pycache__`, build outputs)
 - [ ] Docs updated when behavior changed

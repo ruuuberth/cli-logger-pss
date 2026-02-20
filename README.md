@@ -8,6 +8,13 @@ Proyecto migrado a una app nativa multiplataforma centrada en Python.
 - Código backend reutilizable migrado a `native_app/app/core`, `native_app/app/models`, `native_app/app/services`
 - Legacy archivado: `archive/deprecated/`
 
+## Estrategia de ramas
+
+- Rama base activa (nativa): `main`
+- Ramas web en mantenimiento: `web/main`, `web/develop`
+- Las nuevas features se integran por PR a `main`
+- Reglas de colaboración: `CONTRIBUTING.md`
+
 ## Ejecutar app nativa en desarrollo
 
 ```bash

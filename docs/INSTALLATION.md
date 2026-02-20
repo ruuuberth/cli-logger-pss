@@ -71,5 +71,5 @@ archive/deprecated/
 
 ## Notas importantes
 - La arquitectura web/Docker quedó archivada en `archive/deprecated/`.
-- La rama base de trabajo es `Main-NativeApp`.
+- La rama base de trabajo es `main`.
 - Flujo de ramas y PRs: ver `docs/WORKFLOW.md`.

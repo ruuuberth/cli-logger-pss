@@ -25,7 +25,7 @@ if [ -z "$SLUG" ]; then
   exit 1
 fi
 
-BASE="Main-NativeApp"
+BASE="main"
 BRANCH="$TYPE/$SLUG"
 
 CURRENT="$(git branch --show-current)"
