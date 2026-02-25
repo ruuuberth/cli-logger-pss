@@ -1,8 +1,11 @@
+import asyncio
+import json
 import logging
 import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from importlib.util import find_spec
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -11,7 +14,16 @@ from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.pss_models import BattleIndex, BattleReport, CrewDesign, ItemDesign, ShipDesign
+from app.models.pss_models import (
+    BattleIndex,
+    BattleReport,
+    CrewDesign,
+    ImportedGameFile,
+    ItemDesign,
+    ItemIngredient,
+    ItemTag,
+    ShipDesign,
+)
 
 if find_spec("pssapi") is not None:
     from pssapi import PssApiClient  # type: ignore
@@ -31,6 +43,9 @@ class PSSAuthenticationError(Exception):
 
 class PSSService:
     _battle_report_cache: Dict[int, Dict[str, Any]] = {}
+    _unknown_item_keys: set[str] = set()
+    _local_item_rows_cache: Dict[str, List[Dict[str, Any]]] = {}
+    _api_item_rows_cache: Dict[str, Any] = {}
 
     def __init__(self, db: Session):
         self.db = db
@@ -40,10 +55,11 @@ class PSSService:
     async def get_item_designs(
         self, force_refresh: bool = False, ttl_seconds: Optional[int] = None
     ) -> List[Dict[str, Any]]:
+        cached_items: List[ItemDesign] = []
         try:
             ttl = self._resolve_ttl(ttl_seconds)
             cached_items = self.db.query(ItemDesign).all()
-            if cached_items and not force_refresh and self._is_cache_fresh(cached_items, ttl):
+            if cached_items and not force_refresh:
                 logger.info(
                     "event=item_designs source=cache count=%s ttl_seconds=%s",
                     len(cached_items),
@@ -67,14 +83,124 @@ class PSSService:
             rows = [self._item_row(design) for design in item_designs]
             rows = [row for row in rows if row["item_design_id"] is not None]
             self._upsert_rows(ItemDesign, rows, "item_design_id")
+            self._sync_item_relations(rows)
             self.db.commit()
 
             refreshed = self.db.query(ItemDesign).all()
             logger.info("event=item_designs source=api count=%s", len(refreshed))
             return [self._serialize_item_design(item) for item in refreshed]
+        except Exception as exc:
+            self.db.rollback()
+            raw_reason = ""
+            if getattr(exc, "orig", None) is not None:
+                raw_reason = str(exc.orig)
+            if not raw_reason:
+                raw_reason = str(exc)
+            reason = " ".join(raw_reason.split())[:240]
+            logger.error(
+                "event=item_designs_error type=%s reason=%s",
+                exc.__class__.__name__,
+                reason or "n/a",
+            )
+            if cached_items:
+                return [self._serialize_item_design(item) for item in cached_items]
+            return []
+
+    async def get_item_designs_by_type(
+        self,
+        item_type: str,
+        force_refresh: bool = False,
+        ttl_seconds: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        try:
+            if force_refresh:
+                await self.get_item_designs(force_refresh=True, ttl_seconds=ttl_seconds)
+            cached_items = (
+                self.db.query(ItemDesign)
+                .filter(ItemDesign.item_type == item_type)
+                .all()
+            )
+            return [self._serialize_item_design(item) for item in cached_items]
         except Exception:
             self.db.rollback()
-            logger.exception("event=item_designs_error")
+            logger.exception("event=item_designs_by_type_error item_type=%s", item_type)
+            return []
+
+    async def get_item_designs_api(
+        self,
+        item_type: str | None = None,
+        refresh: bool = False,
+        ttl_seconds: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        ttl = max(0, settings.ITEMS_API_CACHE_TTL_SECONDS if ttl_seconds is None else ttl_seconds)
+        now = datetime.now(timezone.utc)
+        cached_at = self._api_item_rows_cache.get("cached_at")
+        cached_rows = self._api_item_rows_cache.get("rows")
+        if (
+            not refresh
+            and cached_at is not None
+            and isinstance(cached_rows, list)
+            and (now - cached_at).total_seconds() <= ttl
+        ):
+            rows = cached_rows
+        else:
+            rows = await self.get_item_designs(force_refresh=True)
+            self._api_item_rows_cache["cached_at"] = now
+            self._api_item_rows_cache["rows"] = rows
+
+        if item_type:
+            if item_type == "Resources":
+                return [r for r in rows if r.get("item_type") in {"Gas", "Mineral"}]
+            return [r for r in rows if r.get("item_type") == item_type]
+        return rows
+
+    async def get_item_designs_db(self, item_type: str | None = None) -> List[Dict[str, Any]]:
+        try:
+            query = self.db.query(ItemDesign)
+            if item_type:
+                query = query.filter(ItemDesign.item_type == item_type)
+            rows = query.all()
+            return [self._serialize_item_design(item) for item in rows]
+        except Exception:
+            self.db.rollback()
+            logger.exception("event=item_designs_db_error item_type=%s", item_type)
+            return []
+
+    async def get_item_designs_from_local_files(self, item_type: str | None = None) -> List[Dict[str, Any]]:
+        try:
+            files = (
+                self.db.query(ImportedGameFile)
+                .filter(
+                    ImportedGameFile.file_name == "ItemDesigns.txt"
+                )
+                .all()
+            )
+            available = {f.file_name for f in files}
+            if "ItemDesigns.txt" not in available:
+                logger.warning(
+                    "event=item_designs_local_missing_file file=ItemDesigns.txt note=import_scan_limit_or_missing_export"
+                )
+                return []
+            rows: List[Dict[str, Any]] = []
+            for file in files:
+                cache_key = file.content_hash or ""
+                if cache_key and cache_key in self._local_item_rows_cache:
+                    parsed_rows = self._local_item_rows_cache[cache_key]
+                else:
+                    parsed_rows = self._parse_local_item_file(file.file_name or "", file.content_text or "")
+                    if cache_key:
+                        self._local_item_rows_cache[cache_key] = parsed_rows
+                rows.extend(parsed_rows)
+
+            if item_type:
+                if item_type == "Resources":
+                    rows = [r for r in rows if r.get("item_type") in {"Gas", "Mineral"}]
+                else:
+                    rows = [r for r in rows if r.get("item_type") == item_type]
+            return rows
+        except Exception:
+            self.db.rollback()
+            logger.exception("event=item_designs_local_files_error item_type=%s", item_type)
             return []
 
     async def get_item_design(self, item_id: int) -> Optional[Dict[str, Any]]:
@@ -102,6 +228,7 @@ class PSSService:
             if row["item_design_id"] is None:
                 return None
             self._upsert_rows(ItemDesign, [row], "item_design_id")
+            self._sync_item_relations([row])
             self.db.commit()
 
             db_item = self.db.query(ItemDesign).filter(ItemDesign.item_design_id == item_id).first()
@@ -114,10 +241,11 @@ class PSSService:
     async def get_ship_designs(
         self, force_refresh: bool = False, ttl_seconds: Optional[int] = None
     ) -> List[Dict[str, Any]]:
+        cached_ships: List[ShipDesign] = []
         try:
             ttl = self._resolve_ttl(ttl_seconds)
             cached_ships = self.db.query(ShipDesign).all()
-            if cached_ships and not force_refresh and self._is_cache_fresh(cached_ships, ttl):
+            if cached_ships and not force_refresh:
                 logger.info(
                     "event=ship_designs source=cache count=%s ttl_seconds=%s",
                     len(cached_ships),
@@ -150,6 +278,8 @@ class PSSService:
         except Exception:
             self.db.rollback()
             logger.exception("event=ship_designs_error")
+            if cached_ships:
+                return [self._serialize_ship_design(ship) for ship in cached_ships]
             return []
 
     async def get_ship_design(self, ship_id: int) -> Optional[Dict[str, Any]]:
@@ -191,10 +321,11 @@ class PSSService:
     async def get_crew_designs(
         self, force_refresh: bool = False, ttl_seconds: Optional[int] = None
     ) -> List[Dict[str, Any]]:
+        cached_crews: List[CrewDesign] = []
         try:
             ttl = self._resolve_ttl(ttl_seconds)
             cached_crews = self.db.query(CrewDesign).all()
-            if cached_crews and not force_refresh and self._is_cache_fresh(cached_crews, ttl):
+            if cached_crews and not force_refresh:
                 logger.info(
                     "event=crew_designs source=cache count=%s ttl_seconds=%s",
                     len(cached_crews),
@@ -226,6 +357,8 @@ class PSSService:
         except Exception:
             self.db.rollback()
             logger.exception("event=crew_designs_error")
+            if cached_crews:
+                return [self._serialize_crew_design(crew) for crew in cached_crews]
             return []
 
     async def get_crew_design(self, crew_id: int) -> Optional[Dict[str, Any]]:
@@ -715,17 +848,237 @@ class PSSService:
     def _serialize_item_design(self, item: ItemDesign) -> Dict[str, Any]:
         return {
             "id": item.item_design_id,
+            "item_design_id": item.item_design_id,
             "name": item.name,
             "description": item.description,
             "rarity": item.rarity,
             "item_type": item.item_type,
+            "item_design_key": item.item_design_key,
+            "item_design_name_en": item.item_design_name_en,
+            "item_design_description_raw": item.item_design_description_raw,
+            "level": item.level,
+            "item_sub_type": item.item_sub_type,
+            "min_ship_level": item.min_ship_level,
+            "min_room_level": item.min_room_level,
+            "market_price": item.market_price,
+            "fair_price": item.fair_price,
+            "build_time": item.build_time,
+            "build_price": item.build_price,
+            "mineral_cost": item.mineral_cost,
+            "gas_cost": item.gas_cost,
+            "manufacture_cost": item.manufacture_cost,
+            "starbase_manufacture_cost": item.starbase_manufacture_cost,
+            "our_price": item.our_price,
+            "active_animation_id": item.active_animation_id,
+            "animation_id": item.animation_id,
+            "border_sprite_id": item.border_sprite_id,
+            "character_design_id": item.character_design_id,
+            "character_part_id": item.character_part_id,
+            "character_part": item.character_part,
+            "circulation": item.circulation,
+            "content": item.content,
+            "craft_design_id": item.craft_design_id,
+            "equip_sound_file_id": item.equip_sound_file_id,
+            "flags": item.flags,
+            "image_sprite_id": item.image_sprite_id,
+            "logo_sprite_id": item.logo_sprite_id,
+            "missile_design_id": item.missile_design_id,
+            "parent_item_design_id": item.parent_item_design_id,
+            "particle_sprite_id": item.particle_sprite_id,
+            "priority": item.priority,
+            "race_id": item.race_id,
+            "rank": item.rank,
+            "reload_modifier": item.reload_modifier,
+            "reload_time": item.reload_time,
+            "requirement_string": item.requirement_string,
+            "room_design_id": item.room_design_id,
+            "root_item_design_id": item.root_item_design_id,
+            "situation_design_id": item.situation_design_id,
+            "sound_file_id": item.sound_file_id,
+            "training_design_id": item.training_design_id,
+            "transaction_volume": item.transaction_volume,
+            "module_type": item.module_type,
+            "module_argument": item.module_argument,
+            "enhancement_type": item.enhancement_type,
+            "enhancement_value": item.enhancement_value,
+            "drop_chance": item.drop_chance,
+            "max_count": item.max_count,
+            "item_space": item.item_space,
+            "required_research_design_id": item.required_research_design_id,
+            "tags": item.tags,
+            "ingredients": item.ingredients,
+            "metadata_json": item.metadata_json,
             "stats": item.stats,
             "created_at": item.created_at.isoformat() if item.created_at else None,
         }
 
+    def _empty_item_payload(self) -> Dict[str, Any]:
+        return {
+            "id": None,
+            "item_design_id": None,
+            "name": "",
+            "description": "",
+            "rarity": "",
+            "item_type": "",
+            "item_design_key": None,
+            "item_design_name_en": None,
+            "item_design_description_raw": None,
+            "level": None,
+            "item_sub_type": None,
+            "min_ship_level": None,
+            "min_room_level": None,
+            "market_price": None,
+            "fair_price": None,
+            "build_time": None,
+            "build_price": None,
+            "mineral_cost": None,
+            "gas_cost": None,
+            "manufacture_cost": None,
+            "starbase_manufacture_cost": None,
+            "our_price": None,
+            "active_animation_id": None,
+            "animation_id": None,
+            "border_sprite_id": None,
+            "character_design_id": None,
+            "character_part_id": None,
+            "character_part": None,
+            "circulation": None,
+            "content": None,
+            "craft_design_id": None,
+            "equip_sound_file_id": None,
+            "flags": None,
+            "image_sprite_id": None,
+            "logo_sprite_id": None,
+            "missile_design_id": None,
+            "parent_item_design_id": None,
+            "particle_sprite_id": None,
+            "priority": None,
+            "race_id": None,
+            "rank": None,
+            "reload_modifier": None,
+            "reload_time": None,
+            "requirement_string": None,
+            "room_design_id": None,
+            "root_item_design_id": None,
+            "situation_design_id": None,
+            "sound_file_id": None,
+            "training_design_id": None,
+            "transaction_volume": None,
+            "module_type": None,
+            "module_argument": None,
+            "enhancement_type": None,
+            "enhancement_value": None,
+            "drop_chance": None,
+            "max_count": None,
+            "item_space": None,
+            "required_research_design_id": None,
+            "tags": None,
+            "ingredients": None,
+            "metadata_json": None,
+            "stats": {},
+            "created_at": None,
+        }
+
+    def _parse_local_item_file(self, file_name: str, content_text: str) -> List[Dict[str, Any]]:
+        if not content_text.strip().startswith("<"):
+            return []
+        try:
+            root = ET.fromstring(content_text)
+        except Exception:
+            logger.warning("event=local_item_file_parse_error file=%s", file_name)
+            return []
+
+        rows: List[Dict[str, Any]] = []
+        for node in list(root):
+            attrs = {str(k): v for k, v in node.attrib.items()}
+            n = self._normalize_key(node.tag)
+            if n == "craftdesign":
+                rows.append(self._local_craft_row(attrs))
+            elif n == "missiledesign":
+                rows.append(self._local_missile_row(attrs))
+            elif n == "itemdesign":
+                rows.append(self._local_itemdesign_row(attrs))
+        return rows
+
+    def _local_craft_row(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        row = self._empty_item_payload()
+        craft_id = self._first_raw_value(attrs, "craft_design_id")
+        row.update(
+            {
+                "id": craft_id,
+                "item_design_id": craft_id,
+                "name": self._first_raw_value(attrs, "craft_name") or "",
+                "description": "Fuente local: CraftDesigns",
+                "item_type": "Craft",
+                "item_sub_type": "CraftDesign",
+                "craft_design_id": craft_id,
+                "missile_design_id": self._first_raw_value(attrs, "missile_design_id"),
+                "reload_time": self._value_as_float(attrs, attrs, "reload"),
+                "stats": {
+                    "hp": self._value_as_int(attrs, attrs, "hp"),
+                    "speed": self._value_as_int(attrs, attrs, "flight_speed"),
+                },
+            }
+        )
+        return row
+
+    def _local_missile_row(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        row = self._empty_item_payload()
+        missile_id = self._first_raw_value(attrs, "missile_design_id")
+        row.update(
+            {
+                "id": missile_id,
+                "item_design_id": missile_id,
+                "name": self._first_raw_value(attrs, "missile_design_name") or "",
+                "description": "Fuente local: MissileDesigns",
+                "item_type": "Missile",
+                "item_sub_type": "MissileDesign",
+                "missile_design_id": missile_id,
+                "damage": None,
+                "stats": {
+                    "attack": self._value_as_float(attrs, attrs, "system_damage"),
+                    "hull_damage": self._value_as_float(attrs, attrs, "hull_damage"),
+                    "shield_damage": self._value_as_float(attrs, attrs, "shield_damage"),
+                },
+            }
+        )
+        return row
+
+    def _local_itemdesign_row(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        row = self._empty_item_payload()
+        item_id = self._value_as_int(attrs, attrs, "item_design_id")
+        row.update(
+            {
+                "id": item_id,
+                "item_design_id": item_id,
+                "name": self._first_raw_value(attrs, "item_design_name", "name") or "",
+                "description": self._first_raw_value(attrs, "item_design_description", "description") or "",
+                "rarity": self._first_raw_value(attrs, "rarity") or "",
+                "item_type": self._first_raw_value(attrs, "item_type") or "",
+                "item_design_key": self._first_raw_value(attrs, "item_design_key"),
+                "item_design_name_en": self._first_raw_value(attrs, "item_design_name_en"),
+                "level": self._value_as_int(attrs, attrs, "level"),
+                "item_sub_type": self._first_raw_value(attrs, "item_sub_type"),
+                "min_ship_level": self._value_as_int(attrs, attrs, "min_ship_level"),
+                "min_room_level": self._value_as_int(attrs, attrs, "min_room_level"),
+                "market_price": self._value_as_int(attrs, attrs, "market_price"),
+                "fair_price": self._value_as_int(attrs, attrs, "fair_price"),
+                "build_time": self._value_as_int(attrs, attrs, "build_time"),
+                "build_price": self._value_as_int(attrs, attrs, "build_price"),
+                "mineral_cost": self._value_as_int(attrs, attrs, "mineral_cost"),
+                "gas_cost": self._value_as_int(attrs, attrs, "gas_cost"),
+                "tags": self._first_raw_value(attrs, "tags"),
+                "ingredients": self._first_raw_value(attrs, "ingredients"),
+                "metadata_json": self._first_raw_value(attrs, "metadata"),
+                "stats": {},
+            }
+        )
+        return row
+
     def _serialize_ship_design(self, ship: ShipDesign) -> Dict[str, Any]:
         return {
             "id": ship.ship_design_id,
+            "ship_design_id": ship.ship_design_id,
             "name": ship.name,
             "description": ship.description,
             "class_type": ship.class_type,
@@ -737,6 +1090,7 @@ class PSSService:
         raw = crew.raw_data if isinstance(crew.raw_data, dict) else {}
         return {
             "id": crew.crew_design_id,
+            "crew_design_id": crew.crew_design_id,
             "name": crew.name,
             "description": crew.description,
             "race": crew.race,
@@ -805,6 +1159,204 @@ class PSSService:
                 if isinstance(value, (int, float)):
                     stats[attr] = value
         return stats
+
+    def _parse_tags(self, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return []
+            return [tag.strip() for tag in value.split(",") if tag.strip()]
+        if isinstance(value, (list, tuple, set)):
+            return [str(tag).strip() for tag in value if str(tag).strip()]
+        return [str(value).strip()]
+
+    def _parse_ingredients(self, value: Any) -> list[tuple[int, int]]:
+        if value is None:
+            return []
+        raw = value
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return []
+            try:
+                raw = json.loads(value)
+            except Exception:
+                raw = value
+        if isinstance(raw, str):
+            parts = [part.strip() for part in raw.split("|") if part.strip()]
+        elif isinstance(raw, (list, tuple, set)):
+            parts = [str(part).strip() for part in raw if str(part).strip()]
+        else:
+            parts = [str(raw).strip()]
+
+        output: list[tuple[int, int]] = []
+        for part in parts:
+            if "x" not in part:
+                continue
+            item_id_raw, qty_raw = part.split("x", 1)
+            try:
+                item_id = int(item_id_raw.strip())
+                qty = int(qty_raw.strip())
+            except ValueError:
+                continue
+            output.append((item_id, qty))
+        return output
+
+    def _sync_item_relations(self, rows: List[Dict[str, Any]]) -> None:
+        if not rows:
+            return
+        item_ids = [row.get("item_design_id") for row in rows if row.get("item_design_id") is not None]
+        if not item_ids:
+            return
+
+        self.db.query(ItemIngredient).filter(ItemIngredient.item_design_id.in_(item_ids)).delete(
+            synchronize_session=False
+        )
+        self.db.query(ItemTag).filter(ItemTag.item_design_id.in_(item_ids)).delete(
+            synchronize_session=False
+        )
+
+        ingredients_objects: list[ItemIngredient] = []
+        tag_objects: list[ItemTag] = []
+        for row in rows:
+            item_id = row.get("item_design_id")
+            if not item_id:
+                continue
+            for tag in self._parse_tags(row.get("tags")):
+                tag_objects.append(ItemTag(item_design_id=item_id, tag=tag))
+            for ingredient_id, qty in self._parse_ingredients(row.get("ingredients")):
+                ingredients_objects.append(
+                    ItemIngredient(
+                        item_design_id=item_id,
+                        ingredient_item_design_id=ingredient_id,
+                        quantity=qty,
+                    )
+                )
+
+        if ingredients_objects:
+            self.db.bulk_save_objects(ingredients_objects)
+        if tag_objects:
+            self.db.bulk_save_objects(tag_objects)
+
+    def _log_unknown_item_keys(self, raw_data: Dict[str, Any]) -> None:
+        if not raw_data:
+            return
+
+        # Supported raw keys for item designs (normalized).
+        supported = {
+            self._normalize_key(key)
+            for key in [
+                "ItemDesignKey",
+                "ItemDesignNameEN",
+                "ItemDesignDescription",
+                "ItemDesignId",
+                "ItemDesignName",
+                "ItemType",
+                "ItemSubType",
+                "Level",
+                "Rarity",
+                "MinShipLevel",
+                "MinRoomLevel",
+                "MarketPrice",
+                "FairPrice",
+                "BuildTime",
+                "BuildPrice",
+                "MineralCost",
+                "GasCost",
+                "ManufactureCost",
+                "StarbaseManufactureCost",
+                "OurPrice",
+                "ModuleType",
+                "ModuleArgument",
+                "EnhancementType",
+                "EnhancementValue",
+                "DropChance",
+                "MaxCount",
+                "ItemSpace",
+                "RequiredResearchDesignId",
+                "Tags",
+                "Ingredients",
+                "Metadata",
+                "ActiveAnimationId",
+                "AnimationId",
+                "BorderSpriteId",
+                "CharacterDesignId",
+                "CharacterPartId",
+                "CharacterPart",
+                "Circulation",
+                "Content",
+                "CraftDesignId",
+                "EquipSoundFileId",
+                "Flags",
+                "ImageSpriteId",
+                "LogoSpriteId",
+                "MissileDesignId",
+                "ParentItemDesignId",
+                "ParticleSpriteId",
+                "Priority",
+                "RaceId",
+                "Rank",
+                "ReloadModifier",
+                "ReloadTime",
+                "RequirementString",
+                "RoomDesignId",
+                "RootItemDesignId",
+                "SituationDesignId",
+                "SoundFileId",
+                "TrainingDesignId",
+                "TransactionVolume",
+            ]
+            + [
+                "attack",
+                "defense",
+                "health",
+                "speed",
+                "critical",
+                "dodge",
+                "hp",
+                "pilot",
+                "repair",
+                "weapon",
+                "science",
+                "engine",
+                "research",
+                "stamina",
+                "ability",
+                "fire_resistance",
+                "walk_speed",
+                "run_speed",
+            ]
+        }
+
+        unknown = []
+        for key in raw_data.keys():
+            normalized = self._normalize_key(str(key))
+            if normalized not in supported and normalized not in self._unknown_item_keys:
+                self._unknown_item_keys.add(normalized)
+                unknown.append(str(key))
+
+        if unknown:
+            logger.warning(
+                "event=item_design_unknown_raw_keys count=%s sample=%s",
+                len(unknown),
+                ", ".join(unknown[:20]),
+            )
+            self._persist_unknown_item_keys(unknown)
+
+    def _persist_unknown_item_keys(self, keys: list[str]) -> None:
+        if not keys:
+            return
+        try:
+            log_dir = Path.home() / ".pss_logger"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_path = log_dir / "unknown_item_keys.log"
+            with log_path.open("a", encoding="utf-8") as handle:
+                for key in keys:
+                    handle.write(f"{key}\n")
+        except Exception:
+            logger.exception("event=item_design_unknown_keys_persist_error")
 
     def _extract_crew_stats(self, base_stats: Any, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         stats = dict(base_stats) if isinstance(base_stats, dict) else {}
@@ -914,7 +1466,8 @@ class PSSService:
                 continue
             result = method(*args)
             if hasattr(result, "__await__"):
-                return await result
+                timeout = max(1, int(settings.PSS_API_REQUEST_TIMEOUT_SECONDS))
+                return await asyncio.wait_for(result, timeout=timeout)
             return result
         logger.warning(
             "event=pss_method_missing service=%s methods=%s",
@@ -959,6 +1512,40 @@ class PSSService:
             if value is not None:
                 return value
         return None
+
+    def _first_attr_or_raw(self, obj: Any, raw_data: Dict[str, Any], *aliases: str) -> Any:
+        value = self._first_attr(obj, *aliases)
+        if value is not None:
+            return value
+        return self._first_raw_value(raw_data, *aliases)
+
+    def _value_as_int(self, obj: Any, raw_data: Dict[str, Any], *aliases: str) -> Optional[int]:
+        value = self._first_attr_or_raw(obj, raw_data, *aliases)
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        try:
+            return int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return None
+
+    def _value_as_float(self, obj: Any, raw_data: Dict[str, Any], *aliases: str) -> Optional[float]:
+        value = self._first_attr_or_raw(obj, raw_data, *aliases)
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return float(int(value))
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            return float(str(value).strip())
+        except (TypeError, ValueError):
+            return None
 
     def _serialize_user_battle(self, battle: Any, username: str) -> Dict[str, Any]:
         raw_data = self._extract_raw_data(battle)
@@ -1123,14 +1710,71 @@ class PSSService:
 
     def _item_row(self, design: Any) -> Dict[str, Any]:
         raw_data = self._extract_raw_data(design)
+        self._log_unknown_item_keys(raw_data)
         return {
             "item_design_id": self._first_attr(design, "item_design_id", "id"),
             "name": self._first_attr(design, "item_design_name", "name") or "",
             "description": self._first_attr(design, "description") or "",
-            "rarity": self._first_attr(design, "rarity") or "",
-            "item_type": self._first_attr(design, "item_type") or "",
+            "rarity": self._first_attr_or_raw(design, raw_data, "rarity") or "",
+            "item_type": self._first_attr_or_raw(design, raw_data, "item_type") or "",
+            "item_design_key": self._first_attr_or_raw(design, raw_data, "item_design_key"),
+            "item_design_name_en": self._first_attr_or_raw(design, raw_data, "item_design_name_en"),
+            "item_design_description_raw": self._first_attr_or_raw(design, raw_data, "item_design_description"),
+            "level": self._value_as_int(design, raw_data, "level"),
+            "item_sub_type": self._first_attr_or_raw(design, raw_data, "item_sub_type"),
+            "min_ship_level": self._value_as_int(design, raw_data, "min_ship_level"),
+            "min_room_level": self._value_as_int(design, raw_data, "min_room_level"),
+            "market_price": self._value_as_int(design, raw_data, "market_price"),
+            "fair_price": self._value_as_int(design, raw_data, "fair_price"),
+            "build_time": self._value_as_int(design, raw_data, "build_time"),
+            "build_price": self._value_as_int(design, raw_data, "build_price"),
+            "mineral_cost": self._value_as_int(design, raw_data, "mineral_cost"),
+            "gas_cost": self._value_as_int(design, raw_data, "gas_cost"),
+            "manufacture_cost": self._value_as_int(design, raw_data, "manufacture_cost"),
+            "starbase_manufacture_cost": self._value_as_int(design, raw_data, "starbase_manufacture_cost"),
+            "our_price": self._value_as_int(design, raw_data, "our_price"),
+            "active_animation_id": self._value_as_int(design, raw_data, "active_animation_id"),
+            "animation_id": self._value_as_int(design, raw_data, "animation_id"),
+            "border_sprite_id": self._value_as_int(design, raw_data, "border_sprite_id"),
+            "character_design_id": self._value_as_int(design, raw_data, "character_design_id"),
+            "character_part_id": self._value_as_int(design, raw_data, "character_part_id"),
+            "character_part": self._first_attr_or_raw(design, raw_data, "character_part"),
+            "circulation": self._value_as_int(design, raw_data, "circulation"),
+            "content": self._first_attr_or_raw(design, raw_data, "content"),
+            "craft_design_id": self._value_as_int(design, raw_data, "craft_design_id"),
+            "equip_sound_file_id": self._value_as_int(design, raw_data, "equip_sound_file_id"),
+            "flags": self._value_as_int(design, raw_data, "flags"),
+            "image_sprite_id": self._value_as_int(design, raw_data, "image_sprite_id"),
+            "logo_sprite_id": self._value_as_int(design, raw_data, "logo_sprite_id"),
+            "missile_design_id": self._value_as_int(design, raw_data, "missile_design_id"),
+            "parent_item_design_id": self._value_as_int(design, raw_data, "parent_item_design_id"),
+            "particle_sprite_id": self._value_as_int(design, raw_data, "particle_sprite_id"),
+            "priority": self._value_as_int(design, raw_data, "priority"),
+            "race_id": self._value_as_int(design, raw_data, "race_id"),
+            "rank": self._value_as_int(design, raw_data, "rank"),
+            "reload_modifier": self._value_as_float(design, raw_data, "reload_modifier"),
+            "reload_time": self._value_as_float(design, raw_data, "reload_time"),
+            "requirement_string": self._first_attr_or_raw(design, raw_data, "requirement_string"),
+            "room_design_id": self._value_as_int(design, raw_data, "room_design_id"),
+            "root_item_design_id": self._value_as_int(design, raw_data, "root_item_design_id"),
+            "situation_design_id": self._value_as_int(design, raw_data, "situation_design_id"),
+            "sound_file_id": self._value_as_int(design, raw_data, "sound_file_id"),
+            "training_design_id": self._value_as_int(design, raw_data, "training_design_id"),
+            "transaction_volume": self._value_as_int(design, raw_data, "transaction_volume"),
+            "module_type": self._first_attr_or_raw(design, raw_data, "module_type"),
+            "module_argument": self._first_attr_or_raw(design, raw_data, "module_argument"),
+            "enhancement_type": self._first_attr_or_raw(design, raw_data, "enhancement_type"),
+            "enhancement_value": self._value_as_float(design, raw_data, "enhancement_value"),
+            "drop_chance": self._value_as_float(design, raw_data, "drop_chance"),
+            "max_count": self._value_as_int(design, raw_data, "max_count"),
+            "item_space": self._value_as_int(design, raw_data, "item_space"),
+            "required_research_design_id": self._value_as_int(
+                design, raw_data, "required_research_design_id"
+            ),
+            "tags": self._first_attr_or_raw(design, raw_data, "tags"),
+            "ingredients": self._first_attr_or_raw(design, raw_data, "ingredients"),
+            "metadata_json": self._first_attr_or_raw(design, raw_data, "metadata"),
             "stats": self._extract_stats(design, raw_data),
-            "raw_data": raw_data,
         }
 
     def _ship_row(self, design: Any) -> Dict[str, Any]:
@@ -1162,6 +1806,7 @@ class PSSService:
         bind = self.db.get_bind()
         dialect_name = bind.dialect.name if bind is not None else ""
         table = model.__table__
+        rows = [self._sanitize_row_for_table(table, row) for row in rows]
 
         update_dict = {k: table.c[k] for k in rows[0].keys() if k not in {"id", "created_at", key_column}}
         if "updated_at" in table.c:
@@ -1177,9 +1822,17 @@ class PSSService:
         if dialect_name == "sqlite":
             from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-            stmt = sqlite_insert(table).values(rows)
-            stmt = stmt.on_conflict_do_update(index_elements=[key_column], set_=update_dict)
-            self.db.execute(stmt)
+            # SQLite has a hard cap on bind parameters per statement.
+            # Split large upserts into chunks to avoid "too many SQL variables".
+            max_sqlite_binds = 900
+            column_count = max(1, len(rows[0]))
+            chunk_size = max(1, max_sqlite_binds // column_count)
+
+            for i in range(0, len(rows), chunk_size):
+                chunk = rows[i : i + chunk_size]
+                stmt = sqlite_insert(table).values(chunk)
+                stmt = stmt.on_conflict_do_update(index_elements=[key_column], set_=update_dict)
+                self.db.execute(stmt)
             return
 
         for row in rows:
@@ -1192,6 +1845,37 @@ class PSSService:
             else:
                 for key, value in row.items():
                     setattr(existing, key, value)
+
+    def _sanitize_row_for_table(self, table: Any, row: Dict[str, Any]) -> Dict[str, Any]:
+        sanitized: Dict[str, Any] = {}
+        for key, value in row.items():
+            column = table.c.get(key)
+            if column is None:
+                sanitized[key] = value
+                continue
+
+            type_name = column.type.__class__.__name__.lower()
+            is_json_column = "json" in type_name
+
+            if value is None:
+                sanitized[key] = None
+                continue
+
+            if is_json_column:
+                if isinstance(value, set):
+                    sanitized[key] = list(value)
+                elif isinstance(value, tuple):
+                    sanitized[key] = list(value)
+                else:
+                    sanitized[key] = value
+                continue
+
+            if isinstance(value, (dict, list, tuple, set)):
+                sanitized[key] = json.dumps(value, ensure_ascii=False)
+                continue
+
+            sanitized[key] = value
+        return sanitized
 
     def _resolve_ttl(self, ttl_seconds: Optional[int]) -> int:
         if ttl_seconds is not None:

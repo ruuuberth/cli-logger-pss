@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Native App",
+            "type": "shell",
+            "command": "${workspaceFolder}/native_app/.venv/bin/python",
+            "args": [
+                "${workspaceFolder}/native_app/run.py"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/native_app"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
