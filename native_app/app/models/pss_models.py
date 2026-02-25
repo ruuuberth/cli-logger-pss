@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON
+from sqlalchemy import Column, Integer, Float, String, DateTime, Text, JSON, UniqueConstraint
 from sqlalchemy.sql import func
 from app.models.database import Base
 
@@ -11,10 +11,87 @@ class ItemDesign(Base):
     description = Column(Text)
     rarity = Column(String(50))
     item_type = Column(String(100))
+    item_design_key = Column(String(100))
+    item_design_name_en = Column(String(255))
+    item_design_description_raw = Column(Text)
+    level = Column(Integer)
+    item_sub_type = Column(String(100))
+    min_ship_level = Column(Integer)
+    min_room_level = Column(Integer)
+    market_price = Column(Integer)
+    fair_price = Column(Integer)
+    build_time = Column(Integer)
+    build_price = Column(Integer)
+    mineral_cost = Column(Integer)
+    gas_cost = Column(Integer)
+    manufacture_cost = Column(Integer)
+    starbase_manufacture_cost = Column(Integer)
+    our_price = Column(Integer)
+    active_animation_id = Column(Integer)
+    animation_id = Column(Integer)
+    border_sprite_id = Column(Integer)
+    character_design_id = Column(Integer)
+    character_part_id = Column(Integer)
+    character_part = Column(Text)
+    circulation = Column(Integer)
+    content = Column(Text)
+    craft_design_id = Column(Integer)
+    equip_sound_file_id = Column(Integer)
+    flags = Column(Integer)
+    image_sprite_id = Column(Integer)
+    logo_sprite_id = Column(Integer)
+    missile_design_id = Column(Integer)
+    parent_item_design_id = Column(Integer)
+    particle_sprite_id = Column(Integer)
+    priority = Column(Integer)
+    race_id = Column(Integer)
+    rank = Column(Integer)
+    reload_modifier = Column(Float)
+    reload_time = Column(Float)
+    requirement_string = Column(Text)
+    room_design_id = Column(Integer)
+    root_item_design_id = Column(Integer)
+    situation_design_id = Column(Integer)
+    sound_file_id = Column(Integer)
+    training_design_id = Column(Integer)
+    transaction_volume = Column(Integer)
+    module_type = Column(String(100))
+    module_argument = Column(Text)
+    enhancement_type = Column(String(100))
+    enhancement_value = Column(Float)
+    drop_chance = Column(Float)
+    max_count = Column(Integer)
+    item_space = Column(Integer)
+    required_research_design_id = Column(Integer)
+    tags = Column(Text)
+    ingredients = Column(JSON)
+    metadata_json = Column(JSON)
     stats = Column(JSON)
-    raw_data = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class ItemIngredient(Base):
+    __tablename__ = "item_ingredients"
+    __table_args__ = (
+        UniqueConstraint("item_design_id", "ingredient_item_design_id", name="ux_item_ingredients_item_ing"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_design_id = Column(Integer, index=True, nullable=False)
+    ingredient_item_design_id = Column(Integer, index=True, nullable=False)
+    quantity = Column(Integer, nullable=False)
+
+
+class ItemTag(Base):
+    __tablename__ = "item_tags"
+    __table_args__ = (
+        UniqueConstraint("item_design_id", "tag", name="ux_item_tags_item_tag"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_design_id = Column(Integer, index=True, nullable=False)
+    tag = Column(String(100), index=True, nullable=False)
 
 class ShipDesign(Base):
     __tablename__ = "ship_designs"

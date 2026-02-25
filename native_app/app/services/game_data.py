@@ -6,7 +6,7 @@ from typing import Iterable
 
 TEXT_EXTENSIONS = {".xml", ".json", ".txt", ".log", ".csv", ".ini", ".cfg", ".yaml", ".yml"}
 MAX_FILES = 300
-MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
+MAX_FILE_SIZE_BYTES = 12 * 1024 * 1024
 
 
 @dataclass
