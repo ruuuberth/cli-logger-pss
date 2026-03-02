@@ -54,32 +54,20 @@ def main() -> int:
 
     from app.models.database import (
         Base,
-        backfill_item_designs_columns,
-        backfill_item_relations,
         engine,
         ensure_sqlite_schema,
         ensure_sqlite_indexes,
         log_schema_health,
-        migrate_item_designs_drop_raw_data,
-        repair_item_designs_json_columns,
     )
-    from app.services.catalog_service import CatalogService
-    from app.services.storage import Storage
     from app.ui.main_window import MainWindow
 
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_schema()
     ensure_sqlite_indexes()
-    backfill_item_designs_columns()
-    repair_item_designs_json_columns()
-    migrate_item_designs_drop_raw_data()
-    backfill_item_relations()
     log_schema_health()
 
     app = QApplication(sys.argv)
-    storage = Storage(db_path)
-    catalog_service = CatalogService()
-    window = MainWindow(storage=storage, catalog_service=catalog_service)
+    window = MainWindow()
     window.show()
     return app.exec()
 

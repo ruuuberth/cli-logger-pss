@@ -5,7 +5,8 @@ from typing import List
 
 class CsvEnvSettingsSource(EnvSettingsSource):
     def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        if field_name == "ALLOWED_HOSTS" and isinstance(value, str):
+        list_fields = {"ALLOWED_HOSTS", "API_FLOW_IGNORE_HOSTS"}
+        if field_name in list_fields and isinstance(value, str):
             cleaned_value = value.strip()
             if not cleaned_value:
                 return []
@@ -17,7 +18,8 @@ class CsvEnvSettingsSource(EnvSettingsSource):
 
 class CsvDotEnvSettingsSource(DotEnvSettingsSource):
     def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        if field_name == "ALLOWED_HOSTS" and isinstance(value, str):
+        list_fields = {"ALLOWED_HOSTS", "API_FLOW_IGNORE_HOSTS"}
+        if field_name in list_fields and isinstance(value, str):
             cleaned_value = value.strip()
             if not cleaned_value:
                 return []
@@ -50,6 +52,17 @@ class Settings(BaseSettings):
     ITEMS_API_CACHE_TTL_SECONDS: int = 86400
     BATTLE_REPORT_CACHE_TTL_SECONDS: int = 3600
     PSS_CHECKSUM_KEY: str = ""
+
+    # API Flow capture (mitmproxy)
+    API_FLOW_ENABLED: bool = True
+    MITMPROXY_BINARY: str = "mitmdump"
+    MITMPROXY_LISTEN_HOST: str = "127.0.0.1"
+    MITMPROXY_LISTEN_PORT: int = 8081
+    API_FLOW_BODY_MAX_CHARS: int = 4000
+    API_FLOW_RETENTION_DAYS: int = 7
+    API_FLOW_MAX_DB_MB: int = 512
+    API_FLOW_CAPTURE_HTTPS: bool = True
+    API_FLOW_IGNORE_HOSTS: List[str] = []
 
     @classmethod
     def settings_customise_sources(

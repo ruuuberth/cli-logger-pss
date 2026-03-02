@@ -74,12 +74,14 @@ Salida esperada:
 
 Variables principales:
 - `DATABASE_URL`
-- `PSS_API_BASE_URL`
-- `PSS_API_REQUEST_TIMEOUT_SECONDS`
-- `PSS_CHECKSUM_KEY`
-- `DESIGNS_CACHE_TTL_SECONDS`
-- `ITEMS_API_CACHE_TTL_SECONDS`
-- `BATTLE_REPORT_CACHE_TTL_SECONDS`
+- `API_FLOW_ENABLED`
+- `MITMPROXY_BINARY`
+- `MITMPROXY_LISTEN_HOST`
+- `MITMPROXY_LISTEN_PORT`
+- `API_FLOW_BODY_MAX_CHARS`
+- `API_FLOW_RETENTION_DAYS`
+- `API_FLOW_MAX_DB_MB`
+- `API_FLOW_IGNORE_HOSTS`
 
 ### Base de datos en desarrollo
 
@@ -88,13 +90,12 @@ Variables principales:
 - Si no existe `DATABASE_URL`, la app usa fallback en:
   - `~/.pss_logger/pss_logger.db`
 
-## Items en GUI: fuentes de datos
+## Enfoque actual de la UI
 
-- Pestaña: `Items`
-- Fuente `BaseDeDatos`: usa `item_designs` en SQLite local (rápido, sin red).
-- Fuente `API`: consulta la API oficial y actualiza SQLite; usa caché en memoria con TTL por `ITEMS_API_CACHE_TTL_SECONDS` (default 86400 = 1 día).
-- Fuente `ArchivosLocales`: parsea `ItemDesigns.txt` importado desde la carpeta del juego.
-- Nota: el checkbox de refresco forzado aplica a llamadas de API, no a DB/local.
+- La app se opera desde la pestaña `Flujo de la API` para logging de batallas.
+- Se removieron de navegación principal las opciones de:
+  - Importación desde archivos locales.
+  - Consulta directa de catálogos/items por API.
 
 ## VSCode: ejecución y depuración
 
@@ -111,10 +112,24 @@ Uso:
 
 ## Funciones implementadas en la app nativa
 
-- Detección automática de carpeta `SavySoda/Pixel Starships`
-- Selección manual de carpeta (fallback)
-- Escaneo de archivos exportables (`xml/json/txt/log/csv/ini/cfg/yaml`)
-- Importación local a SQLite
+- Captura de tráfico API en tiempo real (pestaña `Flujo de la API`) usando `mitmproxy`
+- Almacenamiento histórico en SQLite con retención por TTL/tamaño
+- Filtros, paginación y panel de detalle JSON por evento
+
+## Flujo de la API (mitmproxy)
+
+1. Instalar dependencias:
+```bash
+cd native_app
+source .venv/bin/activate
+pip install -e .
+```
+2. Abrir la pestaña `Flujo de la API`.
+3. Pulsar `Iniciar captura`.
+4. Configurar el juego para usar proxy `127.0.0.1:8081`.
+5. Si un host no permite MITM (pinning/TLS estricto), agrégalo a passthrough:
+   - `API_FLOW_IGNORE_HOSTS=player-auth.services.api.unity.com`
+   - varios hosts separados por coma.
 
 ## Estructura
 
@@ -128,9 +143,9 @@ native_app/
       database.py
       pss_models.py
     services/
-      game_data.py
-      pss_service.py
-      storage.py
+      api_flow_capture.py
+      api_flow_storage.py
+      mitm_api_flow_addon.py
     ui/
       main_window.py
   scripts/

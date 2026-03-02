@@ -48,15 +48,28 @@ Both should point to `native_app/.venv/...`.
 - Effective local file: `native_app/pss_logger_dev.db`.
 - Fallback (if `DATABASE_URL` is not set): `~/.pss_logger/pss_logger.db`.
 
-## Items sources
+## App focus
 
-- `BaseDeDatos`: reads parsed rows from local SQLite.
-- `API`: fetches official endpoint and updates local DB.
-- `ArchivosLocales`: parses imported `ItemDesigns.txt`.
-- API item cache TTL uses `ITEMS_API_CACHE_TTL_SECONDS` (default `86400` = 1 day).
-- API request timeout uses `PSS_API_REQUEST_TIMEOUT_SECONDS`.
+- Current UI is focused on `Flujo de la API` for battle logging.
+- Local file import and direct catalog/item API options are removed from the main navigation.
 
 ## VSCode
 
 - Debug configuration: `.vscode/launch.json` -> `Native App (Debug)`.
 - Run task: `.vscode/tasks.json` -> `Run Native App`.
+
+## API Flow tab (mitmproxy)
+
+- New tab: `Flujo de la API` for live request/response capture.
+- Starts/stops `mitmdump` from the app and stores history in SQLite.
+- Requires proxy setup in game/client (`127.0.0.1:8081` by default).
+
+Environment variables:
+- `API_FLOW_ENABLED`
+- `MITMPROXY_BINARY`
+- `MITMPROXY_LISTEN_HOST`
+- `MITMPROXY_LISTEN_PORT`
+- `API_FLOW_BODY_MAX_CHARS`
+- `API_FLOW_RETENTION_DAYS`
+- `API_FLOW_MAX_DB_MB`
+- `API_FLOW_IGNORE_HOSTS` (comma-separated passthrough hosts)

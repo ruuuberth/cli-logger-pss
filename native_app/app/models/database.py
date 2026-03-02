@@ -137,33 +137,62 @@ def ensure_sqlite_schema() -> None:
 
     with engine.begin() as conn:
         tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "item_designs" not in tables:
-            return
+        if "item_designs" in tables:
+            table_info = conn.exec_driver_sql("PRAGMA table_info(item_designs)").fetchall()
+            existing_columns = {row[1] for row in table_info}
 
-        table_info = conn.exec_driver_sql("PRAGMA table_info(item_designs)").fetchall()
-        existing_columns = {row[1] for row in table_info}
+            for column_name, column_type in ITEM_DESIGNS_SQLITE_COLUMNS.items():
+                if column_name in existing_columns:
+                    continue
+                conn.exec_driver_sql(f"ALTER TABLE item_designs ADD COLUMN {column_name} {column_type}")
 
-        for column_name, column_type in ITEM_DESIGNS_SQLITE_COLUMNS.items():
-            if column_name in existing_columns:
-                continue
-            conn.exec_driver_sql(f"ALTER TABLE item_designs ADD COLUMN {column_name} {column_type}")
-
-        conn.exec_driver_sql(
-            """
-            CREATE TABLE IF NOT EXISTS item_ingredients (
-                id INTEGER NOT NULL PRIMARY KEY,
-                item_design_id INTEGER NOT NULL,
-                ingredient_item_design_id INTEGER NOT NULL,
-                quantity INTEGER NOT NULL
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS item_ingredients (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    item_design_id INTEGER NOT NULL,
+                    ingredient_item_design_id INTEGER NOT NULL,
+                    quantity INTEGER NOT NULL
+                )
+                """
             )
-            """
-        )
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS item_tags (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    item_design_id INTEGER NOT NULL,
+                    tag VARCHAR(100) NOT NULL
+                )
+                """
+            )
         conn.exec_driver_sql(
             """
-            CREATE TABLE IF NOT EXISTS item_tags (
+            CREATE TABLE IF NOT EXISTS api_flow_events (
                 id INTEGER NOT NULL PRIMARY KEY,
-                item_design_id INTEGER NOT NULL,
-                tag VARCHAR(100) NOT NULL
+                session_id VARCHAR(64) NOT NULL,
+                captured_at DATETIME,
+                direction VARCHAR(16) NOT NULL,
+                method VARCHAR(16),
+                scheme VARCHAR(16),
+                host VARCHAR(255),
+                port INTEGER,
+                path VARCHAR(2048),
+                query TEXT,
+                url_full TEXT,
+                status_code INTEGER,
+                duration_ms INTEGER,
+                request_headers_json JSON,
+                response_headers_json JSON,
+                request_body_preview TEXT,
+                response_body_preview TEXT,
+                request_size_bytes INTEGER,
+                response_size_bytes INTEGER,
+                content_type_request VARCHAR(255),
+                content_type_response VARCHAR(255),
+                tls BOOLEAN,
+                error_text VARCHAR(2048),
+                game_process_hint VARCHAR(255),
+                flow_hash VARCHAR(100)
             )
             """
         )
@@ -174,35 +203,68 @@ def ensure_sqlite_indexes() -> None:
         return
 
     with engine.begin() as conn:
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_item_type ON item_designs (item_type)")
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_rarity ON item_designs (rarity)")
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_level ON item_designs (level)")
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_min_ship_level ON item_designs (min_ship_level)")
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_min_room_level ON item_designs (min_room_level)")
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_item_sub_type ON item_designs (item_sub_type)")
+        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "item_designs" in tables:
+            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_item_type ON item_designs (item_type)")
+            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_rarity ON item_designs (rarity)")
+            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_level ON item_designs (level)")
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_designs_min_ship_level ON item_designs (min_ship_level)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_designs_min_room_level ON item_designs (min_room_level)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_designs_item_sub_type ON item_designs (item_sub_type)"
+            )
 
-        conn.exec_driver_sql(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ux_item_ingredients_item_ing "
-            "ON item_ingredients (item_design_id, ingredient_item_design_id)"
-        )
-        conn.exec_driver_sql(
-            "CREATE INDEX IF NOT EXISTS ix_item_ingredients_item_design_id "
-            "ON item_ingredients (item_design_id)"
-        )
-        conn.exec_driver_sql(
-            "CREATE INDEX IF NOT EXISTS ix_item_ingredients_ingredient_item_design_id "
-            "ON item_ingredients (ingredient_item_design_id)"
-        )
+        if "item_ingredients" in tables:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_item_ingredients_item_ing "
+                "ON item_ingredients (item_design_id, ingredient_item_design_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_ingredients_item_design_id "
+                "ON item_ingredients (item_design_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_ingredients_ingredient_item_design_id "
+                "ON item_ingredients (ingredient_item_design_id)"
+            )
 
+        if "item_tags" in tables:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_item_tags_item_tag "
+                "ON item_tags (item_design_id, tag)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_tags_item_design_id "
+                "ON item_tags (item_design_id)"
+            )
+            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_tags_tag ON item_tags (tag)")
+
+        if "api_flow_events" not in tables:
+            return
         conn.exec_driver_sql(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ux_item_tags_item_tag "
-            "ON item_tags (item_design_id, tag)"
+            "CREATE INDEX IF NOT EXISTS ix_api_flow_events_captured_at "
+            "ON api_flow_events (captured_at DESC)"
         )
         conn.exec_driver_sql(
-            "CREATE INDEX IF NOT EXISTS ix_item_tags_item_design_id "
-            "ON item_tags (item_design_id)"
+            "CREATE INDEX IF NOT EXISTS ix_api_flow_events_host_path "
+            "ON api_flow_events (host, path)"
         )
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_tags_tag ON item_tags (tag)")
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_api_flow_events_status_captured "
+            "ON api_flow_events (status_code, captured_at DESC)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_api_flow_events_session_id "
+            "ON api_flow_events (session_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_api_flow_events_flow_hash "
+            "ON api_flow_events (flow_hash)"
+        )
 
 
 def _safe_int(value: Any) -> Optional[int]:
