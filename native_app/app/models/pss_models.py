@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, Text, JSON, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 from app.models.database import Base
 
@@ -169,3 +169,33 @@ class ImportedGameFile(Base):
     content_text = Column(Text, nullable=False)
     imported_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class ApiFlowEvent(Base):
+    __tablename__ = "api_flow_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(64), index=True, nullable=False)
+    captured_at = Column(DateTime(timezone=True), index=True, server_default=func.now())
+    direction = Column(String(16), nullable=False, default="response")
+    method = Column(String(16))
+    scheme = Column(String(16))
+    host = Column(String(255), index=True)
+    port = Column(Integer)
+    path = Column(String(2048), index=True)
+    query = Column(Text)
+    url_full = Column(Text)
+    status_code = Column(Integer, index=True)
+    duration_ms = Column(Integer)
+    request_headers_json = Column(JSON)
+    response_headers_json = Column(JSON)
+    request_body_preview = Column(Text)
+    response_body_preview = Column(Text)
+    request_size_bytes = Column(Integer)
+    response_size_bytes = Column(Integer)
+    content_type_request = Column(String(255))
+    content_type_response = Column(String(255))
+    tls = Column(Boolean, default=False)
+    error_text = Column(String(2048))
+    game_process_hint = Column(String(255))
+    flow_hash = Column(String(100), index=True)

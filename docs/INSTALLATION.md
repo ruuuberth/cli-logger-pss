@@ -60,22 +60,31 @@ Salida esperada:
 - Linux/macOS: `native_app/dist/pss-logger-native`
 - Windows: `native_app/dist/pss-logger-native.exe`
 
-## Funcionalidades actuales
-- Detección automática de carpeta `SavySoda/Pixel Starships`
-- Selección manual de carpeta (fallback)
-- Escaneo de archivos exportables (`xml/json/txt/log/csv/ini/cfg/yaml`)
-- Importación local a SQLite
+## Funcionalidad actual
+- Captura de tráfico de juego en tiempo real desde `Flujo de la API` (battle logger).
+- Persistencia de requests/responses en SQLite local.
+- Filtros, paginación y detalle JSON en la UI.
 
 ## Base de datos en desarrollo
 - Con `native_app/.env` de desarrollo, `DATABASE_URL=sqlite:///./pss_logger_dev.db`.
 - Eso apunta a `native_app/pss_logger_dev.db`.
 - Si `DATABASE_URL` no está definido, la app usa fallback: `~/.pss_logger/pss_logger.db`.
 
-## Items: fuentes disponibles en la app
-- `BaseDeDatos`: lee datos ya parseados en SQLite.
-- `API`: consulta la API oficial y persiste resultados; su caché de memoria se controla con `ITEMS_API_CACHE_TTL_SECONDS` (default `86400`, 1 día).
-- `ArchivosLocales`: parsea `ItemDesigns.txt` importado desde archivos del juego.
-- El timeout de llamadas remotas usa `PSS_API_REQUEST_TIMEOUT_SECONDS` (segundos).
+## Flujo de la API (mitmproxy)
+
+- Pestaña nativa: `Flujo de la API`.
+- La app inicia `mitmdump` para capturar llamadas en tiempo real.
+- Configura el cliente/juego para usar proxy local `127.0.0.1:8081` (o el host/puerto definidos en `.env`).
+
+Variables:
+- `API_FLOW_ENABLED`
+- `MITMPROXY_BINARY`
+- `MITMPROXY_LISTEN_HOST`
+- `MITMPROXY_LISTEN_PORT`
+- `API_FLOW_BODY_MAX_CHARS`
+- `API_FLOW_RETENTION_DAYS`
+- `API_FLOW_MAX_DB_MB`
+- `API_FLOW_IGNORE_HOSTS` (lista separada por coma para passthrough)
 
 ## VSCode: depuración y ejecución
 Archivos de configuración incluidos:
