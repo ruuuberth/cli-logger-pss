@@ -175,6 +175,17 @@ class ApiFlowRepository:
             finally:
                 db.close()
 
+        # SQLite does not release file space on DELETE alone; compact after purging.
+        if deleted_total > 0 and engine.dialect.name == "sqlite":
+            self._vacuum_sqlite()
+
+        current_size = self._current_db_size_mb()
+        if current_size > float(max_db_mb):
+            logger.warning(
+                "event=api_flow_purge_size_target_not_met current_mb=%.2f max_mb=%s",
+                current_size,
+                max_db_mb,
+            )
         return deleted_total
 
     def clear_events(self) -> int:
@@ -208,6 +219,14 @@ class ApiFlowRepository:
         except Exception:
             logger.exception("event=api_flow_db_size_error")
             return 0.0
+
+    def _vacuum_sqlite(self) -> None:
+        try:
+            with engine.connect() as conn:
+                conn = conn.execution_options(isolation_level="AUTOCOMMIT")
+                conn.exec_driver_sql("VACUUM")
+        except Exception:
+            logger.exception("event=api_flow_vacuum_error")
 
     def _normalize_event(self, event: dict[str, Any]) -> dict[str, Any]:
         request_headers = self._redact_headers(event.get("request_headers_json"))

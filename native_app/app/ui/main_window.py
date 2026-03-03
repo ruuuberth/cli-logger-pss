@@ -204,6 +204,12 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _flush_api_flow_events(self) -> None:
+        self._flush_pending_events()
+        if self.api_flow_auto_scroll_checkbox.isChecked():
+            self.api_flow_page = 0
+            self.reload_api_flow_page()
+
+    def _flush_pending_events(self) -> None:
         if self.api_flow_pending_events:
             pending = list(self.api_flow_pending_events)
             self.api_flow_pending_events.clear()
@@ -212,9 +218,6 @@ class MainWindow(QMainWindow):
                 retention_days=settings.API_FLOW_RETENTION_DAYS,
                 max_db_mb=settings.API_FLOW_MAX_DB_MB,
             )
-        if self.api_flow_auto_scroll_checkbox.isChecked():
-            self.api_flow_page = 0
-            self.reload_api_flow_page()
 
     def _current_api_flow_filters(self) -> ApiFlowFilters:
         status_min = self.api_flow_status_min.value() or None
@@ -357,5 +360,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.api_flow_flush_timer.stop()
+        self._flush_pending_events()
         self.api_flow_capture_manager.stop_capture()
         super().closeEvent(event)
