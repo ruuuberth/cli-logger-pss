@@ -148,11 +148,13 @@ class ApiFlowRepository:
         threshold = datetime.now(timezone.utc) - timedelta(days=retention_days)
         db = SessionLocal()
         try:
-            deleted = (
-                db.query(ApiFlowEvent)
+            event_ids = [
+                row[0]
+                for row in db.query(ApiFlowEvent.id)
                 .filter(ApiFlowEvent.captured_at < threshold)
-                .delete(synchronize_session=False)
-            )
+                .all()
+            ]
+            deleted = self._delete_events_and_normalized(db, event_ids)
             db.commit()
             return int(deleted or 0)
         except Exception:
@@ -178,11 +180,7 @@ class ApiFlowRepository:
                 if not oldest:
                     break
                 oldest_ids = [row[0] for row in oldest]
-                deleted = (
-                    db.query(ApiFlowEvent)
-                    .filter(ApiFlowEvent.id.in_(oldest_ids))
-                    .delete(synchronize_session=False)
-                )
+                deleted = self._delete_events_and_normalized(db, oldest_ids)
                 db.commit()
                 deleted_total += int(deleted or 0)
                 if deleted == 0:
@@ -279,33 +277,38 @@ class ApiFlowRepository:
         db = SessionLocal()
         inserted = 0
         try:
-            candidates = (
-                db.query(ApiFlowEvent)
-                .outerjoin(
-                    BattleReplayNormalized,
-                    BattleReplayNormalized.api_flow_event_id == ApiFlowEvent.id,
+            last_seen_id = 0
+            while True:
+                candidates = (
+                    db.query(ApiFlowEvent)
+                    .outerjoin(
+                        BattleReplayNormalized,
+                        BattleReplayNormalized.api_flow_event_id == ApiFlowEvent.id,
+                    )
+                    .filter(BattleReplayNormalized.id.is_(None))
+                    .filter(ApiFlowEvent.path.like("/BattleService/GetBattle3%"))
+                    .filter(ApiFlowEvent.response_body_cleaned.isnot(None))
+                    .filter(ApiFlowEvent.id > last_seen_id)
+                    .order_by(ApiFlowEvent.id.asc())
+                    .limit(max(1, batch_size))
+                    .all()
                 )
-                .filter(BattleReplayNormalized.id.is_(None))
-                .filter(ApiFlowEvent.path.like("/BattleService/GetBattle3%"))
-                .filter(ApiFlowEvent.response_body_cleaned.isnot(None))
-                .order_by(ApiFlowEvent.id.asc())
-                .limit(max(1, batch_size))
-                .all()
-            )
-            if not candidates:
-                return 0
+                if not candidates:
+                    return inserted
 
-            new_rows = self._build_battle_replay_rows(candidates)
-            if not new_rows:
-                return 0
-            db.add_all(new_rows)
-            db.flush()
-            child_rows = self._build_battle_replay_child_rows(candidates, new_rows)
-            if child_rows:
-                db.add_all(child_rows)
-            db.commit()
-            inserted = len(new_rows)
-            return inserted
+                last_seen_id = candidates[-1].id
+                new_rows = self._build_battle_replay_rows(candidates)
+                if not new_rows:
+                    continue
+
+                db.add_all(new_rows)
+                db.flush()
+                child_rows = self._build_battle_replay_child_rows(candidates, new_rows)
+                if child_rows:
+                    self._persist_rows_one_by_one(db, child_rows)
+                db.commit()
+                inserted += len(new_rows)
+                return inserted
         except Exception:
             db.rollback()
             logger.exception("event=battle_replay_sync_error")
@@ -931,3 +934,37 @@ class ApiFlowRepository:
         for row in rows:
             db.add(row)
             db.flush()
+
+    def _delete_events_and_normalized(self, db, event_ids: list[int]) -> int:
+        if not event_ids:
+            return 0
+
+        replay_ids = [
+            row[0]
+            for row in db.query(BattleReplayNormalized.id)
+            .filter(BattleReplayNormalized.api_flow_event_id.in_(event_ids))
+            .all()
+        ]
+        if replay_ids:
+            db.query(BattleReplayCommand).filter(
+                BattleReplayCommand.battle_replay_id.in_(replay_ids)
+            ).delete(synchronize_session=False)
+            db.query(BattleReplayCharacter).filter(
+                BattleReplayCharacter.battle_replay_id.in_(replay_ids)
+            ).delete(synchronize_session=False)
+            db.query(BattleReplayRoom).filter(
+                BattleReplayRoom.battle_replay_id.in_(replay_ids)
+            ).delete(synchronize_session=False)
+            db.query(BattleReplayShip).filter(
+                BattleReplayShip.battle_replay_id.in_(replay_ids)
+            ).delete(synchronize_session=False)
+            db.query(BattleReplayNormalized).filter(
+                BattleReplayNormalized.id.in_(replay_ids)
+            ).delete(synchronize_session=False)
+
+        deleted = (
+            db.query(ApiFlowEvent)
+            .filter(ApiFlowEvent.id.in_(event_ids))
+            .delete(synchronize_session=False)
+        )
+        return int(deleted or 0)
