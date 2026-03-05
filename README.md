@@ -82,6 +82,8 @@ Variables principales:
 - `API_FLOW_RETENTION_DAYS`
 - `API_FLOW_MAX_DB_MB`
 - `API_FLOW_IGNORE_HOSTS`
+- `API_FLOW_CAPTURE_HOST_ALLOWLIST`
+- `API_FLOW_CAPTURE_PATH_ALLOWLIST`
 
 ### Base de datos en desarrollo
 
@@ -130,6 +132,23 @@ pip install -e .
 5. Si un host no permite MITM (pinning/TLS estricto), agrégalo a passthrough:
    - `API_FLOW_IGNORE_HOSTS=player-auth.services.api.unity.com`
    - varios hosts separados por coma.
+6. Por defecto la captura se filtra al replay de batalla:
+   - host: `api.pixelstarships.com`
+   - path: `/BattleService/GetBattle3`
+   - puedes ampliar por env vars:
+     - `API_FLOW_CAPTURE_HOST_ALLOWLIST=api.pixelstarships.com`
+     - `API_FLOW_CAPTURE_PATH_ALLOWLIST=/BattleService/GetBattle3`
+
+### Migrar y normalizar historico de batallas
+
+```bash
+cd native_app
+python scripts/migrate_battle_replays_normalized.py
+```
+
+El comando:
+- completa `response_body_cleaned` faltante para `GetBattle3`
+- inserta/actualiza `battle_replays_normalized` desde la respuesta limpia
 
 ## Estructura
 

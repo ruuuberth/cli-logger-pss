@@ -62,6 +62,9 @@ Both should point to `native_app/.venv/...`.
 
 - New tab: `Flujo de la API` for live request/response capture.
 - Starts/stops `mitmdump` from the app and stores history in SQLite.
+- Default capture is restricted to battle replay endpoint:
+  - host: `api.pixelstarships.com`
+  - path: `/BattleService/GetBattle3`
 - Requires proxy setup in game/client (`127.0.0.1:8081` by default).
 
 Environment variables:
@@ -73,3 +76,15 @@ Environment variables:
 - `API_FLOW_RETENTION_DAYS`
 - `API_FLOW_MAX_DB_MB`
 - `API_FLOW_IGNORE_HOSTS` (comma-separated passthrough hosts)
+- `API_FLOW_CAPTURE_HOST_ALLOWLIST` (comma-separated capture host allowlist)
+- `API_FLOW_CAPTURE_PATH_ALLOWLIST` (comma-separated capture path allowlist)
+
+## Battle normalization migration
+
+Run this when you want to normalize historical `GetBattle3` captures into
+`battle_replays_normalized`:
+
+```bash
+cd native_app
+python scripts/migrate_battle_replays_normalized.py
+```

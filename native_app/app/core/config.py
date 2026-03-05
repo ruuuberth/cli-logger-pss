@@ -1,11 +1,22 @@
 from pydantic.fields import FieldInfo
-from pydantic_settings import BaseSettings, DotEnvSettingsSource, EnvSettingsSource, PydanticBaseSettingsSource
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 from typing import List
 
 
 class CsvEnvSettingsSource(EnvSettingsSource):
     def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        list_fields = {"ALLOWED_HOSTS", "API_FLOW_IGNORE_HOSTS"}
+        list_fields = {
+            "ALLOWED_HOSTS",
+            "API_FLOW_IGNORE_HOSTS",
+            "API_FLOW_CAPTURE_HOST_ALLOWLIST",
+            "API_FLOW_CAPTURE_PATH_ALLOWLIST",
+        }
         if field_name in list_fields and isinstance(value, str):
             cleaned_value = value.strip()
             if not cleaned_value:
@@ -18,7 +29,12 @@ class CsvEnvSettingsSource(EnvSettingsSource):
 
 class CsvDotEnvSettingsSource(DotEnvSettingsSource):
     def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        list_fields = {"ALLOWED_HOSTS", "API_FLOW_IGNORE_HOSTS"}
+        list_fields = {
+            "ALLOWED_HOSTS",
+            "API_FLOW_IGNORE_HOSTS",
+            "API_FLOW_CAPTURE_HOST_ALLOWLIST",
+            "API_FLOW_CAPTURE_PATH_ALLOWLIST",
+        }
         if field_name in list_fields and isinstance(value, str):
             cleaned_value = value.strip()
             if not cleaned_value:
@@ -30,6 +46,8 @@ class CsvDotEnvSettingsSource(DotEnvSettingsSource):
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     PROJECT_NAME: str = "PixelStarships Logger"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
@@ -63,6 +81,8 @@ class Settings(BaseSettings):
     API_FLOW_MAX_DB_MB: int = 512
     API_FLOW_CAPTURE_HTTPS: bool = True
     API_FLOW_IGNORE_HOSTS: List[str] = []
+    API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = ["api.pixelstarships.com"]
+    API_FLOW_CAPTURE_PATH_ALLOWLIST: List[str] = ["/BattleService/GetBattle3"]
 
     @classmethod
     def settings_customise_sources(
@@ -80,7 +100,4 @@ class Settings(BaseSettings):
             file_secret_settings,
         )
     
-    class Config:
-        env_file = ".env"
-
 settings = Settings()

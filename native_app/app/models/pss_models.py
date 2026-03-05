@@ -191,6 +191,7 @@ class ApiFlowEvent(Base):
     response_headers_json = Column(JSON)
     request_body_preview = Column(Text)
     response_body_preview = Column(Text)
+    response_body_cleaned = Column(Text)
     request_size_bytes = Column(Integer)
     response_size_bytes = Column(Integer)
     content_type_request = Column(String(255))
@@ -199,3 +200,99 @@ class ApiFlowEvent(Base):
     error_text = Column(String(2048))
     game_process_hint = Column(String(255))
     flow_hash = Column(String(100), index=True)
+
+
+class BattleReplayNormalized(Base):
+    __tablename__ = "battle_replays_normalized"
+
+    id = Column(Integer, primary_key=True, index=True)
+    api_flow_event_id = Column(Integer, unique=True, index=True, nullable=False)
+    battle_id = Column(Integer, index=True, nullable=False)
+    captured_at = Column(DateTime(timezone=True), index=True)
+
+    attacking_ship_id = Column(Integer, index=True)
+    defending_ship_id = Column(Integer, index=True)
+    outcome_type = Column(String(64), index=True)
+    client_outcome_type = Column(String(64), index=True)
+
+    win_trophy_result = Column(Integer)
+    win_minerals_result = Column(Integer)
+    win_gas_result = Column(Integer)
+    lose_trophy_result = Column(Integer)
+    lose_minerals_result = Column(Integer)
+    lose_gas_result = Column(Integer)
+
+    battle_end_frame = Column(Integer)
+    client_end_frame = Column(Integer)
+
+    attacker_user_id = Column(Integer, index=True)
+    attacker_name = Column(String(255), index=True)
+    attacker_trophy = Column(Integer)
+
+    defender_user_id = Column(Integer, index=True)
+    defender_name = Column(String(255), index=True)
+    defender_trophy = Column(Integer)
+
+    battle_attributes_json = Column(JSON)
+    attacker_user_attributes_json = Column(JSON)
+    defender_user_attributes_json = Column(JSON)
+
+
+class BattleReplayShip(Base):
+    __tablename__ = "battle_replay_ships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    battle_replay_id = Column(Integer, index=True, nullable=False)
+    side = Column(String(16), index=True, nullable=False)
+    ship_id = Column(Integer, index=True)
+    ship_design_id = Column(Integer)
+    ship_name = Column(String(255), index=True)
+    ship_level = Column(Integer)
+    power_score = Column(Integer)
+    hp = Column(Float)
+    ship_status = Column(String(64), index=True)
+    ship_attributes_json = Column(JSON)
+
+
+class BattleReplayRoom(Base):
+    __tablename__ = "battle_replay_rooms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    battle_replay_id = Column(Integer, index=True, nullable=False)
+    side = Column(String(16), index=True, nullable=False)
+    room_id = Column(Integer, index=True)
+    room_design_id = Column(Integer, index=True)
+    ship_id = Column(Integer, index=True)
+    row = Column(Integer)
+    column = Column(Integer)
+    room_status = Column(String(64), index=True)
+    room_attributes_json = Column(JSON)
+
+
+class BattleReplayCharacter(Base):
+    __tablename__ = "battle_replay_characters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    battle_replay_id = Column(Integer, index=True, nullable=False)
+    side = Column(String(16), index=True, nullable=False)
+    character_id = Column(Integer, index=True)
+    ship_id = Column(Integer, index=True)
+    character_design_id = Column(Integer, index=True)
+    character_name = Column(String(255), index=True)
+    level = Column(Integer)
+    xp = Column(Integer)
+    character_attributes_json = Column(JSON)
+
+
+class BattleReplayCommand(Base):
+    __tablename__ = "battle_replay_commands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    battle_replay_id = Column(Integer, index=True, nullable=False)
+    command_order = Column(Integer, nullable=False)
+    command_tag = Column(String(64), index=True)
+    user_id = Column(Integer, index=True)
+    ship_id = Column(Integer, index=True)
+    room_id = Column(Integer, index=True)
+    character_id = Column(Integer, index=True)
+    command_attributes_json = Column(JSON)

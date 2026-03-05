@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from app.core.config import settings
 from app.services.api_flow_capture import ApiFlowCaptureManager
-from app.services.api_flow_storage import ApiFlowFilters, ApiFlowRepository
+from app.services.api_flow_storage import ApiFlowRepository
 
 
 class ApiFlowBridge(QObject):
@@ -34,9 +34,17 @@ class ApiFlowBridge(QObject):
 
 
 class MainWindow(QMainWindow):
+    API_FLOW_PENDING_MAX_EVENTS = 10_000
+
     def __init__(self):
         super().__init__()
         self.api_flow_repository = ApiFlowRepository()
+        while self.api_flow_repository.backfill_response_body_cleaned(batch_size=100) > 0:
+            pass
+        while self.api_flow_repository.sync_battle_replays_from_api_flow(batch_size=500) > 0:
+            pass
+        while self.api_flow_repository.sync_battle_replay_children(batch_size=200) > 0:
+            pass
         self.api_flow_capture_manager = ApiFlowCaptureManager()
         self.api_flow_bridge = ApiFlowBridge(self)
         self.api_flow_bridge.event_received.connect(self._on_api_flow_event)
@@ -50,6 +58,9 @@ class MainWindow(QMainWindow):
 
         self.api_flow_pending_events: list[dict] = []
         self.api_flow_total_live_events = 0
+        self.api_flow_dropped_pending_events = 0
+        self.api_flow_flush_failures = 0
+        self.api_flow_last_capture_status = "detenido"
         self.api_flow_page = 0
         self.api_flow_page_size = 200
         self.api_flow_current_rows: list[dict] = []
@@ -91,7 +102,7 @@ class MainWindow(QMainWindow):
         controls.addStretch()
 
         self.api_flow_search_input = QLineEdit()
-        self.api_flow_search_input.setPlaceholderText("Buscar host/path...")
+        self.api_flow_search_input.setPlaceholderText("Buscar atacante/defensor/battle id...")
         self.api_flow_search_input.textChanged.connect(self.apply_api_flow_filters)
         self.api_flow_method_combo = QComboBox()
         self.api_flow_method_combo.addItems(["Todos", "GET", "POST", "PUT", "PATCH", "DELETE"])
@@ -128,7 +139,7 @@ class MainWindow(QMainWindow):
 
         self.api_flow_table = QTableWidget(0, 7)
         self.api_flow_table.setHorizontalHeaderLabels(
-            ["Hora", "Metodo", "Endpoint", "Status", "Latencia(ms)", "Tamano", "Host"]
+            ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId"]
         )
         self.api_flow_table.horizontalHeader().setStretchLastSection(True)
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -192,11 +203,18 @@ class MainWindow(QMainWindow):
     @Slot(dict)
     def _on_api_flow_event(self, payload: dict) -> None:
         self.api_flow_pending_events.append(payload)
+        dropped = self._enforce_pending_limit()
+        if dropped:
+            self.api_flow_dropped_pending_events += dropped
+            self.api_flow_status_label.setText(
+                f"Estado: backlog limitado, descartados {self.api_flow_dropped_pending_events} eventos"
+            )
         self.api_flow_total_live_events += 1
         self.api_flow_counter_label.setText(f"Eventos (sesion): {self.api_flow_total_live_events}")
 
     @Slot(str)
     def _on_api_flow_status(self, message: str) -> None:
+        self.api_flow_last_capture_status = message
         self.api_flow_status_label.setText(f"Estado: {message}")
         if not self.api_flow_capture_manager.is_running():
             self.api_flow_start_button.setEnabled(True)
@@ -210,34 +228,40 @@ class MainWindow(QMainWindow):
             self.reload_api_flow_page()
 
     def _flush_pending_events(self) -> None:
-        if self.api_flow_pending_events:
-            pending = list(self.api_flow_pending_events)
-            self.api_flow_pending_events.clear()
-            self.api_flow_repository.save_events(pending)
-            self.api_flow_repository.purge(
-                retention_days=settings.API_FLOW_RETENTION_DAYS,
-                max_db_mb=settings.API_FLOW_MAX_DB_MB,
+        if not self.api_flow_pending_events:
+            return
+
+        pending = list(self.api_flow_pending_events)
+        self.api_flow_pending_events.clear()
+        saved_count = self.api_flow_repository.save_events(pending)
+        if saved_count < len(pending):
+            self.api_flow_flush_failures += 1
+            unsaved = pending[max(0, saved_count) :]
+            self.api_flow_pending_events = unsaved + self.api_flow_pending_events
+            dropped = self._enforce_pending_limit()
+            if dropped:
+                self.api_flow_dropped_pending_events += dropped
+            self.api_flow_status_label.setText(
+                "Estado: error de persistencia, reintentos="
+                f"{self.api_flow_flush_failures}, pendientes={len(self.api_flow_pending_events)}"
             )
+            return
 
-    def _current_api_flow_filters(self) -> ApiFlowFilters:
-        status_min = self.api_flow_status_min.value() or None
-        status_max = self.api_flow_status_max.value() or None
-        if status_min is not None and status_max is not None and status_max < status_min:
-            status_max = status_min
+        if self.api_flow_flush_failures:
+            self.api_flow_flush_failures = 0
+            self.api_flow_status_label.setText(f"Estado: {self.api_flow_last_capture_status}")
 
-        method = self.api_flow_method_combo.currentText()
-        if method == "Todos":
-            method = ""
-
-        return ApiFlowFilters(
-            search=self.api_flow_search_input.text().strip(),
-            method=method,
-            status_min=status_min,
-            status_max=status_max,
-            only_errors=self.api_flow_only_errors.isChecked(),
-            time_from=self._parse_iso_datetime(self.api_flow_time_from.text().strip()),
-            time_to=self._parse_iso_datetime(self.api_flow_time_to.text().strip()),
+        self.api_flow_repository.purge(
+            retention_days=settings.API_FLOW_RETENTION_DAYS,
+            max_db_mb=settings.API_FLOW_MAX_DB_MB,
         )
+
+    def _enforce_pending_limit(self) -> int:
+        if len(self.api_flow_pending_events) <= self.API_FLOW_PENDING_MAX_EVENTS:
+            return 0
+        dropped = len(self.api_flow_pending_events) - self.API_FLOW_PENDING_MAX_EVENTS
+        del self.api_flow_pending_events[:dropped]
+        return dropped
 
     def _parse_iso_datetime(self, value: str) -> datetime | None:
         if not value:
@@ -251,8 +275,8 @@ class MainWindow(QMainWindow):
             return None
 
     def reload_api_flow_page(self) -> None:
-        payload = self.api_flow_repository.list_events(
-            filters=self._current_api_flow_filters(),
+        payload = self.api_flow_repository.list_battle_replays(
+            search=self.api_flow_search_input.text().strip(),
             page=self.api_flow_page,
             page_size=self.api_flow_page_size,
         )
@@ -264,19 +288,22 @@ class MainWindow(QMainWindow):
         self.api_flow_table.setRowCount(len(rows))
         for idx, row in enumerate(rows):
             captured_at = str(row.get("captured_at") or "")
-            method = str(row.get("method") or "-")
-            path = str(row.get("path") or row.get("url_full") or "-")
-            status = str(row.get("status_code") or "-")
-            latency = str(row.get("duration_ms") or "-")
-            size = row.get("response_size_bytes") or row.get("request_size_bytes") or 0
-            host = str(row.get("host") or "-")
+            attacker = str(row.get("attacker_name") or "-")
+            defender = str(row.get("defender_name") or "-")
+            outcome = str(row.get("outcome_type") or "-")
+            botin = (
+                f"M {row.get('win_minerals_result') or 0}/{row.get('lose_minerals_result') or 0}"
+                f" | G {row.get('win_gas_result') or 0}/{row.get('lose_gas_result') or 0}"
+            )
+            copas = f"{row.get('win_trophy_result') or 0}/{row.get('lose_trophy_result') or 0}"
+            battle_id = str(row.get("battle_id") or "-")
             self.api_flow_table.setItem(idx, 0, QTableWidgetItem(captured_at[:19].replace("T", " ")))
-            self.api_flow_table.setItem(idx, 1, QTableWidgetItem(method))
-            self.api_flow_table.setItem(idx, 2, QTableWidgetItem(path))
-            self.api_flow_table.setItem(idx, 3, QTableWidgetItem(status))
-            self.api_flow_table.setItem(idx, 4, QTableWidgetItem(latency))
-            self.api_flow_table.setItem(idx, 5, QTableWidgetItem(str(size)))
-            self.api_flow_table.setItem(idx, 6, QTableWidgetItem(host))
+            self.api_flow_table.setItem(idx, 1, QTableWidgetItem(attacker))
+            self.api_flow_table.setItem(idx, 2, QTableWidgetItem(defender))
+            self.api_flow_table.setItem(idx, 3, QTableWidgetItem(outcome))
+            self.api_flow_table.setItem(idx, 4, QTableWidgetItem(botin))
+            self.api_flow_table.setItem(idx, 5, QTableWidgetItem(copas))
+            self.api_flow_table.setItem(idx, 6, QTableWidgetItem(battle_id))
 
         if total == 0:
             self.api_flow_page_label.setText("Pagina: 0")
@@ -327,6 +354,7 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.StandardButton.Yes:
             return
         self.api_flow_repository.clear_events()
+        self.api_flow_repository.clear_battle_replays()
         self.api_flow_page = 0
         self.api_flow_total_live_events = 0
         self.api_flow_counter_label.setText("Eventos (sesion): 0")

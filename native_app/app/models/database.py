@@ -130,6 +130,10 @@ ITEM_DESIGNS_RAW_MAP: dict[str, str] = {
     "metadata_json": "Metadata",
 }
 
+API_FLOW_EVENTS_SQLITE_COLUMNS: dict[str, str] = {
+    "response_body_cleaned": "TEXT",
+}
+
 
 def ensure_sqlite_schema() -> None:
     if engine.dialect.name != "sqlite":
@@ -185,6 +189,7 @@ def ensure_sqlite_schema() -> None:
                 response_headers_json JSON,
                 request_body_preview TEXT,
                 response_body_preview TEXT,
+                response_body_cleaned TEXT,
                 request_size_bytes INTEGER,
                 response_size_bytes INTEGER,
                 content_type_request VARCHAR(255),
@@ -193,6 +198,112 @@ def ensure_sqlite_schema() -> None:
                 error_text VARCHAR(2048),
                 game_process_hint VARCHAR(255),
                 flow_hash VARCHAR(100)
+            )
+            """
+        )
+        if "api_flow_events" in tables:
+            api_flow_table_info = conn.exec_driver_sql("PRAGMA table_info(api_flow_events)").fetchall()
+            existing_api_flow_columns = {row[1] for row in api_flow_table_info}
+            for column_name, column_type in API_FLOW_EVENTS_SQLITE_COLUMNS.items():
+                if column_name in existing_api_flow_columns:
+                    continue
+                conn.exec_driver_sql(f"ALTER TABLE api_flow_events ADD COLUMN {column_name} {column_type}")
+            if "attacker_name" in existing_api_flow_columns:
+                _drop_api_flow_events_attacker_name(conn)
+                tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS battle_replays_normalized (
+                id INTEGER NOT NULL PRIMARY KEY,
+                api_flow_event_id INTEGER NOT NULL UNIQUE,
+                battle_id INTEGER NOT NULL,
+                captured_at DATETIME,
+                attacking_ship_id INTEGER,
+                defending_ship_id INTEGER,
+                outcome_type VARCHAR(64),
+                client_outcome_type VARCHAR(64),
+                win_trophy_result INTEGER,
+                win_minerals_result INTEGER,
+                win_gas_result INTEGER,
+                lose_trophy_result INTEGER,
+                lose_minerals_result INTEGER,
+                lose_gas_result INTEGER,
+                battle_end_frame INTEGER,
+                client_end_frame INTEGER,
+                attacker_user_id INTEGER,
+                attacker_name VARCHAR(255),
+                attacker_trophy INTEGER,
+                defender_user_id INTEGER,
+                defender_name VARCHAR(255),
+                defender_trophy INTEGER,
+                battle_attributes_json JSON,
+                attacker_user_attributes_json JSON,
+                defender_user_attributes_json JSON
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS battle_replay_ships (
+                id INTEGER NOT NULL PRIMARY KEY,
+                battle_replay_id INTEGER NOT NULL,
+                side VARCHAR(16) NOT NULL,
+                ship_id INTEGER,
+                ship_design_id INTEGER,
+                ship_name VARCHAR(255),
+                ship_level INTEGER,
+                power_score INTEGER,
+                hp FLOAT,
+                ship_status VARCHAR(64),
+                ship_attributes_json JSON
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS battle_replay_rooms (
+                id INTEGER NOT NULL PRIMARY KEY,
+                battle_replay_id INTEGER NOT NULL,
+                side VARCHAR(16) NOT NULL,
+                room_id INTEGER,
+                room_design_id INTEGER,
+                ship_id INTEGER,
+                row INTEGER,
+                column INTEGER,
+                room_status VARCHAR(64),
+                room_attributes_json JSON
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS battle_replay_characters (
+                id INTEGER NOT NULL PRIMARY KEY,
+                battle_replay_id INTEGER NOT NULL,
+                side VARCHAR(16) NOT NULL,
+                character_id INTEGER,
+                ship_id INTEGER,
+                character_design_id INTEGER,
+                character_name VARCHAR(255),
+                level INTEGER,
+                xp INTEGER,
+                character_attributes_json JSON
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS battle_replay_commands (
+                id INTEGER NOT NULL PRIMARY KEY,
+                battle_replay_id INTEGER NOT NULL,
+                command_order INTEGER NOT NULL,
+                command_tag VARCHAR(64),
+                user_id INTEGER,
+                ship_id INTEGER,
+                room_id INTEGER,
+                character_id INTEGER,
+                command_attributes_json JSON
             )
             """
         )
@@ -265,6 +376,119 @@ def ensure_sqlite_indexes() -> None:
             "CREATE INDEX IF NOT EXISTS ix_api_flow_events_flow_hash "
             "ON api_flow_events (flow_hash)"
         )
+        if "battle_replays_normalized" in tables:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_battle_replays_normalized_api_flow_event_id "
+                "ON battle_replays_normalized (api_flow_event_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replays_normalized_battle_id "
+                "ON battle_replays_normalized (battle_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replays_normalized_captured_at "
+                "ON battle_replays_normalized (captured_at DESC)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replays_normalized_attacker_name "
+                "ON battle_replays_normalized (attacker_name)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replays_normalized_defender_name "
+                "ON battle_replays_normalized (defender_name)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replays_normalized_outcome_type "
+                "ON battle_replays_normalized (outcome_type)"
+            )
+        if "battle_replay_ships" in tables:
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_ships_battle_replay_id "
+                "ON battle_replay_ships (battle_replay_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_ships_side "
+                "ON battle_replay_ships (side)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_ships_ship_id "
+                "ON battle_replay_ships (ship_id)"
+            )
+        if "battle_replay_rooms" in tables:
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_rooms_battle_replay_id "
+                "ON battle_replay_rooms (battle_replay_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_rooms_room_id "
+                "ON battle_replay_rooms (room_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_rooms_ship_id "
+                "ON battle_replay_rooms (ship_id)"
+            )
+        if "battle_replay_characters" in tables:
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_characters_battle_replay_id "
+                "ON battle_replay_characters (battle_replay_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_characters_character_id "
+                "ON battle_replay_characters (character_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_characters_ship_id "
+                "ON battle_replay_characters (ship_id)"
+            )
+        if "battle_replay_commands" in tables:
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_commands_battle_replay_id "
+                "ON battle_replay_commands (battle_replay_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_battle_replay_commands_user_id "
+                "ON battle_replay_commands (user_id)"
+            )
+
+
+def _drop_api_flow_events_attacker_name(conn) -> None:
+    table_info = conn.exec_driver_sql("PRAGMA table_info(api_flow_events)").fetchall()
+    existing_columns = [row[1] for row in table_info]
+    if "attacker_name" not in existing_columns:
+        return
+
+    try:
+        try:
+            conn.exec_driver_sql("ALTER TABLE api_flow_events DROP COLUMN attacker_name")
+            return
+        except Exception:
+            pass
+
+        keep_defs: list[str] = []
+        keep_names: list[str] = []
+        for _, name, col_type, notnull, dflt_value, pk in table_info:
+            if name == "attacker_name":
+                continue
+            keep_names.append(name)
+            definition = f"{name} {col_type}"
+            if notnull:
+                definition += " NOT NULL"
+            if dflt_value is not None:
+                definition += f" DEFAULT {dflt_value}"
+            if pk:
+                definition += " PRIMARY KEY"
+            keep_defs.append(definition)
+
+        conn.exec_driver_sql(f"CREATE TABLE api_flow_events_new ({', '.join(keep_defs)})")
+        keep_names_csv = ", ".join(keep_names)
+        conn.exec_driver_sql(
+            f"INSERT INTO api_flow_events_new ({keep_names_csv}) "
+            f"SELECT {keep_names_csv} FROM api_flow_events"
+        )
+        conn.exec_driver_sql("DROP TABLE api_flow_events")
+        conn.exec_driver_sql("ALTER TABLE api_flow_events_new RENAME TO api_flow_events")
+    except Exception:
+        logger.warning("event=schema_drop_attacker_name_skipped reason=database_locked_or_sqlite_limits")
 
 
 def _safe_int(value: Any) -> Optional[int]:

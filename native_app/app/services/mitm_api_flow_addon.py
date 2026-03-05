@@ -37,6 +37,24 @@ def _extract_query(flow: http.HTTPFlow) -> str:
         return ""
 
 
+def _split_csv(value: str | None) -> list[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    return [token.strip() for token in raw.split(",") if token.strip()]
+
+
+def _normalize_path(value: str) -> str:
+    path = (value or "").strip()
+    if not path:
+        return "/"
+    if not path.startswith("/"):
+        path = "/" + path
+    if len(path) > 1:
+        path = path.rstrip("/")
+    return path
+
+
 class ApiFlowAddon:
     def load(self, loader):
         loader.add_option("api_flow_session_id", str, "unknown", "Session id from host app")
@@ -46,6 +64,18 @@ class ApiFlowAddon:
             str,
             "",
             "Comma-separated host list for TLS passthrough",
+        )
+        loader.add_option(
+            "api_flow_capture_hosts",
+            str,
+            "api.pixelstarships.com",
+            "Comma-separated host allowlist for captured events",
+        )
+        loader.add_option(
+            "api_flow_capture_paths",
+            str,
+            "/BattleService/GetBattle3",
+            "Comma-separated path allowlist for captured events",
         )
 
     def tls_clienthello(self, data: tls.ClientHelloData) -> None:
@@ -66,12 +96,33 @@ class ApiFlowAddon:
                 return True
         return False
 
+    def _should_capture_flow(self, flow: http.HTTPFlow) -> bool:
+        host_allowlist = {token.lower() for token in _split_csv(getattr(ctx.options, "api_flow_capture_hosts", ""))}
+        path_allowlist = {
+            _normalize_path(token) for token in _split_csv(getattr(ctx.options, "api_flow_capture_paths", ""))
+        }
+
+        if host_allowlist:
+            request_host = (flow.request.host or "").strip().lower()
+            if request_host not in host_allowlist:
+                return False
+
+        if path_allowlist:
+            request_path = _normalize_path((flow.request.path or "").split("?", 1)[0])
+            if request_path not in path_allowlist:
+                return False
+
+        return True
+
     def response(self, flow: http.HTTPFlow) -> None:
+        if not self._should_capture_flow(flow):
+            return
+
         now = datetime.now(timezone.utc)
         max_chars = int(ctx.options.api_flow_body_max_chars)
 
         request_text = _truncate(_safe_text(flow.request.get_text(strict=False)), max_chars)
-        response_text = _truncate(_safe_text(flow.response.get_text(strict=False)), max_chars)
+        response_text = _safe_text(flow.response.get_text(strict=False))
         request_headers = {str(k): str(v) for k, v in flow.request.headers.items(multi=True)}
         response_headers = {str(k): str(v) for k, v in flow.response.headers.items(multi=True)}
 
@@ -108,7 +159,11 @@ class ApiFlowAddon:
         print(_EVENT_PREFIX + json.dumps(payload, ensure_ascii=True), flush=True)
 
     def error(self, flow: http.HTTPFlow) -> None:
+        if not self._should_capture_flow(flow):
+            return
+
         now = datetime.now(timezone.utc)
+        max_chars = int(ctx.options.api_flow_body_max_chars)
         payload = {
             "session_id": str(ctx.options.api_flow_session_id),
             "captured_at": now.isoformat(),
@@ -124,7 +179,7 @@ class ApiFlowAddon:
             "duration_ms": None,
             "request_headers_json": {str(k): str(v) for k, v in flow.request.headers.items(multi=True)},
             "response_headers_json": {},
-            "request_body_preview": _safe_text(flow.request.get_text(strict=False)),
+            "request_body_preview": _truncate(_safe_text(flow.request.get_text(strict=False)), max_chars),
             "response_body_preview": "",
             "request_size_bytes": len(flow.request.raw_content or b""),
             "response_size_bytes": 0,
