@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from app.services.api_flow_storage import ApiFlowRepository
 
 
@@ -30,3 +32,211 @@ def test_parse_datetime_handles_z_suffix() -> None:
     parsed = repo._parse_datetime("2026-02-20T10:00:00Z")
     assert parsed is not None
     assert parsed.isoformat().startswith("2026-02-20T10:00:00")
+
+
+def test_extracts_normalized_attacker_name_from_battle_xml() -> None:
+    repo = ApiFlowRepository()
+    event = {
+        "path": "/BattleService/GetBattle3?battleId=1",
+        "response_body_preview": (
+            '<BattleService><GetBattle><Battle '
+            'AttackingShipXml="&lt;Ship ShipName=&quot;  Ruuuberth4  &quot; /&gt;" /></GetBattle></BattleService>'
+        ),
+    }
+    normalized = repo._normalize_event(event)
+    assert "attacker_name" not in normalized
+
+
+def test_keeps_full_response_body_preview_without_truncation() -> None:
+    repo = ApiFlowRepository()
+    very_long_body = "x" * (repo.body_max_chars + 500)
+    normalized = repo._normalize_event({"response_body_preview": very_long_body})
+    assert normalized["response_body_preview"] == very_long_body
+
+
+def test_generates_cleaned_response_body_for_developer_readability() -> None:
+    repo = ApiFlowRepository()
+    raw_xml = (
+        '<BattleService><GetBattle><Battle '
+        'AttackingShipXml="&lt;Ship ShipName=&quot;Ruuuberth4&quot; /&gt;" '
+        'BattleId="123" /></GetBattle></BattleService>'
+    )
+    normalized = repo._normalize_event({"response_body_preview": raw_xml})
+
+    assert normalized["response_body_preview"] == raw_xml
+    assert normalized["response_body_cleaned"] is not None
+
+    cleaned = json.loads(normalized["response_body_cleaned"])
+    assert cleaned["tag"] == "BattleService"
+    battle_node = cleaned["children"][0]["children"][0]
+    assert battle_node["attributes"]["BattleId"] == "123"
+    assert battle_node["attributes"]["AttackingShipXml"]["attributes"]["ShipName"] == "Ruuuberth4"
+
+
+def test_extracts_normalized_battle_payload_from_cleaned() -> None:
+    repo = ApiFlowRepository()
+    cleaned_payload = json.dumps(
+        {
+            "tag": "BattleService",
+            "children": [
+                {
+                    "tag": "GetBattle",
+                    "children": [
+                        {
+                            "tag": "Battle",
+                            "attributes": {
+                                "BattleId": "2",
+                                "AttackingShipId": "8657106",
+                                "DefendingShipId": "8761013",
+                                "OutcomeType": "Attacker Won",
+                                "ClientOutcomeType": "Attacker Won",
+                                "WinTrophyResult": "15",
+                                "WinMineralsResult": "0",
+                                "WinGasResult": "0",
+                                "LoseTrophyResult": "0",
+                                "LoseMineralsResult": "0",
+                                "LoseGasResult": "0",
+                                "BattleEndFrame": "0",
+                                "ClientEndFrame": "1215",
+                                "AttackingUserXml": {
+                                    "tag": "User",
+                                    "attributes": {"Id": "11342404", "Name": "lord stella", "Trophy": "5327"},
+                                },
+                                "DefendingUserXml": {
+                                    "tag": "User",
+                                    "attributes": {"Id": "11483762", "Name": "Ruuuberth4", "Trophy": "5023"},
+                                },
+                                "AttackingShipXml": {
+                                    "tag": "Ship",
+                                    "attributes": {"ShipName": " 2Trick "},
+                                }
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    normalized = repo._extract_battle_replay_normalized_from_cleaned(cleaned_payload)
+    assert normalized is not None
+    assert normalized["battle_id"] == 2
+    assert normalized["attacking_ship_id"] == 8657106
+    assert normalized["defending_ship_id"] == 8761013
+    assert normalized["attacker_name"] == "lord stella"
+    assert normalized["defender_name"] == "Ruuuberth4"
+    assert normalized["win_trophy_result"] == 15
+
+
+def test_extracts_child_entities_from_cleaned_payload() -> None:
+    repo = ApiFlowRepository()
+    cleaned_payload = json.dumps(
+        {
+            "tag": "BattleService",
+            "children": [
+                {
+                    "tag": "GetBattle",
+                    "children": [
+                        {
+                            "tag": "Battle",
+                            "attributes": {
+                                "BattleId": "2",
+                                "AttackingShipXml": {
+                                    "tag": "Ship",
+                                    "attributes": {
+                                        "ShipId": "10",
+                                        "ShipDesignId": "200",
+                                        "ShipName": "AttackerShip",
+                                        "ShipLevel": "12",
+                                        "PowerScore": "1111",
+                                        "Hp": "40.5",
+                                        "ShipStatus": "Offline",
+                                    },
+                                    "children": [
+                                        {
+                                            "tag": "Rooms",
+                                            "children": [
+                                                {
+                                                    "tag": "Room",
+                                                    "attributes": {
+                                                        "RoomId": "501",
+                                                        "RoomDesignId": "700",
+                                                        "ShipId": "10",
+                                                        "Row": "20",
+                                                        "Column": "40",
+                                                        "RoomStatus": "Normal",
+                                                    },
+                                                }
+                                            ],
+                                        },
+                                        {
+                                            "tag": "Characters",
+                                            "children": [
+                                                {
+                                                    "tag": "Character",
+                                                    "attributes": {
+                                                        "CharacterId": "9001",
+                                                        "ShipId": "10",
+                                                        "CharacterDesignId": "300",
+                                                        "CharacterName": "Crew A",
+                                                        "Level": "40",
+                                                        "Xp": "1000",
+                                                    },
+                                                }
+                                            ],
+                                        },
+                                    ],
+                                },
+                                "DefendingShipXml": {
+                                    "tag": "Ship",
+                                    "attributes": {
+                                        "ShipId": "11",
+                                        "ShipDesignId": "201",
+                                        "ShipName": "DefenderShip",
+                                    },
+                                    "children": [],
+                                },
+                                "Commands": {
+                                    "tag": "UserCommands",
+                                    "children": [
+                                        {
+                                            "tag": "Commands",
+                                            "children": [
+                                                {
+                                                    "tag": "Command",
+                                                    "attributes": {
+                                                        "UserId": "123",
+                                                        "ShipId": "10",
+                                                        "RoomId": "501",
+                                                        "CharacterId": "9001",
+                                                    },
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    parsed = repo._extract_battle_nodes_from_cleaned(cleaned_payload)
+    assert parsed is not None
+
+    ships = repo._build_ship_rows_for_replay(1, parsed)
+    rooms = repo._build_room_rows_for_replay(1, parsed)
+    characters = repo._build_character_rows_for_replay(1, parsed)
+    commands = repo._build_command_rows_for_replay(1, parsed)
+
+    assert len(ships) == 2
+    assert len(rooms) == 1
+    assert len(characters) == 1
+    assert len(commands) == 1
+    assert ships[0].ship_id == 10
+    assert rooms[0].room_id == 501
+    assert characters[0].character_id == 9001
+    assert commands[0].user_id == 123

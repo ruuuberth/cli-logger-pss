@@ -70,6 +70,10 @@ class ApiFlowCaptureManager:
                 f"api_flow_body_max_chars={settings.API_FLOW_BODY_MAX_CHARS}",
                 "--set",
                 f"api_flow_ignore_hosts={','.join(settings.API_FLOW_IGNORE_HOSTS)}",
+                "--set",
+                f"api_flow_capture_hosts={','.join(settings.API_FLOW_CAPTURE_HOST_ALLOWLIST)}",
+                "--set",
+                f"api_flow_capture_paths={','.join(settings.API_FLOW_CAPTURE_PATH_ALLOWLIST)}",
             ]
             ignore_regex = self._build_ignore_hosts_regex(settings.API_FLOW_IGNORE_HOSTS)
             if ignore_regex:
