@@ -47,3 +47,4 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+.github/pr-body.md
