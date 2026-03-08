@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -136,6 +137,11 @@ class BattleInspectorWindow(QMainWindow):
         layout.addWidget(manager_card)
         wrapper.setLayout(layout)
         self.setCentralWidget(wrapper)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        super().closeEvent(event)
+        # Ensure the window is actually destroyed after user closes it.
+        self.deleteLater()
 
     def _build_header_card(self, replay: dict[str, Any]) -> QFrame:
         battle_id = replay.get("battle_id") or "-"

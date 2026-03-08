@@ -316,3 +316,19 @@ def test_extracts_ship_designs_from_compressed_static_design_payload() -> None:
     assert len(character_designs) == 1
     assert character_designs[0]["crew_design_id"] == 901
     assert character_designs[0]["name"] == "CrewOne"
+
+
+def test_design_decoder_accepts_wrapped_base64_payload() -> None:
+    repo = ApiFlowRepository()
+    xml_payload = (
+        '<DesignService><ListAllStaticDesigns><ShipDesigns version="1">'
+        '<ShipDesign ShipDesignId="292" ShipDesignName="Interceptor" />'
+        "</ShipDesigns></ListAllStaticDesigns></DesignService>"
+    )
+    encoded = base64.b64encode(gzip.compress(xml_payload.encode("utf-8"))).decode("ascii")
+    wrapped = "\n".join(encoded[i : i + 64] for i in range(0, len(encoded), 64))
+
+    ship_designs = repo._extract_ship_designs_from_payload(wrapped)
+
+    assert len(ship_designs) == 1
+    assert ship_designs[0]["ship_design_id"] == 292

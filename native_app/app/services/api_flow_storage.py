@@ -1301,8 +1301,10 @@ class ApiFlowRepository:
         if stripped.startswith("<"):
             return stripped
 
+        # Some captures may line-wrap base64 content; normalize internal whitespace.
+        normalized_base64 = "".join(stripped.split())
         try:
-            raw = base64.b64decode(stripped, validate=True)
+            raw = base64.b64decode(normalized_base64, validate=True)
         except (binascii.Error, ValueError):
             return None
 
