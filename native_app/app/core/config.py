@@ -81,8 +81,8 @@ class Settings(BaseSettings):
     API_FLOW_MAX_DB_MB: int = 512
     API_FLOW_CAPTURE_HTTPS: bool = True
     API_FLOW_IGNORE_HOSTS: List[str] = []
-    API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = ["api.pixelstarships.com"]
-    API_FLOW_CAPTURE_PATH_ALLOWLIST: List[str] = ["/BattleService/GetBattle3"]
+    API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = []
+    API_FLOW_CAPTURE_PATH_ALLOWLIST: List[str] = []
 
     @classmethod
     def settings_customise_sources(

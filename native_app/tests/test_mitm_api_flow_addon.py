@@ -90,7 +90,13 @@ def _capture_payload(monkeypatch: pytest.MonkeyPatch) -> dict:
     return out
 
 
-def _set_options(monkeypatch: pytest.MonkeyPatch, *, body_max_chars: int) -> None:
+def _set_options(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    body_max_chars: int,
+    capture_hosts: str = "api.pixelstarships.com",
+    capture_paths: str = "/BattleService/GetBattle3",
+) -> None:
     monkeypatch.setattr(
         addon,
         "ctx",
@@ -99,8 +105,8 @@ def _set_options(monkeypatch: pytest.MonkeyPatch, *, body_max_chars: int) -> Non
                 api_flow_session_id="session-1",
                 api_flow_body_max_chars=body_max_chars,
                 api_flow_ignore_hosts="",
-                api_flow_capture_hosts="api.pixelstarships.com",
-                api_flow_capture_paths="/BattleService/GetBattle3",
+                api_flow_capture_hosts=capture_hosts,
+                api_flow_capture_paths=capture_paths,
             )
         ),
     )
@@ -182,3 +188,13 @@ def test_response_body_is_not_truncated(monkeypatch: pytest.MonkeyPatch) -> None
     assert len(out) == 1
     payload = json.loads(out[0][len("API_FLOW_EVENT ") :])
     assert payload["response_body_preview"] == long_response
+
+
+def test_captures_all_when_allowlists_are_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_options(monkeypatch, body_max_chars=100, capture_hosts="", capture_paths="")
+    out = _capture_payload(monkeypatch)
+
+    flow = _Flow(req_text="req", res_text="res", host="other.host", path="/Some/OtherEndpoint")
+    addon.ApiFlowAddon().response(flow)
+
+    assert len(out) == 1

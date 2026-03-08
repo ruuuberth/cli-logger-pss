@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import gzip
 import json
 import logging
 import os
 import unicodedata
 import xml.etree.ElementTree as ET
+from sqlite3 import OperationalError as SQLiteOperationalError
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from html import unescape
 from typing import Any
 
 from sqlalchemy import String, cast, or_, text
+from sqlalchemy.exc import OperationalError as SQLAlchemyOperationalError
 
 from app.core.config import settings
 from app.models.database import SessionLocal, engine
@@ -21,6 +26,9 @@ from app.models.pss_models import (
     BattleReplayNormalized,
     BattleReplayRoom,
     BattleReplayShip,
+    CrewDesign,
+    RoomDesign,
+    ShipDesign,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +57,7 @@ class ApiFlowFilters:
 class ApiFlowRepository:
     def __init__(self) -> None:
         self.body_max_chars = max(128, int(settings.API_FLOW_BODY_MAX_CHARS))
+        self._recent_catalog_sync_count = 0
 
     def save_events(self, events: list[dict[str, Any]]) -> int:
         if not events:
@@ -70,8 +79,22 @@ class ApiFlowRepository:
                 child_rows = self._build_battle_replay_child_rows(rows, battle_rows)
                 if child_rows:
                     self._persist_rows_one_by_one(db, child_rows)
+            design_catalog_updated = self._sync_design_catalogs_from_saved_rows(db, rows)
             db.commit()
+            if design_catalog_updated:
+                self._recent_catalog_sync_count += int(design_catalog_updated)
+                logger.info("event=design_catalogs_synced_from_save count=%s", design_catalog_updated)
             return len(rows)
+        except (SQLiteOperationalError, SQLAlchemyOperationalError) as exc:
+            db.rollback()
+            if "database is locked" in str(exc).lower():
+                logger.warning(
+                    "event=api_flow_save_locked count=%s pending_retry=true",
+                    len(events),
+                )
+                return 0
+            logger.exception("event=api_flow_save_error count=%s", len(events))
+            return 0
         except Exception:
             db.rollback()
             logger.exception("event=api_flow_save_error count=%s", len(events))
@@ -273,6 +296,116 @@ class ApiFlowRepository:
         finally:
             db.close()
 
+    def get_battle_replay_detail(self, battle_replay_id: int) -> dict[str, Any] | None:
+        db = SessionLocal()
+        try:
+            replay = (
+                db.query(BattleReplayNormalized)
+                .filter(BattleReplayNormalized.id == int(battle_replay_id))
+                .first()
+            )
+            if replay is None:
+                return None
+
+            api_flow_event = (
+                db.query(ApiFlowEvent)
+                .filter(ApiFlowEvent.id == replay.api_flow_event_id)
+                .first()
+            )
+            ships = (
+                db.query(BattleReplayShip)
+                .filter(BattleReplayShip.battle_replay_id == replay.id)
+                .order_by(BattleReplayShip.id.asc())
+                .all()
+            )
+            ship_design_ids = {
+                int(row.ship_design_id)
+                for row in ships
+                if row.ship_design_id is not None
+            }
+            ship_design_map: dict[int, str] = {}
+            if ship_design_ids:
+                design_rows = (
+                    db.query(ShipDesign.ship_design_id, ShipDesign.name)
+                    .filter(ShipDesign.ship_design_id.in_(list(ship_design_ids)))
+                    .all()
+                )
+                ship_design_map = {
+                    int(design_id): str(name)
+                    for design_id, name in design_rows
+                    if design_id is not None and name
+                }
+            rooms = (
+                db.query(BattleReplayRoom)
+                .filter(BattleReplayRoom.battle_replay_id == replay.id)
+                .order_by(BattleReplayRoom.id.asc())
+                .all()
+            )
+            room_design_ids = {
+                int(row.room_design_id)
+                for row in rooms
+                if row.room_design_id is not None
+            }
+            room_design_map: dict[int, str] = {}
+            if room_design_ids:
+                try:
+                    room_rows = (
+                        db.query(RoomDesign.room_design_id, RoomDesign.name)
+                        .filter(RoomDesign.room_design_id.in_(list(room_design_ids)))
+                        .all()
+                    )
+                    room_design_map = {
+                        int(design_id): str(name)
+                        for design_id, name in room_rows
+                        if design_id is not None and name
+                    }
+                except SQLAlchemyOperationalError:
+                    logger.warning("event=room_designs_lookup_unavailable")
+            characters = (
+                db.query(BattleReplayCharacter)
+                .filter(BattleReplayCharacter.battle_replay_id == replay.id)
+                .order_by(BattleReplayCharacter.id.asc())
+                .all()
+            )
+            character_design_ids = {
+                int(row.character_design_id)
+                for row in characters
+                if row.character_design_id is not None
+            }
+            character_design_map: dict[int, str] = {}
+            if character_design_ids:
+                try:
+                    character_rows = (
+                        db.query(CrewDesign.crew_design_id, CrewDesign.name)
+                        .filter(CrewDesign.crew_design_id.in_(list(character_design_ids)))
+                        .all()
+                    )
+                    character_design_map = {
+                        int(design_id): str(name)
+                        for design_id, name in character_rows
+                        if design_id is not None and name
+                    }
+                except SQLAlchemyOperationalError:
+                    logger.warning("event=crew_designs_lookup_unavailable")
+            commands = (
+                db.query(BattleReplayCommand)
+                .filter(BattleReplayCommand.battle_replay_id == replay.id)
+                .order_by(BattleReplayCommand.command_order.asc(), BattleReplayCommand.id.asc())
+                .all()
+            )
+            return {
+                "replay": self._serialize_battle_replay_row(replay),
+                "api_flow_event": self._serialize_row(api_flow_event) if api_flow_event else None,
+                "ships": [self._serialize_battle_replay_ship_row(row, ship_design_map) for row in ships],
+                "rooms": [self._serialize_battle_replay_room_row(row, room_design_map) for row in rooms],
+                "characters": [
+                    self._serialize_battle_replay_character_row(row, character_design_map) for row in characters
+                ],
+                "commands": [self._serialize_battle_replay_command_row(row) for row in commands],
+            }
+        finally:
+            db.close()
+
     def sync_battle_replays_from_api_flow(self, batch_size: int = 500) -> int:
         db = SessionLocal()
         inserted = 0
@@ -405,6 +538,36 @@ class ApiFlowRepository:
             return inserted
         finally:
             db.close()
+
+    def sync_ship_designs_from_api_flow(self, limit_events: int = 1) -> int:
+        db = SessionLocal()
+        try:
+            candidates = (
+                db.query(ApiFlowEvent)
+                .filter(ApiFlowEvent.path.like("/DesignService/ListAllStaticDesigns2%"))
+                .filter(ApiFlowEvent.response_body_preview.isnot(None))
+                .order_by(ApiFlowEvent.id.desc())
+                .limit(max(1, int(limit_events)))
+                .all()
+            )
+            if not candidates:
+                return 0
+            updated = self._sync_design_catalogs_from_saved_rows(db, candidates)
+            if updated > 0:
+                db.commit()
+                self._recent_catalog_sync_count += int(updated)
+            return updated
+        except Exception:
+            db.rollback()
+            logger.exception("event=ship_designs_sync_error")
+            return 0
+        finally:
+            db.close()
+
+    def pop_recent_catalog_sync_count(self) -> int:
+        value = int(self._recent_catalog_sync_count)
+        self._recent_catalog_sync_count = 0
+        return value
 
     def _current_db_size_mb(self) -> float:
         if engine.dialect.name != "sqlite":
@@ -705,6 +868,80 @@ class ApiFlowRepository:
             "defender_user_attributes_json": row.defender_user_attributes_json,
         }
 
+    def _serialize_battle_replay_ship_row(
+        self, row: BattleReplayShip, ship_design_map: dict[int, str] | None = None
+    ) -> dict[str, Any]:
+        design_name: str | None = None
+        if ship_design_map and row.ship_design_id is not None:
+            design_name = ship_design_map.get(int(row.ship_design_id))
+        return {
+            "id": row.id,
+            "battle_replay_id": row.battle_replay_id,
+            "side": row.side,
+            "ship_id": row.ship_id,
+            "ship_design_id": row.ship_design_id,
+            "ship_design_name": design_name,
+            "ship_name": row.ship_name,
+            "ship_level": row.ship_level,
+            "power_score": row.power_score,
+            "hp": row.hp,
+            "ship_status": row.ship_status,
+            "ship_attributes_json": row.ship_attributes_json,
+        }
+
+    def _serialize_battle_replay_room_row(
+        self, row: BattleReplayRoom, room_design_map: dict[int, str] | None = None
+    ) -> dict[str, Any]:
+        design_name: str | None = None
+        if room_design_map and row.room_design_id is not None:
+            design_name = room_design_map.get(int(row.room_design_id))
+        return {
+            "id": row.id,
+            "battle_replay_id": row.battle_replay_id,
+            "side": row.side,
+            "room_id": row.room_id,
+            "room_design_id": row.room_design_id,
+            "room_design_name": design_name,
+            "ship_id": row.ship_id,
+            "row": row.row,
+            "column": row.column,
+            "room_status": row.room_status,
+            "room_attributes_json": row.room_attributes_json,
+        }
+
+    def _serialize_battle_replay_character_row(
+        self, row: BattleReplayCharacter, character_design_map: dict[int, str] | None = None
+    ) -> dict[str, Any]:
+        design_name: str | None = None
+        if character_design_map and row.character_design_id is not None:
+            design_name = character_design_map.get(int(row.character_design_id))
+        return {
+            "id": row.id,
+            "battle_replay_id": row.battle_replay_id,
+            "side": row.side,
+            "character_id": row.character_id,
+            "ship_id": row.ship_id,
+            "character_design_id": row.character_design_id,
+            "character_design_name": design_name,
+            "character_name": row.character_name,
+            "level": row.level,
+            "xp": row.xp,
+            "character_attributes_json": row.character_attributes_json,
+        }
+
+    def _serialize_battle_replay_command_row(self, row: BattleReplayCommand) -> dict[str, Any]:
+        return {
+            "id": row.id,
+            "battle_replay_id": row.battle_replay_id,
+            "command_order": row.command_order,
+            "command_tag": row.command_tag,
+            "user_id": row.user_id,
+            "ship_id": row.ship_id,
+            "room_id": row.room_id,
+            "character_id": row.character_id,
+            "command_attributes_json": row.command_attributes_json,
+        }
+
     def _extract_battle_replay_normalized_from_cleaned(
         self, response_body_cleaned: str | None
     ) -> dict[str, Any] | None:
@@ -809,25 +1046,33 @@ class ApiFlowRepository:
 
     def _build_ship_rows_for_replay(self, battle_replay_id: int, parsed: dict[str, Any]) -> list[BattleReplayShip]:
         out: list[BattleReplayShip] = []
+        battle_attrs = parsed.get("battle_attrs") or {}
         for side, key in (("attacker", "attacker_ship_node"), ("defender", "defender_ship_node")):
             ship_node = parsed.get(key)
-            if not isinstance(ship_node, dict):
-                continue
-            attrs = ship_node.get("attributes")
-            if not isinstance(attrs, dict):
-                continue
+            attrs: dict[str, Any] = {}
+            if isinstance(ship_node, dict):
+                node_attrs = ship_node.get("attributes")
+                if isinstance(node_attrs, dict):
+                    attrs = node_attrs
+
+            # Fallback: algunos replays no incluyen la nave del defensor en XML.
+            default_ship_id = (
+                self._as_int(battle_attrs.get("AttackingShipId"))
+                if side == "attacker"
+                else self._as_int(battle_attrs.get("DefendingShipId"))
+            )
             out.append(
                 BattleReplayShip(
                     battle_replay_id=battle_replay_id,
                     side=side,
-                    ship_id=self._as_int(attrs.get("ShipId")),
+                    ship_id=self._as_int(attrs.get("ShipId")) or default_ship_id,
                     ship_design_id=self._as_int(attrs.get("ShipDesignId")),
                     ship_name=self._as_text(self._normalize_text(attrs.get("ShipName")), 255),
                     ship_level=self._as_int(attrs.get("ShipLevel")),
                     power_score=self._as_int(attrs.get("PowerScore")),
                     hp=self._as_float(attrs.get("Hp")),
                     ship_status=self._as_text(attrs.get("ShipStatus"), 64),
-                    ship_attributes_json=attrs,
+                    ship_attributes_json=attrs if attrs else {"missing_ship_xml": True},
                 )
             )
         return out
@@ -934,6 +1179,267 @@ class ApiFlowRepository:
         for row in rows:
             db.add(row)
             db.flush()
+
+    def _sync_design_catalogs_from_saved_rows(self, db, rows: list[ApiFlowEvent]) -> int:
+        total_updated = 0
+        for row in rows:
+            if not row.path or not row.path.startswith("/DesignService/ListAllStaticDesigns2"):
+                continue
+            parsed_ship_designs = self._extract_ship_designs_from_payload(row.response_body_preview)
+            parsed_room_designs = self._extract_room_designs_from_payload(row.response_body_preview)
+            parsed_character_designs = self._extract_character_designs_from_payload(row.response_body_preview)
+            if not parsed_ship_designs and not parsed_room_designs and not parsed_character_designs:
+                continue
+            total_updated += self._upsert_ship_designs(db, parsed_ship_designs)
+            total_updated += self._upsert_room_designs(db, parsed_room_designs)
+            total_updated += self._upsert_character_designs(db, parsed_character_designs)
+        return total_updated
+
+    def _extract_ship_designs_from_payload(self, response_body_preview: str | None) -> list[dict[str, Any]]:
+        xml_text = self._decode_design_payload_to_xml(response_body_preview)
+        if not xml_text:
+            return []
+
+        try:
+            root = ET.fromstring(xml_text)
+        except Exception:
+            return []
+
+        out: list[dict[str, Any]] = []
+        for node in root.findall(".//ShipDesign"):
+            attrs = dict(node.attrib or {})
+            ship_design_id = self._as_int(attrs.get("ShipDesignId"))
+            if ship_design_id is None:
+                continue
+            out.append(
+                {
+                    "ship_design_id": ship_design_id,
+                    "name": self._as_text(self._normalize_text(attrs.get("ShipDesignName")), 255),
+                    "description": self._as_text(self._normalize_text(attrs.get("ShipDescription")), 4096),
+                    "class_type": self._as_text(attrs.get("ShipType"), 100),
+                    "stats": {
+                        "ShipLevel": attrs.get("ShipLevel"),
+                        "Hp": attrs.get("Hp"),
+                        "Rows": attrs.get("Rows"),
+                        "Columns": attrs.get("Columns"),
+                    },
+                    "raw_data": attrs,
+                }
+            )
+        return out
+
+    def _extract_room_designs_from_payload(self, response_body_preview: str | None) -> list[dict[str, Any]]:
+        xml_text = self._decode_design_payload_to_xml(response_body_preview)
+        if not xml_text:
+            return []
+
+        try:
+            root = ET.fromstring(xml_text)
+        except Exception:
+            return []
+
+        out: list[dict[str, Any]] = []
+        for node in root.findall(".//RoomDesign"):
+            attrs = dict(node.attrib or {})
+            room_design_id = self._as_int(attrs.get("RoomDesignId"))
+            if room_design_id is None:
+                continue
+            out.append(
+                {
+                    "room_design_id": room_design_id,
+                    "name": self._as_text(self._normalize_text(attrs.get("RoomName")), 255),
+                    "description": self._as_text(self._normalize_text(attrs.get("RoomDescription")), 4096),
+                    "room_type": self._as_text(attrs.get("RoomType"), 100),
+                    "stats": {
+                        "MinShipLevel": attrs.get("MinShipLevel"),
+                        "Capacity": attrs.get("Capacity"),
+                        "PowerUse": attrs.get("PowerUse"),
+                    },
+                    "raw_data": attrs,
+                }
+            )
+        return out
+
+    def _extract_character_designs_from_payload(self, response_body_preview: str | None) -> list[dict[str, Any]]:
+        xml_text = self._decode_design_payload_to_xml(response_body_preview)
+        if not xml_text:
+            return []
+
+        try:
+            root = ET.fromstring(xml_text)
+        except Exception:
+            return []
+
+        out: list[dict[str, Any]] = []
+        for node in root.findall(".//CharacterDesign"):
+            attrs = dict(node.attrib or {})
+            character_design_id = self._as_int(attrs.get("CharacterDesignId"))
+            if character_design_id is None:
+                continue
+            out.append(
+                {
+                    "crew_design_id": character_design_id,
+                    "name": self._as_text(self._normalize_text(attrs.get("CharacterDesignName")), 255),
+                    "description": self._as_text(self._normalize_text(attrs.get("CharacterDesignDescription")), 4096),
+                    "race": self._as_text(attrs.get("RaceType"), 100),
+                    "role": self._as_text(attrs.get("CharacterType"), 100),
+                    "stats": {
+                        "Hp": attrs.get("Hp"),
+                        "Attack": attrs.get("Attack"),
+                        "FireResistance": attrs.get("FireResistance"),
+                    },
+                    "raw_data": attrs,
+                }
+            )
+        return out
+
+    def _decode_design_payload_to_xml(self, response_body_preview: str | None) -> str | None:
+        text_value = self._as_full_text(response_body_preview)
+        if not text_value:
+            return None
+        stripped = text_value.strip()
+        if stripped.startswith("<"):
+            return stripped
+
+        try:
+            raw = base64.b64decode(stripped, validate=True)
+        except (binascii.Error, ValueError):
+            return None
+
+        if raw.startswith(b"\x1f\x8b"):
+            try:
+                decoded = gzip.decompress(raw)
+            except Exception:
+                return None
+        else:
+            decoded = raw
+
+        try:
+            xml_text = decoded.decode("utf-8", errors="replace").strip()
+            if xml_text.startswith("<"):
+                return xml_text
+        except Exception:
+            return None
+        return None
+
+    def _upsert_ship_designs(self, db, designs: list[dict[str, Any]]) -> int:
+        if not designs:
+            return 0
+        target_ids = [int(item["ship_design_id"]) for item in designs]
+        existing_rows = (
+            db.query(ShipDesign)
+            .filter(ShipDesign.ship_design_id.in_(target_ids))
+            .all()
+        )
+        existing_by_id = {int(row.ship_design_id): row for row in existing_rows if row.ship_design_id is not None}
+
+        updated = 0
+        for item in designs:
+            design_id = int(item["ship_design_id"])
+            row = existing_by_id.get(design_id)
+            if row is None:
+                db.add(
+                    ShipDesign(
+                        ship_design_id=design_id,
+                        name=item.get("name"),
+                        description=item.get("description"),
+                        class_type=item.get("class_type"),
+                        stats=item.get("stats"),
+                        raw_data=item.get("raw_data"),
+                    )
+                )
+                updated += 1
+                continue
+
+            row.name = item.get("name")
+            row.description = item.get("description")
+            row.class_type = item.get("class_type")
+            row.stats = item.get("stats")
+            row.raw_data = item.get("raw_data")
+            updated += 1
+
+        db.flush()
+        return updated
+
+    def _upsert_room_designs(self, db, designs: list[dict[str, Any]]) -> int:
+        if not designs:
+            return 0
+        target_ids = [int(item["room_design_id"]) for item in designs]
+        existing_rows = (
+            db.query(RoomDesign)
+            .filter(RoomDesign.room_design_id.in_(target_ids))
+            .all()
+        )
+        existing_by_id = {int(row.room_design_id): row for row in existing_rows if row.room_design_id is not None}
+
+        updated = 0
+        for item in designs:
+            design_id = int(item["room_design_id"])
+            row = existing_by_id.get(design_id)
+            if row is None:
+                db.add(
+                    RoomDesign(
+                        room_design_id=design_id,
+                        name=item.get("name"),
+                        description=item.get("description"),
+                        room_type=item.get("room_type"),
+                        stats=item.get("stats"),
+                        raw_data=item.get("raw_data"),
+                    )
+                )
+                updated += 1
+                continue
+
+            row.name = item.get("name")
+            row.description = item.get("description")
+            row.room_type = item.get("room_type")
+            row.stats = item.get("stats")
+            row.raw_data = item.get("raw_data")
+            updated += 1
+
+        db.flush()
+        return updated
+
+    def _upsert_character_designs(self, db, designs: list[dict[str, Any]]) -> int:
+        if not designs:
+            return 0
+        target_ids = [int(item["crew_design_id"]) for item in designs]
+        existing_rows = (
+            db.query(CrewDesign)
+            .filter(CrewDesign.crew_design_id.in_(target_ids))
+            .all()
+        )
+        existing_by_id = {int(row.crew_design_id): row for row in existing_rows if row.crew_design_id is not None}
+
+        updated = 0
+        for item in designs:
+            design_id = int(item["crew_design_id"])
+            row = existing_by_id.get(design_id)
+            if row is None:
+                db.add(
+                    CrewDesign(
+                        crew_design_id=design_id,
+                        name=item.get("name"),
+                        description=item.get("description"),
+                        race=item.get("race"),
+                        role=item.get("role"),
+                        stats=item.get("stats"),
+                        raw_data=item.get("raw_data"),
+                    )
+                )
+                updated += 1
+                continue
+
+            row.name = item.get("name")
+            row.description = item.get("description")
+            row.race = item.get("race")
+            row.role = item.get("role")
+            row.stats = item.get("stats")
+            row.raw_data = item.get("raw_data")
+            updated += 1
+
+        db.flush()
+        return updated
 
     def _delete_events_and_normalized(self, db, event_ids: list[int]) -> int:
         if not event_ids:

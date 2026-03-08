@@ -1,41 +1,25 @@
-# Native Migration Roadmap
+# Native Roadmap (Battle Replay)
 
 ## Objetivo
-Consolidar `native_app/` como única aplicación activa y cerrar la etapa legacy web/backend.
 
-## Estado actual
-- Núcleo nativo operativo: `native_app/app/main.py`
-- UI battle logger: `native_app/app/ui/main_window.py` (`Flujo de la API`)
-- Captura runtime: `native_app/app/services/api_flow_capture.py`
-- Persistencia de flujo: `native_app/app/services/api_flow_storage.py`
-- Legacy archivado en `archive/deprecated/`
+Convertir la app en un inspector de batallas sobre datos normalizados.
 
-## Fase 1: Núcleo de datos
-1. Definir una sola capa de persistencia (`sqlite3` o SQLAlchemy).
-2. Ajustar modelos activos para uso nativo.
-3. Centralizar paths/config en `native_app/app/core/config.py`.
+## Prioridades
 
-## Fase 2: Integración de funcionalidades
-1. Consolidar captura estable de tráfico de juego por proxy.
-2. Afinar passthrough por host para dominios con TLS estricto.
-3. Mejorar manejo de errores de red/handshake con mensajes accionables.
+1. Rework UI de logger:
+- Lista de capturas legible para usuario (sin ruido técnico de endpoint/método).
+- Cada captura abre un `Inspector Manager` con subinspectores por tabla.
+- Mantener separación atacante/defensor y foco por contexto.
 
-## Fase 3: UX nativa
-1. Navegación por secciones (tabs/sidebar).
-2. Tabla de flujo con filtros, búsqueda y paginación.
-3. Vistas de historial de batallas y detalle de eventos.
+2. Normalización completa de replay:
+- Expandir extracción de campos clave (atacante, defensor, recompensas, copas, estrellas, timestamps).
+- Mantener integridad entre cabecera y tablas hijas.
 
-## Fase 4: Calidad
-1. Tests de captura, persistencia y retención.
-2. Smoke tests de arranque + DB.
-3. Validaciones de integridad de eventos capturados.
+3. Calidad de parsing:
+- Mejorar limpieza de payload para casos con caracteres/símbolos no legibles.
+- Tests de regresión sobre muestras reales.
+- Fallback robusto cuando falten nodos XML parciales de replay.
 
-## Fase 5: Distribución
-1. Estándar de build con `native_app/scripts/build.sh`.
-2. Empaquetado por OS (Windows/Linux/macOS).
-3. Versionado y publicación de artefactos.
-
-## Fase 6: Cierre legacy
-1. Mantener `archive/deprecated/` como referencia histórica.
-2. Eliminar referencias legacy restantes en docs/scripts.
-3. Tag de release base: `native-v1`.
+4. Operación:
+- Capturar flujo completo (excepto passthrough) y filtrar en capas de consumo/UI.
+- Mantener crecimiento de DB acotado por retención.

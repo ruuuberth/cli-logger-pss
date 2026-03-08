@@ -68,13 +68,13 @@ class ApiFlowAddon:
         loader.add_option(
             "api_flow_capture_hosts",
             str,
-            "api.pixelstarships.com",
+            "",
             "Comma-separated host allowlist for captured events",
         )
         loader.add_option(
             "api_flow_capture_paths",
             str,
-            "/BattleService/GetBattle3",
+            "",
             "Comma-separated path allowlist for captured events",
         )
 

@@ -121,6 +121,20 @@ class CrewDesign(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+class RoomDesign(Base):
+    __tablename__ = "room_designs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    room_design_id = Column(Integer, unique=True, index=True)
+    name = Column(String(255))
+    description = Column(Text)
+    room_type = Column(String(100))
+    stats = Column(JSON)
+    raw_data = Column(JSON)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class BattleReport(Base):
     __tablename__ = "battle_reports"
 
