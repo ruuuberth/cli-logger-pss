@@ -55,6 +55,9 @@ class ApiFlowFilters:
 
 
 class ApiFlowRepository:
+    _ALLOWED_DIRECTIONS = {"request", "response", "error"}
+    _ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT"}
+
     def __init__(self) -> None:
         self.body_max_chars = max(128, int(settings.API_FLOW_BODY_MAX_CHARS))
         self._recent_catalog_sync_count = 0
@@ -64,9 +67,17 @@ class ApiFlowRepository:
             return 0
 
         rows: list[ApiFlowEvent] = []
+        rejected = 0
         for event in events:
             normalized = self._normalize_event(event)
+            if not self._validate_normalized_event(normalized):
+                rejected += 1
+                continue
             rows.append(ApiFlowEvent(**normalized))
+        if rejected:
+            logger.warning("event=api_flow_event_integrity_rejected count=%s", rejected)
+        if not rows:
+            return 0
 
         db = SessionLocal()
         try:
@@ -613,8 +624,8 @@ class ApiFlowRepository:
         normalized = {
             "session_id": str(event.get("session_id") or "unknown")[:64],
             "captured_at": captured_at,
-            "direction": str(event.get("direction") or "response")[:16],
-            "method": self._as_text(event.get("method"), 16),
+            "direction": self._normalize_direction(event.get("direction")),
+            "method": self._normalize_method(event.get("method")),
             "scheme": self._as_text(event.get("scheme"), 16),
             "host": self._as_text(event.get("host"), 255),
             "port": self._as_int(event.get("port")),
@@ -638,6 +649,46 @@ class ApiFlowRepository:
             "flow_hash": self._as_text(event.get("flow_hash"), 100),
         }
         return normalized
+
+    def _normalize_direction(self, value: Any) -> str:
+        direction = str(value or "response").strip().lower()
+        if direction not in self._ALLOWED_DIRECTIONS:
+            return "response"
+        return direction
+
+    def _normalize_method(self, value: Any) -> str | None:
+        method = self._as_text(value, 16)
+        if method is None:
+            return None
+        normalized = method.strip().upper()
+        if not normalized:
+            return None
+        return normalized
+
+    def _validate_normalized_event(self, normalized: dict[str, Any]) -> bool:
+        direction = normalized.get("direction")
+        if direction not in self._ALLOWED_DIRECTIONS:
+            return False
+
+        method = normalized.get("method")
+        if method is not None and method not in self._ALLOWED_METHODS:
+            return False
+
+        status_code = normalized.get("status_code")
+        if status_code is not None and not (100 <= int(status_code) <= 599):
+            return False
+
+        port = normalized.get("port")
+        if port is not None and not (1 <= int(port) <= 65535):
+            return False
+
+        host = normalized.get("host")
+        path = normalized.get("path")
+        url_full = normalized.get("url_full")
+        if not any((host, path, url_full)):
+            return False
+
+        return True
 
     def _serialize_row(self, row: ApiFlowEvent) -> dict[str, Any]:
         return {
