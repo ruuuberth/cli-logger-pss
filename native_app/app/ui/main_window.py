@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 from datetime import datetime
 from threading import Thread
 
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 from app.core.config import settings
 from app.services.api_flow_capture import ApiFlowCaptureManager
 from app.services.api_flow_storage import ApiFlowRepository
+from app.ui.battle_inspector_window import BattleInspectorWindow
 
 
 class ApiFlowBridge(QObject):
@@ -61,6 +63,7 @@ class MainWindow(QMainWindow):
         self.api_flow_page = 0
         self.api_flow_page_size = 200
         self.api_flow_current_rows: list[dict] = []
+        self.battle_inspector_windows: list[BattleInspectorWindow] = []
         self.startup_sync_running = False
         self.startup_sync_thread: Thread | None = None
 
@@ -137,9 +140,9 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.api_flow_time_to)
         filters.addWidget(self.api_flow_reset_filters_button)
 
-        self.api_flow_table = QTableWidget(0, 7)
+        self.api_flow_table = QTableWidget(0, 8)
         self.api_flow_table.setHorizontalHeaderLabels(
-            ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId"]
+            ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId", "Inspector"]
         )
         self.api_flow_table.horizontalHeader().setStretchLastSection(True)
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -340,6 +343,9 @@ class MainWindow(QMainWindow):
             self.api_flow_table.setItem(idx, 4, QTableWidgetItem(botin))
             self.api_flow_table.setItem(idx, 5, QTableWidgetItem(copas))
             self.api_flow_table.setItem(idx, 6, QTableWidgetItem(battle_id))
+            inspect_button = QPushButton("Inspeccionar")
+            inspect_button.clicked.connect(partial(self.open_battle_inspector, row.get("id")))
+            self.api_flow_table.setCellWidget(idx, 7, inspect_button)
 
         if total == 0:
             self.api_flow_page_label.setText("Pagina: 0")
@@ -421,6 +427,22 @@ class MainWindow(QMainWindow):
             "response_body_preview": row.get("response_body_preview"),
         }
         self.api_flow_detail.setPlainText(json.dumps(detail, indent=2, ensure_ascii=False))
+
+    def open_battle_inspector(self, battle_replay_id: int | None) -> None:
+        if battle_replay_id is None:
+            return
+        detail = self.api_flow_repository.get_battle_replay_detail(int(battle_replay_id))
+        if detail is None:
+            QMessageBox.warning(self, "Inspector", "No se encontro la batalla seleccionada.")
+            return
+        inspector = BattleInspectorWindow(detail, self)
+        self.battle_inspector_windows.append(inspector)
+        inspector.destroyed.connect(partial(self._on_battle_inspector_destroyed, inspector))
+        inspector.show()
+
+    def _on_battle_inspector_destroyed(self, inspector: BattleInspectorWindow, *_) -> None:
+        if inspector in self.battle_inspector_windows:
+            self.battle_inspector_windows.remove(inspector)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.api_flow_flush_timer.stop()
