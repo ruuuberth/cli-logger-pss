@@ -1,21 +1,25 @@
 # Native Migration Roadmap (Actualizado)
 
 ## Objetivo
-Consolidar `native_app/` como única aplicación activa y cerrar la etapa legacy web/backend.
 
-## Pendiente real (no completado)
-1. Consolidar en `develop` los cambios ya implementados en ramas de trabajo:
-   - arranque no bloqueante de UI (sync en background),
-   - smoke tests de arranque + inicialización de DB,
-   - validación de integridad de eventos antes de persistencia.
-2. Revisar cada rama nueva antes de mergear a `develop`:
-   - si aporta cambios útiles para el objetivo actual, integrar esos commits en `develop`,
-   - si no aporta valor real, desechar la rama.
-3. Cerrar decisión de UX sobre navegación por secciones (`tabs`/sidebar) para evitar reworks repetidos.
-4. Ajustar mensajes de error de captura/red para que sean accionables en UI (TLS/handshake/lock).
+Convertir la app en un inspector de batallas sobre datos normalizados.
 
-## Alcance ya cubierto
-- Núcleo nativo operativo (`native_app/app/main.py`).
-- Captura por proxy y persistencia de flujo.
-- Tabla de logger de batallas con búsqueda/paginación y detalle.
-- Base de pruebas de captura/persistencia/retención.
+## Prioridades
+
+1. Rework UI de logger:
+- Lista de capturas legible para usuario (sin ruido técnico de endpoint/método).
+- Cada captura abre un `Inspector Manager` con subinspectores por tabla.
+- Mantener separación atacante/defensor y foco por contexto.
+
+2. Normalización completa de replay:
+- Expandir extracción de campos clave (atacante, defensor, recompensas, copas, estrellas, timestamps).
+- Mantener integridad entre cabecera y tablas hijas.
+
+3. Calidad de parsing:
+- Mejorar limpieza de payload para casos con caracteres/símbolos no legibles.
+- Tests de regresión sobre muestras reales.
+- Fallback robusto cuando falten nodos XML parciales de replay.
+
+4. Operación:
+- Capturar flujo completo (excepto passthrough) y filtrar en capas de consumo/UI.
+- Mantener crecimiento de DB acotado por retención.

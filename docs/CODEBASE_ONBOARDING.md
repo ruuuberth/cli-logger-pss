@@ -1,66 +1,48 @@
-# Onboarding Técnico (Native App)
+# Onboarding Técnico
 
-## 1) Visión general
+## Arquitectura
 
-`Logger PSS` es ahora una app nativa de escritorio, multiplataforma, centrada en Python.
+- UI: `native_app/app/ui/main_window.py`
+- Captura runtime: `native_app/app/services/api_flow_capture.py`
+- Addon mitm: `native_app/app/services/mitm_api_flow_addon.py`
+- Persistencia/normalización: `native_app/app/services/api_flow_storage.py`
+- Configuración: `native_app/app/core/config.py`
+- Modelos DB: `native_app/app/models/pss_models.py`
 
-Arquitectura vigente:
-- **UI nativa**: PySide6 (battle logger) (`native_app/app/ui/main_window.py`)
-- **Captura de tráfico**: `mitmdump` + addon (`native_app/app/services/mitm_api_flow_addon.py`)
-- **Persistencia local**: SQLite (`api_flow_events`)
-- **Modelos/config**: `native_app/app/models/` y `native_app/app/core/`
+## Flujo principal
 
-Legacy web/backend se conserva en `archive/deprecated/` solo como referencia.
+1. Se captura tráfico vía proxy.
+2. Se aplica passthrough por `API_FLOW_IGNORE_HOSTS`.
+3. Se guarda evento en `api_flow_events`.
+4. Se limpia payload en `response_body_cleaned`.
+5. Se normaliza replay en tablas relacionales.
+6. Se sincronizan catálogos (`ship_designs`, `room_designs`, `crew_designs`) desde `DesignService/ListAllStaticDesigns2`.
 
-## 2) Estructura clave
+## Tablas de replay
 
-- `native_app/app/main.py`: entrypoint de la app.
-- `native_app/app/ui/main_window.py`: ventana principal y acciones del usuario.
-- `native_app/app/services/api_flow_capture.py`: lifecycle de `mitmdump` (start/stop/estado).
-- `native_app/app/services/mitm_api_flow_addon.py`: normaliza eventos de request/response.
-- `native_app/app/services/api_flow_storage.py`: persistencia, consulta y retención de eventos.
-- `native_app/app/models/*.py`: modelos y acceso de datos.
-- `native_app/app/core/config.py`: configuración central.
+- `battle_replays_normalized`
+- `battle_replay_ships`
+- `battle_replay_rooms`
+- `battle_replay_characters`
+- `battle_replay_commands`
 
-## 3) Flujo funcional principal
+## UI de inspección
 
-1. Usuario abre app nativa.
-2. Inicia captura en `Flujo de la API`.
-3. Juego envía tráfico vía proxy local (`mitmproxy`).
-4. App persiste requests/responses en SQLite.
-5. Usuario explora historial con filtros, paginación y detalle.
+- `Battle Inspector` funciona como manager.
+- Abre subinspectores dedicados por tabla (Naves, Salas, Tripulación, Comandos).
 
-## 4) Decisiones técnicas actuales
+## Convenciones importantes
 
-- Se prioriza app nativa única (sin separación frontend/backend HTTP).
-- Se mantiene compatibilidad con lógica previa migrando módulos de dominio.
-- Se preserva historial técnico en `archive/deprecated/` para trazabilidad.
+- El parser debe priorizar no perder datos del replay.
+- El filtro de captura se aplica en addon (no en UI).
+- Retención por TTL/tamaño debe mantener coherencia entre tablas.
 
-## 5) Riesgos/deuda actual
-
-- Cobertura de tests todavía enfocada en servicios base.
-- Algunos hosts Unity usan TLS estricto y requieren passthrough.
-- Falta pipeline CI/CD multi-OS para releases automáticos.
-
-## 6) Siguiente ruta recomendada
-
-1. Mejorar detección/diagnóstico de hosts con TLS estricto.
-2. Añadir tests de captura y retención.
-3. Extender vistas para análisis específico de batallas.
-4. Madurar build de distribución para Windows/Linux/macOS.
-
-## 7) Comandos útiles
+## Comandos
 
 ```bash
-# Ejecutar app
 cd native_app
-pss-native
-# alternativa: python -m app.main
-
-# Build local
-cd native_app
-./scripts/build.sh
-
-# Crear rama desde main
-./scripts/new-branch.sh feat mi-cambio
+source .venv/bin/activate
+pytest -q
+python -m pytest -q
+python scripts/migrate_battle_replays_normalized.py
 ```
