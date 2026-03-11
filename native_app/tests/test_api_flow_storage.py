@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import gzip
 import json
 
 from app.services.api_flow_storage import ApiFlowRepository
@@ -240,3 +242,93 @@ def test_extracts_child_entities_from_cleaned_payload() -> None:
     assert rooms[0].room_id == 501
     assert characters[0].character_id == 9001
     assert commands[0].user_id == 123
+
+
+def test_build_ship_rows_adds_fallback_when_defender_ship_xml_is_missing() -> None:
+    repo = ApiFlowRepository()
+    cleaned_payload = json.dumps(
+        {
+            "tag": "BattleService",
+            "children": [
+                {
+                    "tag": "GetBattle",
+                    "children": [
+                        {
+                            "tag": "Battle",
+                            "attributes": {
+                                "BattleId": "2",
+                                "AttackingShipId": "10",
+                                "DefendingShipId": "11",
+                                "AttackingShipXml": {
+                                    "tag": "Ship",
+                                    "attributes": {
+                                        "ShipId": "10",
+                                        "ShipDesignId": "200",
+                                        "ShipName": "AttackerShip",
+                                    },
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    parsed = repo._extract_battle_nodes_from_cleaned(cleaned_payload)
+    assert parsed is not None
+
+    ships = repo._build_ship_rows_for_replay(1, parsed)
+
+    assert len(ships) == 2
+    sides = {ship.side for ship in ships}
+    assert sides == {"attacker", "defender"}
+    defender = [ship for ship in ships if ship.side == "defender"][0]
+    assert defender.ship_id == 11
+
+
+def test_extracts_ship_designs_from_compressed_static_design_payload() -> None:
+    repo = ApiFlowRepository()
+    xml_payload = (
+        '<DesignService><ListAllStaticDesigns><ShipDesigns version="1">'
+        '<ShipDesign ShipDesignId="292" ShipDesignName="Interceptor" ShipDescription="Desc A" ShipType="TypeA" ShipLevel="4" Hp="55" Rows="10" Columns="20" />'
+        '<ShipDesign ShipDesignId="293" ShipDesignName="Defender" ShipDescription="Desc B" ShipType="TypeB" ShipLevel="5" Hp="60" Rows="11" Columns="21" />'
+        '</ShipDesigns><RoomDesigns version="1">'
+        '<RoomDesign RoomDesignId="101" RoomName="Laser" RoomDescription="Desc Room" RoomType="Weapon" MinShipLevel="5" Capacity="3" PowerUse="2" />'
+        '</RoomDesigns><CharacterDesigns version="1">'
+        '<CharacterDesign CharacterDesignId="901" CharacterDesignName="CrewOne" CharacterDesignDescription="Desc Crew" RaceType="Human" CharacterType="Hero" Hp="100" Attack="12" FireResistance="3" />'
+        "</CharacterDesigns></ListAllStaticDesigns></DesignService>"
+    )
+    encoded = base64.b64encode(gzip.compress(xml_payload.encode("utf-8"))).decode("ascii")
+
+    ship_designs = repo._extract_ship_designs_from_payload(encoded)
+    room_designs = repo._extract_room_designs_from_payload(encoded)
+    character_designs = repo._extract_character_designs_from_payload(encoded)
+
+    assert len(ship_designs) == 2
+    assert ship_designs[0]["ship_design_id"] == 292
+    assert ship_designs[0]["name"] == "Interceptor"
+    assert ship_designs[0]["class_type"] == "TypeA"
+    assert ship_designs[1]["ship_design_id"] == 293
+    assert len(room_designs) == 1
+    assert room_designs[0]["room_design_id"] == 101
+    assert room_designs[0]["name"] == "Laser"
+    assert len(character_designs) == 1
+    assert character_designs[0]["crew_design_id"] == 901
+    assert character_designs[0]["name"] == "CrewOne"
+
+
+def test_design_decoder_accepts_wrapped_base64_payload() -> None:
+    repo = ApiFlowRepository()
+    xml_payload = (
+        '<DesignService><ListAllStaticDesigns><ShipDesigns version="1">'
+        '<ShipDesign ShipDesignId="292" ShipDesignName="Interceptor" />'
+        "</ShipDesigns></ListAllStaticDesigns></DesignService>"
+    )
+    encoded = base64.b64encode(gzip.compress(xml_payload.encode("utf-8"))).decode("ascii")
+    wrapped = "\n".join(encoded[i : i + 64] for i in range(0, len(encoded), 64))
+
+    ship_designs = repo._extract_ship_designs_from_payload(wrapped)
+
+    assert len(ship_designs) == 1
+    assert ship_designs[0]["ship_design_id"] == 292

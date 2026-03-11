@@ -41,6 +41,8 @@ except ModuleNotFoundError:
     qtwidgets.QAbstractItemView = _Dummy
     qtwidgets.QCheckBox = _Dummy
     qtwidgets.QComboBox = _Dummy
+    qtwidgets.QFrame = _Dummy
+    qtwidgets.QGridLayout = _Dummy
     qtwidgets.QHBoxLayout = _Dummy
     qtwidgets.QLabel = _Dummy
     qtwidgets.QLineEdit = _Dummy
@@ -49,6 +51,7 @@ except ModuleNotFoundError:
     qtwidgets.QPlainTextEdit = _Dummy
     qtwidgets.QPushButton = _Dummy
     qtwidgets.QSpinBox = _Dummy
+    qtwidgets.QTabWidget = _Dummy
     qtwidgets.QTableWidget = _Dummy
     qtwidgets.QTableWidgetItem = _Dummy
     qtwidgets.QVBoxLayout = _Dummy

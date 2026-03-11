@@ -18,6 +18,8 @@ venv/
 # Databases
 *.db
 *.sqlite3
+*.db-wal
+*.db-shm
 
 # Logs
 *.log
@@ -45,3 +47,4 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+.github/pr-body.md

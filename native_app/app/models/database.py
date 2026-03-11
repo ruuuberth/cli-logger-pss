@@ -2,16 +2,33 @@ import json
 import logging
 from typing import Any, Optional
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from app.core.config import settings
 
-engine = create_engine(settings.DATABASE_URL)
+_is_sqlite_url = str(settings.DATABASE_URL).startswith("sqlite")
+_sqlite_connect_args = {"timeout": 30} if _is_sqlite_url else {}
+
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args=_sqlite_connect_args,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
 logger = logging.getLogger(__name__)
+
+
+if engine.dialect.name == "sqlite":
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, connection_record) -> None:  # pragma: no cover
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 ITEM_DESIGNS_SQLITE_COLUMNS: dict[str, str] = {
@@ -169,6 +186,37 @@ def ensure_sqlite_schema() -> None:
                 )
                 """
             )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS crew_designs (
+                id INTEGER NOT NULL PRIMARY KEY,
+                crew_design_id INTEGER,
+                name VARCHAR(255),
+                description TEXT,
+                race VARCHAR(100),
+                role VARCHAR(100),
+                stats JSON,
+                raw_data JSON,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS room_designs (
+                id INTEGER NOT NULL PRIMARY KEY,
+                room_design_id INTEGER,
+                name VARCHAR(255),
+                description TEXT,
+                room_type VARCHAR(100),
+                stats JSON,
+                raw_data JSON,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME
+            )
+            """
+        )
         conn.exec_driver_sql(
             """
             CREATE TABLE IF NOT EXISTS api_flow_events (
@@ -353,6 +401,18 @@ def ensure_sqlite_indexes() -> None:
                 "ON item_tags (item_design_id)"
             )
             conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_tags_tag ON item_tags (tag)")
+
+        if "crew_designs" in tables:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_crew_designs_crew_design_id "
+                "ON crew_designs (crew_design_id)"
+            )
+
+        if "room_designs" in tables:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_room_designs_room_design_id "
+                "ON room_designs (room_design_id)"
+            )
 
         if "api_flow_events" not in tables:
             return
