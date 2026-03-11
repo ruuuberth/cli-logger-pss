@@ -99,6 +99,7 @@ class ShipDesign(Base):
     id = Column(Integer, primary_key=True, index=True)
     ship_design_id = Column(Integer, unique=True, index=True)
     name = Column(String(255))
+    name_es = Column(String(255))
     description = Column(Text)
     class_type = Column(String(100))
     stats = Column(JSON)
@@ -112,6 +113,7 @@ class CrewDesign(Base):
     id = Column(Integer, primary_key=True, index=True)
     crew_design_id = Column(Integer, unique=True, index=True)
     name = Column(String(255))
+    name_es = Column(String(255))
     description = Column(Text)
     race = Column(String(100))
     role = Column(String(100))
@@ -123,10 +125,11 @@ class CrewDesign(Base):
 
 class RoomDesign(Base):
     __tablename__ = "room_designs"
-
+    
     id = Column(Integer, primary_key=True, index=True)
     room_design_id = Column(Integer, unique=True, index=True)
     name = Column(String(255))
+    name_es = Column(String(255))
     description = Column(Text)
     room_type = Column(String(100))
     stats = Column(JSON)

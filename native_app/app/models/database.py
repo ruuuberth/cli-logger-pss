@@ -192,6 +192,7 @@ def ensure_sqlite_schema() -> None:
                 id INTEGER NOT NULL PRIMARY KEY,
                 crew_design_id INTEGER,
                 name VARCHAR(255),
+                name_es VARCHAR(255),
                 description TEXT,
                 race VARCHAR(100),
                 role VARCHAR(100),
@@ -208,6 +209,7 @@ def ensure_sqlite_schema() -> None:
                 id INTEGER NOT NULL PRIMARY KEY,
                 room_design_id INTEGER,
                 name VARCHAR(255),
+                name_es VARCHAR(255),
                 description TEXT,
                 room_type VARCHAR(100),
                 stats JSON,
@@ -217,6 +219,21 @@ def ensure_sqlite_schema() -> None:
             )
             """
         )
+        if "ship_designs" in tables:
+            ship_info = conn.exec_driver_sql("PRAGMA table_info(ship_designs)").fetchall()
+            ship_columns = {row[1] for row in ship_info}
+            if "name_es" not in ship_columns:
+                conn.exec_driver_sql("ALTER TABLE ship_designs ADD COLUMN name_es VARCHAR(255)")
+        if "crew_designs" in tables:
+            crew_info = conn.exec_driver_sql("PRAGMA table_info(crew_designs)").fetchall()
+            crew_columns = {row[1] for row in crew_info}
+            if "name_es" not in crew_columns:
+                conn.exec_driver_sql("ALTER TABLE crew_designs ADD COLUMN name_es VARCHAR(255)")
+        if "room_designs" in tables:
+            room_info = conn.exec_driver_sql("PRAGMA table_info(room_designs)").fetchall()
+            room_columns = {row[1] for row in room_info}
+            if "name_es" not in room_columns:
+                conn.exec_driver_sql("ALTER TABLE room_designs ADD COLUMN name_es VARCHAR(255)")
         conn.exec_driver_sql(
             """
             CREATE TABLE IF NOT EXISTS api_flow_events (
