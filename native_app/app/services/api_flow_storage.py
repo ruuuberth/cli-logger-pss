@@ -334,18 +334,21 @@ class ApiFlowRepository:
                 for row in ships
                 if row.ship_design_id is not None
             }
-            ship_design_map: dict[int, str] = {}
+            ship_design_map_en: dict[int, str] = {}
+            ship_design_map_es: dict[int, str] = {}
             if ship_design_ids:
                 design_rows = (
-                    db.query(ShipDesign.ship_design_id, ShipDesign.name)
+                    db.query(ShipDesign.ship_design_id, ShipDesign.name, ShipDesign.name_es)
                     .filter(ShipDesign.ship_design_id.in_(list(ship_design_ids)))
                     .all()
                 )
-                ship_design_map = {
-                    int(design_id): str(name)
-                    for design_id, name in design_rows
-                    if design_id is not None and name
-                }
+                for design_id, name, name_es in design_rows:
+                    if design_id is None:
+                        continue
+                    if name:
+                        ship_design_map_en[int(design_id)] = str(name)
+                    if name_es:
+                        ship_design_map_es[int(design_id)] = str(name_es)
             rooms = (
                 db.query(BattleReplayRoom)
                 .filter(BattleReplayRoom.battle_replay_id == replay.id)
@@ -357,19 +360,22 @@ class ApiFlowRepository:
                 for row in rooms
                 if row.room_design_id is not None
             }
-            room_design_map: dict[int, str] = {}
+            room_design_map_en: dict[int, str] = {}
+            room_design_map_es: dict[int, str] = {}
             if room_design_ids:
                 try:
                     room_rows = (
-                        db.query(RoomDesign.room_design_id, RoomDesign.name)
+                        db.query(RoomDesign.room_design_id, RoomDesign.name, RoomDesign.name_es)
                         .filter(RoomDesign.room_design_id.in_(list(room_design_ids)))
                         .all()
                     )
-                    room_design_map = {
-                        int(design_id): str(name)
-                        for design_id, name in room_rows
-                        if design_id is not None and name
-                    }
+                    for design_id, name, name_es in room_rows:
+                        if design_id is None:
+                            continue
+                        if name:
+                            room_design_map_en[int(design_id)] = str(name)
+                        if name_es:
+                            room_design_map_es[int(design_id)] = str(name_es)
                 except SQLAlchemyOperationalError:
                     logger.warning("event=room_designs_lookup_unavailable")
             characters = (
@@ -383,19 +389,22 @@ class ApiFlowRepository:
                 for row in characters
                 if row.character_design_id is not None
             }
-            character_design_map: dict[int, str] = {}
+            character_design_map_en: dict[int, str] = {}
+            character_design_map_es: dict[int, str] = {}
             if character_design_ids:
                 try:
                     character_rows = (
-                        db.query(CrewDesign.crew_design_id, CrewDesign.name)
+                        db.query(CrewDesign.crew_design_id, CrewDesign.name, CrewDesign.name_es)
                         .filter(CrewDesign.crew_design_id.in_(list(character_design_ids)))
                         .all()
                     )
-                    character_design_map = {
-                        int(design_id): str(name)
-                        for design_id, name in character_rows
-                        if design_id is not None and name
-                    }
+                    for design_id, name, name_es in character_rows:
+                        if design_id is None:
+                            continue
+                        if name:
+                            character_design_map_en[int(design_id)] = str(name)
+                        if name_es:
+                            character_design_map_es[int(design_id)] = str(name_es)
                 except SQLAlchemyOperationalError:
                     logger.warning("event=crew_designs_lookup_unavailable")
             commands = (
@@ -407,10 +416,29 @@ class ApiFlowRepository:
             return {
                 "replay": self._serialize_battle_replay_row(replay),
                 "api_flow_event": self._serialize_row(api_flow_event) if api_flow_event else None,
-                "ships": [self._serialize_battle_replay_ship_row(row, ship_design_map) for row in ships],
-                "rooms": [self._serialize_battle_replay_room_row(row, room_design_map) for row in rooms],
+                "ships": [
+                    self._serialize_battle_replay_ship_row(
+                        row,
+                        ship_design_map_es,
+                        ship_design_map_en,
+                    )
+                    for row in ships
+                ],
+                "rooms": [
+                    self._serialize_battle_replay_room_row(
+                        row,
+                        room_design_map_es,
+                        room_design_map_en,
+                    )
+                    for row in rooms
+                ],
                 "characters": [
-                    self._serialize_battle_replay_character_row(row, character_design_map) for row in characters
+                    self._serialize_battle_replay_character_row(
+                        row,
+                        character_design_map_es,
+                        character_design_map_en,
+                    )
+                    for row in characters
                 ],
                 "commands": [self._serialize_battle_replay_command_row(row) for row in commands],
             }
@@ -920,11 +948,17 @@ class ApiFlowRepository:
         }
 
     def _serialize_battle_replay_ship_row(
-        self, row: BattleReplayShip, ship_design_map: dict[int, str] | None = None
+        self,
+        row: BattleReplayShip,
+        ship_design_map_es: dict[int, str] | None = None,
+        ship_design_map_en: dict[int, str] | None = None,
     ) -> dict[str, Any]:
-        design_name: str | None = None
-        if ship_design_map and row.ship_design_id is not None:
-            design_name = ship_design_map.get(int(row.ship_design_id))
+        design_name = self._translate_design_name(
+            row.ship_design_id,
+            ship_design_map_es,
+            ship_design_map_en,
+            row.ship_name,
+        )
         return {
             "id": row.id,
             "battle_replay_id": row.battle_replay_id,
@@ -941,11 +975,17 @@ class ApiFlowRepository:
         }
 
     def _serialize_battle_replay_room_row(
-        self, row: BattleReplayRoom, room_design_map: dict[int, str] | None = None
+        self,
+        row: BattleReplayRoom,
+        room_design_map_es: dict[int, str] | None = None,
+        room_design_map_en: dict[int, str] | None = None,
     ) -> dict[str, Any]:
-        design_name: str | None = None
-        if room_design_map and row.room_design_id is not None:
-            design_name = room_design_map.get(int(row.room_design_id))
+        design_name = self._translate_design_name(
+            row.room_design_id,
+            room_design_map_es,
+            room_design_map_en,
+            None,
+        )
         return {
             "id": row.id,
             "battle_replay_id": row.battle_replay_id,
@@ -961,11 +1001,17 @@ class ApiFlowRepository:
         }
 
     def _serialize_battle_replay_character_row(
-        self, row: BattleReplayCharacter, character_design_map: dict[int, str] | None = None
+        self,
+        row: BattleReplayCharacter,
+        character_design_map_es: dict[int, str] | None = None,
+        character_design_map_en: dict[int, str] | None = None,
     ) -> dict[str, Any]:
-        design_name: str | None = None
-        if character_design_map and row.character_design_id is not None:
-            design_name = character_design_map.get(int(row.character_design_id))
+        design_name = self._translate_design_name(
+            row.character_design_id,
+            character_design_map_es,
+            character_design_map_en,
+            row.character_name,
+        )
         return {
             "id": row.id,
             "battle_replay_id": row.battle_replay_id,
@@ -992,6 +1038,42 @@ class ApiFlowRepository:
             "character_id": row.character_id,
             "command_attributes_json": row.command_attributes_json,
         }
+
+    def _translate_design_name(
+        self,
+        design_id: int | None,
+        map_es: dict[int, str] | None,
+        map_en: dict[int, str] | None,
+        raw_name: str | None,
+    ) -> str:
+        if design_id is not None:
+            if map_es:
+                value = map_es.get(int(design_id))
+                if value and str(value).strip():
+                    return str(value).strip()
+            if map_en:
+                value = map_en.get(int(design_id))
+                if value and str(value).strip():
+                    return str(value).strip()
+        if raw_name and str(raw_name).strip():
+            return str(raw_name).strip()
+        if design_id is not None:
+            return str(design_id)
+        return "Sin traduccion"
+
+    def _pick_design_name_es(self, attrs: dict[str, Any], base_key: str) -> str | None:
+        candidates = [
+            f"{base_key}ES",
+            f"{base_key}Es",
+            f"{base_key}_ES",
+            f"{base_key}_Es",
+            f"{base_key}Spanish",
+            f"{base_key}_Spanish",
+        ]
+        for key in candidates:
+            if key in attrs and attrs.get(key):
+                return str(attrs.get(key))
+        return None
 
     def _extract_battle_replay_normalized_from_cleaned(
         self, response_body_cleaned: str | None
@@ -1138,6 +1220,11 @@ class ApiFlowRepository:
                 attrs = room_node.get("attributes")
                 if not isinstance(attrs, dict):
                     continue
+                attrs = dict(attrs)
+                nested_attrs = self._flatten_node_attributes(room_node)
+                for key_name, value in nested_attrs.items():
+                    if key_name not in attrs:
+                        attrs[key_name] = value
                 out.append(
                     BattleReplayRoom(
                         battle_replay_id=battle_replay_id,
@@ -1165,6 +1252,11 @@ class ApiFlowRepository:
                 attrs = char_node.get("attributes")
                 if not isinstance(attrs, dict):
                     continue
+                attrs = dict(attrs)
+                nested_attrs = self._flatten_node_attributes(char_node)
+                for key_name, value in nested_attrs.items():
+                    if key_name not in attrs:
+                        attrs[key_name] = value
                 out.append(
                     BattleReplayCharacter(
                         battle_replay_id=battle_replay_id,
@@ -1178,6 +1270,29 @@ class ApiFlowRepository:
                         character_attributes_json=attrs,
                     )
                 )
+        return out
+
+    def _flatten_node_attributes(self, node: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        children = node.get("children")
+        if not isinstance(children, list):
+            return out
+        for child in children:
+            if not isinstance(child, dict):
+                continue
+            tag = child.get("tag")
+            tag_text = str(tag) if tag else "Child"
+            next_prefix = f"{prefix}.{tag_text}" if prefix else tag_text
+            attrs = child.get("attributes")
+            if isinstance(attrs, dict):
+                for key, value in attrs.items():
+                    full_key = f"{next_prefix}.{key}"
+                    if full_key not in out:
+                        out[full_key] = value
+            nested = self._flatten_node_attributes(child, next_prefix)
+            for key, value in nested.items():
+                if key not in out:
+                    out[key] = value
         return out
 
     def _build_command_rows_for_replay(self, battle_replay_id: int, parsed: dict[str, Any]) -> list[BattleReplayCommand]:
@@ -1262,10 +1377,13 @@ class ApiFlowRepository:
             ship_design_id = self._as_int(attrs.get("ShipDesignId"))
             if ship_design_id is None:
                 continue
+            name_en = self._as_text(self._normalize_text(attrs.get("ShipDesignName")), 255)
+            name_es = self._as_text(self._normalize_text(self._pick_design_name_es(attrs, "ShipDesignName")), 255)
             out.append(
                 {
                     "ship_design_id": ship_design_id,
-                    "name": self._as_text(self._normalize_text(attrs.get("ShipDesignName")), 255),
+                    "name": name_en,
+                    "name_es": name_es,
                     "description": self._as_text(self._normalize_text(attrs.get("ShipDescription")), 4096),
                     "class_type": self._as_text(attrs.get("ShipType"), 100),
                     "stats": {
@@ -1295,10 +1413,13 @@ class ApiFlowRepository:
             room_design_id = self._as_int(attrs.get("RoomDesignId"))
             if room_design_id is None:
                 continue
+            name_en = self._as_text(self._normalize_text(attrs.get("RoomName")), 255)
+            name_es = self._as_text(self._normalize_text(self._pick_design_name_es(attrs, "RoomName")), 255)
             out.append(
                 {
                     "room_design_id": room_design_id,
-                    "name": self._as_text(self._normalize_text(attrs.get("RoomName")), 255),
+                    "name": name_en,
+                    "name_es": name_es,
                     "description": self._as_text(self._normalize_text(attrs.get("RoomDescription")), 4096),
                     "room_type": self._as_text(attrs.get("RoomType"), 100),
                     "stats": {
@@ -1327,10 +1448,13 @@ class ApiFlowRepository:
             character_design_id = self._as_int(attrs.get("CharacterDesignId"))
             if character_design_id is None:
                 continue
+            name_en = self._as_text(self._normalize_text(attrs.get("CharacterDesignName")), 255)
+            name_es = self._as_text(self._normalize_text(self._pick_design_name_es(attrs, "CharacterDesignName")), 255)
             out.append(
                 {
                     "crew_design_id": character_design_id,
-                    "name": self._as_text(self._normalize_text(attrs.get("CharacterDesignName")), 255),
+                    "name": name_en,
+                    "name_es": name_es,
                     "description": self._as_text(self._normalize_text(attrs.get("CharacterDesignDescription")), 4096),
                     "race": self._as_text(attrs.get("RaceType"), 100),
                     "role": self._as_text(attrs.get("CharacterType"), 100),
@@ -1395,6 +1519,7 @@ class ApiFlowRepository:
                     ShipDesign(
                         ship_design_id=design_id,
                         name=item.get("name"),
+                        name_es=item.get("name_es"),
                         description=item.get("description"),
                         class_type=item.get("class_type"),
                         stats=item.get("stats"),
@@ -1405,6 +1530,7 @@ class ApiFlowRepository:
                 continue
 
             row.name = item.get("name")
+            row.name_es = item.get("name_es")
             row.description = item.get("description")
             row.class_type = item.get("class_type")
             row.stats = item.get("stats")
@@ -1434,6 +1560,7 @@ class ApiFlowRepository:
                     RoomDesign(
                         room_design_id=design_id,
                         name=item.get("name"),
+                        name_es=item.get("name_es"),
                         description=item.get("description"),
                         room_type=item.get("room_type"),
                         stats=item.get("stats"),
@@ -1444,6 +1571,7 @@ class ApiFlowRepository:
                 continue
 
             row.name = item.get("name")
+            row.name_es = item.get("name_es")
             row.description = item.get("description")
             row.room_type = item.get("room_type")
             row.stats = item.get("stats")
@@ -1473,6 +1601,7 @@ class ApiFlowRepository:
                     CrewDesign(
                         crew_design_id=design_id,
                         name=item.get("name"),
+                        name_es=item.get("name_es"),
                         description=item.get("description"),
                         race=item.get("race"),
                         role=item.get("role"),
@@ -1484,6 +1613,7 @@ class ApiFlowRepository:
                 continue
 
             row.name = item.get("name")
+            row.name_es = item.get("name_es")
             row.description = item.get("description")
             row.race = item.get("race")
             row.role = item.get("role")

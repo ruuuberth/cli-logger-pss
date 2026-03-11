@@ -514,9 +514,9 @@ class BattleInspectorWindow(QMainWindow):
         return table
 
     def _build_rooms_table(self, rooms: list[dict[str, Any]], *, include_side: bool = True) -> QTableWidget:
-        headers = ["Diseno", "Fila", "Columna", "Estado"]
-        if include_side:
-            headers = ["Side"] + headers
+        base_headers = ["Diseno", "Fila", "Columna", "Estado"]
+        dynamic_headers = self._collect_attribute_keys(rooms, "room_attributes_json")
+        headers = (["Side"] if include_side else []) + base_headers + dynamic_headers
         table = QTableWidget(len(rooms), len(headers))
         table.setHorizontalHeaderLabels(headers)
         for idx, room in enumerate(rooms):
@@ -530,6 +530,15 @@ class BattleInspectorWindow(QMainWindow):
             ]
             if not include_side:
                 values = values[1:]
+            attrs = room.get("room_attributes_json")
+            if not isinstance(attrs, dict):
+                attrs = {}
+            for key in dynamic_headers:
+                value = attrs.get(key)
+                if value is None or str(value).strip() == "":
+                    values.append("-")
+                else:
+                    values.append(str(value))
             for col, value in enumerate(values):
                 table.setItem(idx, col, QTableWidgetItem(value))
         table.horizontalHeader().setStretchLastSection(True)
@@ -539,9 +548,9 @@ class BattleInspectorWindow(QMainWindow):
     def _build_characters_table(
         self, characters: list[dict[str, Any]], *, include_side: bool = True
     ) -> QTableWidget:
-        headers = ["Nombre", "Diseno", "Nivel", "XP"]
-        if include_side:
-            headers = ["Side"] + headers
+        base_headers = ["Nombre", "Diseno", "Nivel", "XP"]
+        dynamic_headers = self._collect_attribute_keys(characters, "character_attributes_json")
+        headers = (["Side"] if include_side else []) + base_headers + dynamic_headers
         table = QTableWidget(len(characters), len(headers))
         table.setHorizontalHeaderLabels(headers)
         for idx, character in enumerate(characters):
@@ -555,6 +564,15 @@ class BattleInspectorWindow(QMainWindow):
             ]
             if not include_side:
                 values = values[1:]
+            attrs = character.get("character_attributes_json")
+            if not isinstance(attrs, dict):
+                attrs = {}
+            for key in dynamic_headers:
+                value = attrs.get(key)
+                if value is None or str(value).strip() == "":
+                    values.append("-")
+                else:
+                    values.append(str(value))
             for col, value in enumerate(values):
                 table.setItem(idx, col, QTableWidgetItem(value))
         table.horizontalHeader().setStretchLastSection(True)
@@ -571,3 +589,13 @@ class BattleInspectorWindow(QMainWindow):
         table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
         return table
+
+    def _collect_attribute_keys(self, rows: list[dict[str, Any]], key_name: str) -> list[str]:
+        keys: set[str] = set()
+        for row in rows:
+            attrs = row.get(key_name)
+            if not isinstance(attrs, dict):
+                continue
+            for key in attrs.keys():
+                keys.add(str(key))
+        return sorted(keys)

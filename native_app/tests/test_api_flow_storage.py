@@ -242,6 +242,98 @@ def test_extracts_child_entities_from_cleaned_payload() -> None:
     assert commands[0].user_id == 123
 
 
+def test_room_attributes_include_nested_child_nodes() -> None:
+    repo = ApiFlowRepository()
+    parsed = {
+        "attacker_ship_node": {
+            "tag": "Ship",
+            "attributes": {"ShipId": "10"},
+            "children": [
+                {
+                    "tag": "Rooms",
+                    "children": [
+                        {
+                            "tag": "Room",
+                            "attributes": {"RoomId": "1", "RoomDesignId": "2", "Row": "3", "Column": "4"},
+                            "children": [
+                                {"tag": "Upgrade", "attributes": {"Level": "5"}},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        "defender_ship_node": {},
+    }
+
+    rooms = repo._build_room_rows_for_replay(1, parsed)
+    assert rooms
+    assert rooms[0].room_attributes_json["Upgrade.Level"] == "5"
+
+
+def test_character_attributes_include_nested_child_nodes() -> None:
+    repo = ApiFlowRepository()
+    parsed = {
+        "attacker_ship_node": {
+            "tag": "Ship",
+            "attributes": {"ShipId": "10"},
+            "children": [
+                {
+                    "tag": "Characters",
+                    "children": [
+                        {
+                            "tag": "Character",
+                            "attributes": {"CharacterId": "9", "CharacterDesignId": "11"},
+                            "children": [
+                                {"tag": "Equipment", "attributes": {"Slot": "Helmet"}},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        "defender_ship_node": {},
+    }
+
+    characters = repo._build_character_rows_for_replay(1, parsed)
+    assert characters
+    assert characters[0].character_attributes_json["Equipment.Slot"] == "Helmet"
+
+
+def test_translate_design_name_prefers_es_then_en_then_raw() -> None:
+    repo = ApiFlowRepository()
+    out = repo._translate_design_name(10, {10: "Nave ES"}, {10: "Ship EN"}, "Raw Name")
+    assert out == "Nave ES"
+
+    out = repo._translate_design_name(11, {10: "Nave ES"}, {11: "Ship EN"}, "Raw Name")
+    assert out == "Ship EN"
+
+    out = repo._translate_design_name(12, {}, {}, "Raw Name")
+    assert out == "Raw Name"
+
+
+def test_translate_design_name_falls_back_to_id_or_placeholder() -> None:
+    repo = ApiFlowRepository()
+    out = repo._translate_design_name(42, {}, {}, None)
+    assert out == "42"
+
+    out = repo._translate_design_name(None, {}, {}, None)
+    assert out == "Sin traduccion"
+
+
+def test_extracts_es_design_name_when_present() -> None:
+    repo = ApiFlowRepository()
+    xml = (
+        "<DesignService>"
+        "<ShipDesign ShipDesignId=\"1\" ShipDesignName=\"Ship EN\" ShipDesignName_ES=\"Nave ES\" />"
+        "</DesignService>"
+    )
+    designs = repo._extract_ship_designs_from_payload(xml)
+    assert designs
+    assert designs[0]["name"] == "Ship EN"
+    assert designs[0]["name_es"] == "Nave ES"
+
+
 def test_event_integrity_validation_accepts_valid_event_shape() -> None:
     repo = ApiFlowRepository()
     normalized = repo._normalize_event(
