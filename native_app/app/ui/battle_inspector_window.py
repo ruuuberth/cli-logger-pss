@@ -519,6 +519,10 @@ class BattleInspectorWindow(QMainWindow):
             rooms,
             "room_attributes_json",
             exclude_keys={
+                "Row",
+                "row",
+                "Column",
+                "column",
                 "RoomStatus",
                 "Status",
                 "CapacityUsed",
