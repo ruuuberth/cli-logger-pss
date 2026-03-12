@@ -514,8 +514,26 @@ class BattleInspectorWindow(QMainWindow):
         return table
 
     def _build_rooms_table(self, rooms: list[dict[str, Any]], *, include_side: bool = True) -> QTableWidget:
-        base_headers = ["Diseno", "Fila", "Columna", "Estado"]
-        dynamic_headers = self._collect_attribute_keys(rooms, "room_attributes_json")
+        base_headers = ["Diseno", "Fila", "Columna"]
+        dynamic_headers = self._collect_attribute_keys(
+            rooms,
+            "room_attributes_json",
+            exclude_keys={
+                "RoomStatus",
+                "Status",
+                "CapacityUsed",
+                "Capacity Used",
+                "ConstructionStart",
+                "ConstrucionStart",
+                "ManufactureStart",
+                "Manufacture Start",
+                "ManufactureString",
+                "Manufactured",
+                "SalvageString",
+                "ShipId",
+                "ShipID",
+            },
+        )
         headers = (["Side"] if include_side else []) + base_headers + dynamic_headers
         table = QTableWidget(len(rooms), len(headers))
         table.setHorizontalHeaderLabels(headers)
@@ -526,7 +544,6 @@ class BattleInspectorWindow(QMainWindow):
                 translated_name,
                 str(room.get("row") or "-"),
                 str(room.get("column") or "-"),
-                str(room.get("room_status") or "-"),
             ]
             if not include_side:
                 values = values[1:]
@@ -590,12 +607,22 @@ class BattleInspectorWindow(QMainWindow):
         table.setAlternatingRowColors(True)
         return table
 
-    def _collect_attribute_keys(self, rows: list[dict[str, Any]], key_name: str) -> list[str]:
+    def _collect_attribute_keys(
+        self,
+        rows: list[dict[str, Any]],
+        key_name: str,
+        *,
+        exclude_keys: set[str] | None = None,
+    ) -> list[str]:
         keys: set[str] = set()
+        exclude_keys = exclude_keys or set()
         for row in rows:
             attrs = row.get(key_name)
             if not isinstance(attrs, dict):
                 continue
             for key in attrs.keys():
-                keys.add(str(key))
+                key_text = str(key)
+                if key_text in exclude_keys:
+                    continue
+                keys.add(key_text)
         return sorted(keys)
