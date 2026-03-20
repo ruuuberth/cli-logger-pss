@@ -278,6 +278,8 @@ class MainWindow(QMainWindow):
                 pass
             while repo.sync_battle_replay_children(batch_size=200) > 0:
                 pass
+            while repo.backfill_room_attributes(batch_size=200) > 0:
+                pass
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
         self.api_flow_bridge.startup_sync_finished.emit(result)

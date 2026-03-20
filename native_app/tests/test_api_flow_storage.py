@@ -300,6 +300,26 @@ def test_character_attributes_include_nested_child_nodes() -> None:
     assert characters[0].character_attributes_json["Equipment.Slot"] == "Helmet"
 
 
+def test_room_attributes_normalize_room_actions() -> None:
+    repo = ApiFlowRepository()
+    attrs = {
+        "RoomActions.RoomAction[0].ActionTypeId": "85",
+        "RoomActions.RoomAction[0].ConditionTypeId": "216",
+        "RoomActions.RoomAction[0].RoomActionId": "118681236",
+        "RoomActions.RoomAction[0].RoomActionIndex": "0",
+        "RoomActions.RoomAction[1].ActionTypeId": "55",
+        "RoomActions.RoomAction[1].ConditionTypeId": "321",
+        "RoomActions.RoomAction[1].RoomActionId": "118681237",
+        "RoomActions.RoomAction[1].RoomActionIndex": "1",
+    }
+    normalized = repo._normalize_room_attributes(attrs)
+    assert "RoomActionsNormalized" in normalized
+    actions = normalized["RoomActionsNormalized"]
+    assert isinstance(actions, list)
+    assert actions[0]["action_type_id"] == "85"
+    assert actions[0]["condition_type_id"] == "216"
+
+
 def test_translate_design_name_prefers_es_then_en_then_raw() -> None:
     repo = ApiFlowRepository()
     out = repo._translate_design_name(10, {10: "Nave ES"}, {10: "Ship EN"}, "Raw Name")

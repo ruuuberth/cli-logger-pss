@@ -16,7 +16,8 @@
 3. Se guarda evento en `api_flow_events`.
 4. Se limpia payload en `response_body_cleaned`.
 5. Se normaliza replay en tablas relacionales.
-6. Se sincronizan catálogos (`ship_designs`, `room_designs`, `crew_designs`) desde `DesignService/ListAllStaticDesigns2`.
+6. Se sincronizan catálogos (`ship_designs`, `room_designs`, `crew_designs`) desde `DesignService/ListAllStaticDesigns2` (fallback).
+7. La UI usa catálogos locales (`Data/Prod`) como fuente principal de traducciones.
 
 ## Tablas de replay
 
@@ -30,6 +31,9 @@
 
 - `Battle Inspector` funciona como manager.
 - Abre subinspectores dedicados por tabla (Naves, Salas, Tripulación, Comandos).
+- Las acciones `SetItem` del inspector de IA se resuelven con un mapping manual
+  por sala en `native_app/app/resources/room_item_slot_mappings.json`, usando
+  nombres canonicos del catalogo de items e ignorando nivel.
 
 ## Convenciones importantes
 

@@ -4,6 +4,7 @@ import base64
 import binascii
 import gzip
 import json
+import re
 import logging
 import os
 import unicodedata
@@ -522,6 +523,62 @@ class ApiFlowRepository:
             db.rollback()
             logger.exception("event=api_flow_cleaned_backfill_error")
             return 0
+        finally:
+            db.close()
+
+    def backfill_room_attributes(self, batch_size: int = 100) -> int:
+        db = SessionLocal()
+        updated = 0
+        try:
+            last_seen_id = 0
+            while True:
+                candidates = (
+                    db.query(BattleReplayNormalized, ApiFlowEvent)
+                    .join(ApiFlowEvent, ApiFlowEvent.id == BattleReplayNormalized.api_flow_event_id)
+                    .filter(ApiFlowEvent.response_body_cleaned.isnot(None))
+                    .filter(BattleReplayNormalized.id > last_seen_id)
+                    .order_by(BattleReplayNormalized.id.asc())
+                    .limit(max(1, batch_size))
+                    .all()
+                )
+                if not candidates:
+                    break
+                for replay, api_flow_event in candidates:
+                    last_seen_id = max(last_seen_id, int(replay.id))
+                    parsed = self._extract_battle_nodes_from_cleaned(api_flow_event.response_body_cleaned)
+                    if parsed is None:
+                        continue
+                    new_rows = self._build_room_rows_for_replay(replay.id, parsed)
+                    if not new_rows:
+                        continue
+                    existing_rows = (
+                        db.query(BattleReplayRoom)
+                        .filter(BattleReplayRoom.battle_replay_id == replay.id)
+                        .all()
+                    )
+                    by_key: dict[tuple[str, int | None, int | None], BattleReplayRoom] = {}
+                    for row in existing_rows:
+                        key = (str(row.side or ""), row.room_id, row.ship_id)
+                        by_key[key] = row
+                    for new_row in new_rows:
+                        key = (str(new_row.side or ""), new_row.room_id, new_row.ship_id)
+                        existing = by_key.get(key)
+                        if existing is None:
+                            continue
+                        existing.room_attributes_json = self._normalize_room_attributes(
+                            new_row.room_attributes_json or {}
+                        )
+                        existing.row = new_row.row
+                        existing.column = new_row.column
+                        existing.room_status = new_row.room_status
+                        updated += 1
+                if updated > 0:
+                    db.commit()
+            return updated
+        except Exception:
+            db.rollback()
+            logger.exception("event=room_attributes_backfill_error")
+            return updated
         finally:
             db.close()
 
@@ -1225,6 +1282,7 @@ class ApiFlowRepository:
                 for key_name, value in nested_attrs.items():
                     if key_name not in attrs:
                         attrs[key_name] = value
+                attrs = self._normalize_room_attributes(attrs)
                 out.append(
                     BattleReplayRoom(
                         battle_replay_id=battle_replay_id,
@@ -1277,11 +1335,23 @@ class ApiFlowRepository:
         children = node.get("children")
         if not isinstance(children, list):
             return out
+        tag_counts: dict[str, int] = {}
         for child in children:
             if not isinstance(child, dict):
                 continue
             tag = child.get("tag")
             tag_text = str(tag) if tag else "Child"
+            tag_counts[tag_text] = tag_counts.get(tag_text, 0) + 1
+
+        tag_seen: dict[str, int] = {}
+        for child in children:
+            if not isinstance(child, dict):
+                continue
+            tag = child.get("tag")
+            tag_text = str(tag) if tag else "Child"
+            tag_seen[tag_text] = tag_seen.get(tag_text, 0) + 1
+            if tag_counts.get(tag_text, 0) > 1:
+                tag_text = f"{tag_text}[{tag_seen[tag_text] - 1}]"
             next_prefix = f"{prefix}.{tag_text}" if prefix else tag_text
             attrs = child.get("attributes")
             if isinstance(attrs, dict):
@@ -1294,6 +1364,42 @@ class ApiFlowRepository:
                 if key not in out:
                     out[key] = value
         return out
+
+    def _normalize_room_attributes(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        room_actions: dict[int, dict[str, Any]] = {}
+        to_remove: list[str] = []
+        pattern = re.compile(r"^RoomActions\.RoomAction\[(\d+)\]\.(.+)$")
+        for key, value in attrs.items():
+            match = pattern.match(str(key))
+            if not match:
+                continue
+            idx = int(match.group(1))
+            field = match.group(2)
+            if idx not in room_actions:
+                room_actions[idx] = {}
+            room_actions[idx][field] = value
+            to_remove.append(key)
+
+        if room_actions:
+            normalized = []
+            for idx in sorted(room_actions.keys()):
+                payload = room_actions[idx]
+                action_index = payload.get("RoomActionIndex")
+                normalized.append(
+                    {
+                        "index": action_index if action_index is not None else idx,
+                        "condition_type_id": payload.get("ConditionTypeId"),
+                        "action_type_id": payload.get("ActionTypeId"),
+                        "room_action_id": payload.get("RoomActionId"),
+                    }
+                )
+            cleaned = dict(attrs)
+            for key in to_remove:
+                cleaned.pop(key, None)
+            cleaned["RoomActionsNormalized"] = normalized
+            return cleaned
+
+        return attrs
 
     def _build_command_rows_for_replay(self, battle_replay_id: int, parsed: dict[str, Any]) -> list[BattleReplayCommand]:
         out: list[BattleReplayCommand] = []

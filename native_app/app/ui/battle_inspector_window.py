@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import json
 from typing import Any
+from pathlib import Path
 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QTableWidget,
@@ -17,6 +22,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.models.database import SessionLocal
+from app.services.catalogo import CatalogoResolver
+from app.services.room_item_mapping import RoomItemMappingResolver
 
 _DARK_STYLE = """
 QMainWindow { background: #0f141b; }
@@ -114,6 +122,14 @@ class BattleInspectorWindow(QMainWindow):
         super().__init__(parent)
         self.detail = detail
         self.child_inspectors: list[TableInspectorWindow] = []
+        self.catalog_base_dir = CatalogoResolver.default_base_dir()
+        self.catalogo = CatalogoResolver(
+            base_dir=self.catalog_base_dir,
+            db_session_factory=SessionLocal,
+            status_callback=self._on_catalog_status,
+        )
+        self.room_item_mapping = RoomItemMappingResolver(catalogo=self.catalogo)
+        self.catalog_status_label: QLabel | None = None
 
         replay = detail.get("replay") or {}
         battle_id = replay.get("battle_id") or "-"
@@ -203,6 +219,7 @@ class BattleInspectorWindow(QMainWindow):
         title = QLabel("Inspectores")
         title.setObjectName("panelTitle")
 
+        catalog_panel = self._build_catalog_panel()
         buttons_row = QHBoxLayout()
         ships_btn = QPushButton("Inspector de Naves")
         rooms_btn = QPushButton("Inspector de Salas")
@@ -225,10 +242,48 @@ class BattleInspectorWindow(QMainWindow):
         help_text.setObjectName("statsKey")
 
         layout.addWidget(title)
+        layout.addWidget(catalog_panel)
         layout.addLayout(buttons_row)
         layout.addWidget(help_text)
         frame.setLayout(layout)
         return frame
+
+    def _build_catalog_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("panelCard")
+        panel_layout = QVBoxLayout()
+        panel_layout.setContentsMargins(8, 8, 8, 8)
+        panel_layout.setSpacing(6)
+
+        title = QLabel("Catalogos locales")
+        title.setObjectName("statsKey")
+        panel_layout.addWidget(title)
+
+        row = QHBoxLayout()
+        self.catalog_path_input = QLineEdit()
+        self.catalog_path_input.setPlaceholderText("Ruta de Data/Prod")
+        if self.catalog_base_dir:
+            self.catalog_path_input.setText(str(self.catalog_base_dir))
+        browse_btn = QPushButton("Buscar")
+        browse_btn.clicked.connect(self._browse_catalog_dir)
+        auto_btn = QPushButton("Auto-detectar")
+        auto_btn.clicked.connect(self._auto_detect_catalog_dir)
+        apply_btn = QPushButton("Aplicar")
+        apply_btn.clicked.connect(self._apply_catalog_dir)
+
+        row.addWidget(self.catalog_path_input)
+        row.addWidget(browse_btn)
+        row.addWidget(auto_btn)
+        row.addWidget(apply_btn)
+        panel_layout.addLayout(row)
+
+        self.catalog_status_label = QLabel()
+        self.catalog_status_label.setObjectName("statsKey")
+        self._refresh_catalog_status()
+        panel_layout.addWidget(self.catalog_status_label)
+
+        panel.setLayout(panel_layout)
+        return panel
 
     def open_ships_inspector(self) -> None:
         widget = self._build_split_side_widget(
@@ -247,6 +302,18 @@ class BattleInspectorWindow(QMainWindow):
             "Nave",
             None,
         )
+        if self._has_room_actions(self.detail):
+            wrapper = QWidget()
+            layout = QVBoxLayout()
+            layout.setContentsMargins(14, 14, 14, 14)
+            layout.setSpacing(10)
+            room_actions_btn = QPushButton("Inspector IA (Room Actions)")
+            room_actions_btn.clicked.connect(lambda: self.open_room_actions_inspector(self.detail))
+            layout.addWidget(room_actions_btn)
+            layout.addWidget(widget)
+            wrapper.setLayout(layout)
+            self._open_child("Inspector de Naves", wrapper)
+            return
         self._open_child("Inspector de Naves", widget)
 
     def open_rooms_inspector(self) -> None:
@@ -402,7 +469,11 @@ class BattleInspectorWindow(QMainWindow):
         table.setHorizontalHeaderLabels(headers)
         for idx, ship in enumerate(ships):
             translated_name = str(ship.get("ship_design_name") or "").strip()
-            display_name = translated_name or "Sin traduccion"
+            display_name = self.catalogo.resolve_design_name(
+                ship.get("ship_design_id"),
+                translated_name,
+                "ship",
+            )
             values = [
                 str(ship.get("side") or "-"),
                 display_name,
@@ -486,7 +557,11 @@ class BattleInspectorWindow(QMainWindow):
 
         for idx, ship in enumerate(ships, start=1):
             translated_name = str(ship.get("ship_design_name") or "").strip()
-            display_name = translated_name or "Sin traduccion"
+            display_name = self.catalogo.resolve_design_name(
+                ship.get("ship_design_id"),
+                translated_name,
+                "ship",
+            )
             rows.append((f"Nave {idx}", display_name))
             rows.append(("Nivel", str(ship.get("ship_level") or "-")))
             rows.append(("PowerScore", str(ship.get("power_score") or "-")))
@@ -525,6 +600,9 @@ class BattleInspectorWindow(QMainWindow):
                 "column",
                 "RoomStatus",
                 "Status",
+                "RoomActionsNormalized",
+                "RoomAction",
+                "RoomActions",
                 "CapacityUsed",
                 "Capacity Used",
                 "ConstructionStart",
@@ -537,15 +615,22 @@ class BattleInspectorWindow(QMainWindow):
                 "ShipId",
                 "ShipID",
             },
+            exclude_prefixes={"RoomActions.", "RoomAction."},
         )
-        headers = (["Side"] if include_side else []) + base_headers + dynamic_headers
+        headers = (["Side"] if include_side else []) + base_headers + dynamic_headers + ["IA"]
         table = QTableWidget(len(rooms), len(headers))
         table.setHorizontalHeaderLabels(headers)
+        fallback_actions = self._room_actions_from_cleaned(self.detail)
         for idx, room in enumerate(rooms):
-            translated_name = str(room.get("room_design_name") or "").strip() or "Sin traduccion"
+            translated_name = str(room.get("room_design_name") or "").strip()
+            display_name = self.catalogo.resolve_design_name(
+                room.get("room_design_id"),
+                translated_name,
+                "room",
+            )
             values = [
                 str(room.get("side") or "-"),
-                translated_name,
+                display_name,
                 str(room.get("row") or "-"),
                 str(room.get("column") or "-"),
             ]
@@ -562,6 +647,14 @@ class BattleInspectorWindow(QMainWindow):
                     values.append(str(value))
             for col, value in enumerate(values):
                 table.setItem(idx, col, QTableWidgetItem(value))
+            attrs = room.get("room_attributes_json")
+            if not isinstance(attrs, dict):
+                attrs = {}
+            actions = self._room_actions_for_room(room, attrs, fallback_actions)
+            if actions:
+                btn = QPushButton("Inspector IA")
+                btn.clicked.connect(lambda _, r=room: self.open_room_actions_inspector(self.detail, r))
+                table.setCellWidget(idx, len(headers) - 1, btn)
         table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
         return table
@@ -575,11 +668,16 @@ class BattleInspectorWindow(QMainWindow):
         table = QTableWidget(len(characters), len(headers))
         table.setHorizontalHeaderLabels(headers)
         for idx, character in enumerate(characters):
-            translated_name = str(character.get("character_design_name") or "").strip() or "Sin traduccion"
+            translated_name = str(character.get("character_design_name") or "").strip()
+            display_name = self.catalogo.resolve_design_name(
+                character.get("character_design_id"),
+                translated_name,
+                "character",
+            )
             values = [
                 str(character.get("side") or "-"),
                 str(character.get("character_name") or "-"),
-                translated_name,
+                display_name,
                 str(character.get("level") or "-"),
                 str(character.get("xp") or "-"),
             ]
@@ -617,16 +715,280 @@ class BattleInspectorWindow(QMainWindow):
         key_name: str,
         *,
         exclude_keys: set[str] | None = None,
+        exclude_prefixes: set[str] | None = None,
     ) -> list[str]:
         keys: set[str] = set()
-        exclude_keys = exclude_keys or set()
+        exclude_keys = {str(key).lower() for key in (exclude_keys or set())}
+        exclude_prefixes = {str(prefix).lower() for prefix in (exclude_prefixes or set())}
         for row in rows:
             attrs = row.get(key_name)
             if not isinstance(attrs, dict):
                 continue
             for key in attrs.keys():
                 key_text = str(key)
-                if key_text in exclude_keys:
+                if key_text.lower() in exclude_keys:
+                    continue
+                key_lower = key_text.lower()
+                if any(key_lower.startswith(prefix) for prefix in exclude_prefixes):
                     continue
                 keys.add(key_text)
         return sorted(keys)
+
+    def _parse_room_actions(self, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        text = str(value).strip()
+        if not text:
+            return []
+        separators = [",", ";", "|", " "]
+        tokens = [text]
+        for sep in separators:
+            next_tokens: list[str] = []
+            for token in tokens:
+                next_tokens.extend(token.split(sep))
+            tokens = next_tokens
+        return [token.strip() for token in tokens if token.strip()]
+
+    def _collect_room_actions(
+        self, detail: dict[str, Any]
+    ) -> list[tuple[str, str, Any, list[dict[str, str]]]]:
+        rows: list[tuple[str, str, Any, list[dict[str, str]]]] = []
+        rooms = detail.get("rooms") or []
+        fallback_actions = self._room_actions_from_cleaned(detail)
+        for room in rooms:
+            side = str(room.get("side") or "-")
+            room_id = str(room.get("room_id") or "-")
+            room_design_id = room.get("room_design_id")
+            attrs = room.get("room_attributes_json")
+            if not isinstance(attrs, dict):
+                continue
+            actions = self._room_actions_for_room(room, attrs, fallback_actions)
+            if actions:
+                rows.append((side, room_id, room_design_id, actions))
+        return rows
+
+    def open_room_actions_inspector(self, detail: dict[str, Any], room: dict[str, Any] | None = None) -> None:
+        if room is None:
+            rows = self._collect_room_actions(detail)
+        else:
+            attrs = room.get("room_attributes_json")
+            if not isinstance(attrs, dict):
+                attrs = {}
+            actions = self._room_actions_for_room(room, attrs, self._room_actions_from_cleaned(detail))
+            side = str(room.get("side") or "-")
+            room_id = str(room.get("room_id") or "-")
+            room_design_id = room.get("room_design_id")
+            rows = [(side, room_id, room_design_id, actions)] if actions else []
+        total_rows = sum(len(actions) for _, _, _, actions in rows)
+        table = QTableWidget(total_rows or 1, 3)
+        table.setHorizontalHeaderLabels(["ID", "RoomConditionID", "RoomActionID"])
+        row_idx = 0
+        for side, room_id, room_design_id, actions in rows:
+            for idx, action in enumerate(actions, start=1):
+                action_id = action.get("action_id") or "-"
+                condition_id = action.get("condition_id") or "-"
+                action_index = action.get("id") or str(idx)
+                try:
+                    action_index_int = int(str(action_index))
+                    action_index = str(action_index_int + 1)
+                except Exception:
+                    action_index = str(action_index)
+                action_label, condition_label = self.catalogo.resolve_action_condition(action_id, condition_id)
+                action_label = self.room_item_mapping.resolve_action_label(
+                    room_design_id,
+                    action_id,
+                    fallback_action_name=action_label,
+                )
+                table.setItem(row_idx, 0, QTableWidgetItem(str(action_index)))
+                table.setItem(row_idx, 1, QTableWidgetItem(condition_label))
+                table.setItem(row_idx, 2, QTableWidgetItem(action_label))
+                row_idx += 1
+        if total_rows == 0:
+            table.setItem(0, 0, QTableWidgetItem("-"))
+            table.setItem(0, 1, QTableWidgetItem("-"))
+            table.setItem(0, 2, QTableWidgetItem("-"))
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(True)
+
+        wrapper = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+        title = QLabel("Room Actions")
+        title.setObjectName("panelTitle")
+        layout.addWidget(title)
+        layout.addWidget(table)
+        wrapper.setLayout(layout)
+        self._open_child("Inspector IA", wrapper)
+
+    def _refresh_catalog_status(self) -> None:
+        if self.catalog_status_label is None:
+            return
+        if self.catalog_base_dir:
+            self.catalog_status_label.setText("Catalogos: local (ruta configurada)")
+        else:
+            self.catalog_status_label.setText("Catalogos: sin ruta local")
+
+    def _on_catalog_status(self, status: str) -> None:
+        if self.catalog_status_label is None:
+            return
+        messages = {
+            "local": "Catalogos: local (OK)",
+            "db": "Catalogos: fallback DB",
+            "current_name": "Catalogos: usando nombre existente",
+            "placeholder": "Catalogos: sin traduccion",
+            "missing_path": "Catalogos: ruta no configurada",
+            "missing_file": "Catalogos: archivo faltante",
+            "parse_error": "Catalogos: error al leer archivos",
+        }
+        self.catalog_status_label.setText(messages.get(status, "Catalogos: estado desconocido"))
+
+    def _apply_catalog_dir(self) -> None:
+        value = self.catalog_path_input.text().strip()
+        if not value:
+            QMessageBox.warning(self, "Catalogos", "La ruta esta vacia.")
+            self.catalog_base_dir = None
+            self.catalogo.set_base_dir(None)
+            self._refresh_catalog_status()
+            return
+        path = Path(value)
+        if not path.exists():
+            QMessageBox.warning(self, "Catalogos", "La ruta no existe.")
+            self.catalog_base_dir = None
+            self.catalogo.set_base_dir(None)
+            self._refresh_catalog_status()
+            return
+        self.catalog_base_dir = path
+        self.catalogo.set_base_dir(path)
+        self._refresh_catalog_status()
+
+    def _browse_catalog_dir(self) -> None:
+        selected = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta Data/Prod")
+        if not selected:
+            return
+        self.catalog_path_input.setText(selected)
+        self._apply_catalog_dir()
+
+    def _auto_detect_catalog_dir(self) -> None:
+        auto = CatalogoResolver.default_base_dir()
+        if auto is None:
+            QMessageBox.warning(self, "Catalogos", "No se encontro ruta por defecto.")
+            self.catalog_base_dir = None
+            self.catalogo.set_base_dir(None)
+            self._refresh_catalog_status()
+            return
+        self.catalog_path_input.setText(str(auto))
+        self._apply_catalog_dir()
+
+    def _room_actions_for_room(
+        self,
+        room: dict[str, Any],
+        attrs: dict[str, Any],
+        fallback_actions: dict[str, list[dict[str, str]]],
+    ) -> list[dict[str, str]]:
+        normalized = attrs.get("RoomActionsNormalized")
+        if isinstance(normalized, list) and normalized:
+            out: list[dict[str, str]] = []
+            for entry in normalized:
+                if not isinstance(entry, dict):
+                    continue
+                out.append(
+                    {
+                        "id": str(entry.get("index") or "-"),
+                        "condition_id": str(entry.get("condition_type_id") or "-"),
+                        "action_id": str(entry.get("action_type_id") or entry.get("room_action_id") or "-"),
+                    }
+                )
+            if out:
+                return out
+        raw_value = attrs.get("RoomAction")
+        if raw_value is None:
+            raw_value = attrs.get("RoomActions")
+        actions = self._parse_room_actions(raw_value)
+        if actions:
+            return [{"id": str(idx), "condition_id": "-", "action_id": value} for idx, value in enumerate(actions, start=1)]
+        room_id = str(room.get("room_id") or "")
+        if room_id and room_id in fallback_actions:
+            return fallback_actions[room_id]
+        return []
+
+    def _room_actions_from_cleaned(self, detail: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
+        api_flow = detail.get("api_flow_event") or {}
+        cleaned = api_flow.get("response_body_cleaned")
+        if not cleaned:
+            return {}
+        try:
+            payload = json.loads(cleaned)
+        except Exception:
+            return {}
+        room_actions: dict[str, list[dict[str, str]]] = {}
+        for node in self._iter_nodes(payload):
+            if node.get("tag") != "Room":
+                continue
+            attrs = node.get("attributes")
+            if not isinstance(attrs, dict):
+                continue
+            room_id = attrs.get("RoomId")
+            if room_id is None:
+                continue
+            actions = []
+            for action_node in self._extract_children_by_path(node, ["RoomActions", "RoomAction"]):
+                action_attrs = action_node.get("attributes")
+                if not isinstance(action_attrs, dict):
+                    continue
+                actions.append(
+                    {
+                        "id": str(action_attrs.get("RoomActionIndex") or len(actions) + 1),
+                        "condition_id": str(action_attrs.get("ConditionTypeId") or "-"),
+                        "action_id": str(action_attrs.get("ActionTypeId") or action_attrs.get("RoomActionId") or "-"),
+                    }
+                )
+            if actions:
+                room_actions[str(room_id)] = actions
+        return room_actions
+
+    def _extract_children_by_path(
+        self, node: dict[str, Any], path: list[str | None]
+    ) -> list[dict[str, Any]]:
+        current: list[dict[str, Any]] = [node]
+        for expected_tag in path:
+            next_nodes: list[dict[str, Any]] = []
+            for item in current:
+                children = item.get("children")
+                if not isinstance(children, list):
+                    continue
+                for child in children:
+                    if not isinstance(child, dict):
+                        continue
+                    if expected_tag is None or child.get("tag") == expected_tag:
+                        next_nodes.append(child)
+            current = next_nodes
+            if not current:
+                break
+        return current
+
+    def _iter_nodes(self, node: dict[str, Any]) -> list[dict[str, Any]]:
+        stack = [node]
+        out: list[dict[str, Any]] = []
+        while stack:
+            current = stack.pop()
+            if not isinstance(current, dict):
+                continue
+            out.append(current)
+            children = current.get("children")
+            if isinstance(children, list):
+                for child in children:
+                    if isinstance(child, dict):
+                        stack.append(child)
+            attrs = current.get("attributes")
+            if isinstance(attrs, dict):
+                for value in attrs.values():
+                    if isinstance(value, dict):
+                        stack.append(value)
+                    elif isinstance(value, list):
+                        for entry in value:
+                            if isinstance(entry, dict):
+                                stack.append(entry)
+        return out

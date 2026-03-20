@@ -1,0 +1,488 @@
+{
+  "version": 2,
+  "rooms": {
+    "823": {
+      "room_name": "Hangar de defensivo",
+      "slots": {
+        "0": { "item_name_en_base": "Laser Turret Drone" },
+        "1": { "item_name_en_base": "Missile Turret Drone" },
+        "2": { "item_name_en_base": "Repair Drone" },
+        "3": { "item_name_en_base": "Shield Drone" },
+        "4": { "item_name_en_base": "Missile ECM Drone" }
+      }
+    },
+    "824": {
+      "room_name": "Hangar de defensivo",
+      "slots": {
+        "0": { "item_name_en_base": "Laser Turret Drone" },
+        "1": { "item_name_en_base": "Missile Turret Drone" },
+        "2": { "item_name_en_base": "Repair Drone" },
+        "3": { "item_name_en_base": "Shield Drone" },
+        "4": { "item_name_en_base": "Missile ECM Drone" }
+      }
+    },
+    "825": {
+      "room_name": "Hangar de defensivo",
+      "slots": {
+        "0": { "item_name_en_base": "Laser Turret Drone" },
+        "1": { "item_name_en_base": "Missile Turret Drone" },
+        "2": { "item_name_en_base": "Repair Drone" },
+        "3": { "item_name_en_base": "Shield Drone" },
+        "4": { "item_name_en_base": "Missile ECM Drone" }
+      }
+    },
+    "688": {
+      "room_name": "Hangar de drones",
+      "slots": {
+        "0": { "item_name_en_base": "Bombshell" }
+      }
+    },
+    "689": {
+      "room_name": "Hangar de drones",
+      "slots": {
+        "0": { "item_name_en_base": "Bombshell" }
+      }
+    },
+    "690": {
+      "room_name": "Hangar de drones",
+      "slots": {
+        "0": { "item_name_en_base": "Bombshell" }
+      }
+    },
+    "691": {
+      "room_name": "Hangar de drones",
+      "slots": {
+        "0": { "item_name_en_base": "Bombshell" }
+      }
+    },
+    "777": {
+      "room_name": "Hangar de drones",
+      "slots": {
+        "0": { "item_name_en_base": "Bombshell" }
+      }
+    },
+    "150": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "165": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "166": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "184": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "213": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "214": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "237": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "295": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "296": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "525": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "776": {
+      "room_name": "Hangar",
+      "slots": {
+        "0": { "item_name_en_base": "Interceptor" },
+        "1": { "item_name_en_base": "Defender" },
+        "2": { "item_name_en_base": "Firehawk" },
+        "3": { "item_name_en_base": "Corsair" },
+        "4": { "item_name_en_base": "Stinger" },
+        "5": { "item_name_en_base": "Catapult" }
+      }
+    },
+    "692": {
+      "room_name": "Bahía de drones señuelo",
+      "slots": {
+        "0": { "item_name_en_base": "Close Range Decoy Drone" },
+        "1": { "item_name_en_base": "Long Distance Decoy Drone" }
+      }
+    },
+    "697": {
+      "room_name": "Bahía de drones señuelo",
+      "slots": {
+        "0": { "item_name_en_base": "Close Range Decoy Drone" },
+        "1": { "item_name_en_base": "Long Distance Decoy Drone" }
+      }
+    },
+    "698": {
+      "room_name": "Bahía de drones señuelo",
+      "slots": {
+        "0": { "item_name_en_base": "Close Range Decoy Drone" },
+        "1": { "item_name_en_base": "Long Distance Decoy Drone" }
+      }
+    },
+    "699": {
+      "room_name": "Bahía de drones señuelo",
+      "slots": {
+        "0": { "item_name_en_base": "Close Range Decoy Drone" },
+        "1": { "item_name_en_base": "Long Distance Decoy Drone" }
+      }
+    },
+    "778": {
+      "room_name": "Bahía de drones señuelo",
+      "slots": {
+        "0": { "item_name_en_base": "Close Range Decoy Drone" },
+        "1": { "item_name_en_base": "Long Distance Decoy Drone" }
+      }
+    },
+    "298": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "306": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "307": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "308": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "309": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "310": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "311": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "312": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "313": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "314": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "520": {
+      "room_name": "Taller de androides",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "413": {
+      "room_name": "Bahía mecánica visiri",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "831": {
+      "room_name": "Bahía mecánica visiri",
+      "slots": {
+        "0": { "item_name_en_base": "Service Droid" },
+        "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "9": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "17": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "85": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "86": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "87": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "144": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "145": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "146": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "147": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "189": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "190": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "191": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "235": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "294": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "543": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
+    "750": {
+      "room_name": "Sala de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    }
+  }
+}

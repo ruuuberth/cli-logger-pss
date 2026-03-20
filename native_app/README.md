@@ -30,6 +30,23 @@ Pipeline:
 4. Normalización a tablas replay.
 5. Sync de catálogos de diseño (`ship_designs`, `room_designs`, `crew_designs`).
 
+## Catalogos locales (UI)
+
+La UI usa los catálogos locales del juego (`Data/Prod`) como fuente principal
+para traducir nombres (naves, salas, tripulación y condiciones/acciones).
+
+Fallbacks:
+1. Archivos locales.
+2. DB de diseño si existe.
+3. `Sin traduccion`.
+
+Puedes configurar la ruta desde el Inspector Manager.
+
+Para acciones `SetItem` del inspector de IA, el proyecto mantiene un mapping
+manual por sala en `app/resources/room_item_slot_mappings.json`. Ese archivo
+resuelve placeholders de slot a nombres canonicos de item, y luego el nombre
+visible sale de `ItemDesigns.txt` ignorando nivel.
+
 ## Variables de entorno
 
 - `API_FLOW_ENABLED`

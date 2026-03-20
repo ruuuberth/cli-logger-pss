@@ -64,7 +64,26 @@ python scripts/migrate_battle_replays_normalized.py
 Este script:
 - completa `response_body_cleaned` pendiente en `GetBattle3`
 - sincroniza replay normalizado y tablas hijas
-- sincroniza catálogos de diseño desde `DesignService/ListAllStaticDesigns2`
+- sincroniza catálogos de diseño desde `DesignService/ListAllStaticDesigns2` (fallback)
+
+## Catalogos locales (UI)
+
+La UI prioriza catálogos locales del juego (`Data/Prod`) para traducir nombres
+de naves, salas, tripulación y condiciones/acciones.
+
+Fallbacks:
+1. Archivos locales.
+2. DB (`ship_designs`, `room_designs`, `crew_designs`) si existen.
+3. Nombre existente o `Sin traduccion`.
+
+Si no se detecta la ruta por defecto, el Inspector Manager permite definirla manualmente.
+
+Tambien existe un mapeo manual versionado por sala para acciones `SetItem`
+del inspector de IA. Ese mapping vive en
+`native_app/app/resources/room_item_slot_mappings.json` y resuelve:
+
+- `RoomDesignId + slot -> nombre canonico del item`
+- nombre canonico -> nombre visible via `ItemDesigns.txt`, ignorando nivel
 
 ## Ramas
 
