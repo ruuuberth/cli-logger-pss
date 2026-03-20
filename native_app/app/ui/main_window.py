@@ -137,9 +137,9 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.api_flow_time_to)
         filters.addWidget(self.api_flow_reset_filters_button)
 
-        self.api_flow_table = QTableWidget(0, 8)
+        self.api_flow_table = QTableWidget(0, 9)
         self.api_flow_table.setHorizontalHeaderLabels(
-            ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId", "Inspector"]
+            ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId", "Inspector", "Eliminar"]
         )
         self.api_flow_table.horizontalHeader().setStretchLastSection(True)
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -340,6 +340,11 @@ class MainWindow(QMainWindow):
             inspect_button = QPushButton("Inspeccionar")
             inspect_button.clicked.connect(partial(self.open_battle_inspector, row.get("id")))
             self.api_flow_table.setCellWidget(idx, 7, inspect_button)
+            delete_button = QPushButton("Eliminar")
+            delete_button.clicked.connect(
+                partial(self.delete_api_flow_event, row.get("api_flow_event_id"), battle_id)
+            )
+            self.api_flow_table.setCellWidget(idx, 8, delete_button)
 
         if total == 0:
             self.api_flow_page_label.setText("Pagina: 0")
@@ -393,6 +398,23 @@ class MainWindow(QMainWindow):
         self.api_flow_page = 0
         self.api_flow_total_live_events = 0
         self.api_flow_counter_label.setText("Eventos (sesion): 0")
+        self.reload_api_flow_page()
+
+    def delete_api_flow_event(self, event_id: int | None, battle_id: str | None) -> None:
+        if event_id is None:
+            QMessageBox.warning(self, "Eliminar evento", "No se pudo identificar el evento.")
+            return
+        label = battle_id or "-"
+        answer = QMessageBox.question(
+            self,
+            "Confirmar",
+            f"¿Eliminar el evento de la batalla {label}?",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        deleted = self.api_flow_repository.delete_event(int(event_id))
+        if deleted <= 0:
+            QMessageBox.warning(self, "Eliminar evento", "No se pudo eliminar el evento.")
         self.reload_api_flow_page()
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:

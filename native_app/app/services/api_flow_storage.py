@@ -285,6 +285,21 @@ class ApiFlowRepository:
         finally:
             db.close()
 
+    def delete_event(self, event_id: int | None) -> int:
+        if event_id is None:
+            return 0
+        db = SessionLocal()
+        try:
+            deleted = self._delete_events_and_normalized(db, [int(event_id)])
+            db.commit()
+            return int(deleted or 0)
+        except Exception:
+            db.rollback()
+            logger.exception("event=api_flow_event_delete_error event_id=%s", event_id)
+            return 0
+        finally:
+            db.close()
+
     def list_battle_replays(
         self,
         search: str,
