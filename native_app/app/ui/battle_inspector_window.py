@@ -30,7 +30,11 @@ from app.services.character_inspector_resolver import CharacterInspectorResolver
 from app.services.room_item_mapping import RoomItemMappingResolver
 
 _DARK_STYLE = """
-QMainWindow { background: #0f141b; }
+QMainWindow {
+    background: #0f141b;
+    font-family: 'Noto Sans', 'Noto Sans CJK SC', 'Noto Sans Arabic', 'Noto Sans JP',
+        'Noto Sans KR', 'Segoe UI', 'Arial Unicode MS', 'DejaVu Sans', sans-serif;
+}
 QFrame#headerCard {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 #0d4f69, stop:1 #2f7a89);

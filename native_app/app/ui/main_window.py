@@ -72,6 +72,14 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("PixelStarships Battle Logger Native")
         self.resize(1200, 760)
+        self.setStyleSheet(
+            """
+            QMainWindow {
+                font-family: 'Noto Sans', 'Noto Sans CJK SC', 'Noto Sans Arabic', 'Noto Sans JP',
+                    'Noto Sans KR', 'Segoe UI', 'Arial Unicode MS', 'DejaVu Sans', sans-serif;
+            }
+            """
+        )
         self.setCentralWidget(self._build_api_flow_tab())
         QTimer.singleShot(0, self._start_startup_sync)
 
