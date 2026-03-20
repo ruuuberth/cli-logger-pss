@@ -34,6 +34,9 @@
 - Las acciones `SetItem` del inspector de IA se resuelven con un mapping manual
   por sala en `native_app/app/resources/room_item_slot_mappings.json`, usando
   nombres canonicos del catalogo de items e ignorando nivel.
+- El inspector de tripulación usa `CharacterActionsNormalized` y
+  `CharacterItemsNormalized` dentro de `battle_replay_characters.character_attributes_json`
+  para renderizar IA, equipo y stats limpias sin exponer el JSON crudo en la UI.
 
 ## Convenciones importantes
 

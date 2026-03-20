@@ -54,6 +54,14 @@ def test_keeps_full_response_body_preview_without_truncation() -> None:
     assert normalized["response_body_preview"] == very_long_body
 
 
+def test_persists_only_whitelisted_battle_paths() -> None:
+    repo = ApiFlowRepository()
+    allowed = repo._normalize_event({"path": "/BattleService/GetBattle3?battleId=1"})
+    blocked = repo._normalize_event({"path": "/UserService/SearchUsers?name=x"})
+    assert repo._should_persist_event(allowed) is True
+    assert repo._should_persist_event(blocked) is False
+
+
 def test_generates_cleaned_response_body_for_developer_readability() -> None:
     repo = ApiFlowRepository()
     raw_xml = (
@@ -298,6 +306,50 @@ def test_character_attributes_include_nested_child_nodes() -> None:
     characters = repo._build_character_rows_for_replay(1, parsed)
     assert characters
     assert characters[0].character_attributes_json["Equipment.Slot"] == "Helmet"
+
+
+def test_character_attributes_normalize_character_actions() -> None:
+    repo = ApiFlowRepository()
+    attrs = {
+        "CharacterActions.CharacterAction[0].ActionTypeId": "34",
+        "CharacterActions.CharacterAction[0].ConditionTypeId": "405",
+        "CharacterActions.CharacterAction[0].CharacterActionId": "119846187",
+        "CharacterActions.CharacterAction[0].CharacterActionIndex": "0",
+    }
+    normalized = repo._normalize_character_attributes(attrs)
+    assert "CharacterActionsNormalized" in normalized
+    actions = normalized["CharacterActionsNormalized"]
+    assert isinstance(actions, list)
+    assert actions[0]["action_type_id"] == "34"
+    assert actions[0]["condition_type_id"] == "405"
+
+
+def test_character_attributes_normalize_character_items() -> None:
+    repo = ApiFlowRepository()
+    attrs = {
+        "Items.Item[0].ItemId": "254905515",
+        "Items.Item[0].ItemDesignId": "1982",
+        "Items.Item[0].Quantity": "1",
+        "Items.Item[0].BonusEnhancementType": "Ability",
+        "Items.Item[0].BonusEnhancementValue": "13.4",
+    }
+    normalized = repo._normalize_character_attributes(attrs)
+    assert "CharacterItemsNormalized" in normalized
+    items = normalized["CharacterItemsNormalized"]
+    assert isinstance(items, list)
+    assert items[0]["item_design_id"] == "1982"
+    assert items[0]["bonus_enhancement_type"] == "Ability"
+
+
+def test_character_normalization_keeps_backward_compatible_attrs() -> None:
+    repo = ApiFlowRepository()
+    attrs = {
+        "CharacterActions.CharacterAction[0].ActionTypeId": "34",
+        "Items.Item[0].ItemDesignId": "1982",
+    }
+    normalized = repo._normalize_character_attributes(attrs)
+    assert normalized["CharacterActions.CharacterAction[0].ActionTypeId"] == "34"
+    assert normalized["Items.Item[0].ItemDesignId"] == "1982"
 
 
 def test_room_attributes_normalize_room_actions() -> None:

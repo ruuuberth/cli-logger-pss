@@ -26,3 +26,9 @@ def test_settings_loads_from_env_file(tmp_path: Path, monkeypatch) -> None:
     assert loaded.API_FLOW_IGNORE_HOSTS == ["one.test", "two.test"]
     assert loaded.API_FLOW_CAPTURE_HOST_ALLOWLIST == ["api.pixelstarships.com"]
     assert loaded.API_FLOW_CAPTURE_PATH_ALLOWLIST == ["/BattleService/GetBattle3", "/BattleService/GetBattle3/"]
+
+
+def test_settings_default_capture_allowlists() -> None:
+    loaded = Settings()
+    assert loaded.API_FLOW_CAPTURE_HOST_ALLOWLIST == ["api.pixelstarships.com"]
+    assert loaded.API_FLOW_CAPTURE_PATH_ALLOWLIST == ["/BattleService/GetBattle3"]

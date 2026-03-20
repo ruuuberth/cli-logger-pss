@@ -47,6 +47,15 @@ manual por sala en `app/resources/room_item_slot_mappings.json`. Ese archivo
 resuelve placeholders de slot a nombres canonicos de item, y luego el nombre
 visible sale de `ItemDesigns.txt` ignorando nivel.
 
+El inspector de tripulación usa una capa equivalente, pero sin mapping manual:
+- normaliza `CharacterActionsNormalized`
+- normaliza `CharacterItemsNormalized`
+- traduce IA con `ActionTypes.txt` y `ConditionTypes.txt`
+- traduce equipamiento con `ItemDesigns.txt`
+
+La tabla principal de tripulantes ya no muestra `character_attributes_json`
+crudo; expone stats limpias y botones de `Equipo` e `Inspector IA`.
+
 ## Variables de entorno
 
 - `API_FLOW_ENABLED`

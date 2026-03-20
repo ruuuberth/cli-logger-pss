@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from app.models.database import SessionLocal
 from app.services.catalogo import CatalogoResolver
+from app.services.character_inspector_resolver import CharacterInspectorResolver
 from app.services.room_item_mapping import RoomItemMappingResolver
 
 _DARK_STYLE = """
@@ -128,6 +129,7 @@ class BattleInspectorWindow(QMainWindow):
             db_session_factory=SessionLocal,
             status_callback=self._on_catalog_status,
         )
+        self.character_inspector = CharacterInspectorResolver(catalogo=self.catalogo)
         self.room_item_mapping = RoomItemMappingResolver(catalogo=self.catalogo)
         self.catalog_status_label: QLabel | None = None
 
@@ -662,9 +664,27 @@ class BattleInspectorWindow(QMainWindow):
     def _build_characters_table(
         self, characters: list[dict[str, Any]], *, include_side: bool = True
     ) -> QTableWidget:
-        base_headers = ["Nombre", "Diseno", "Nivel", "XP"]
-        dynamic_headers = self._collect_attribute_keys(characters, "character_attributes_json")
-        headers = (["Side"] if include_side else []) + base_headers + dynamic_headers
+        base_headers = [
+            "Nombre",
+            "Diseno",
+            "Nivel",
+            "XP",
+            "Sala",
+            "Stamina",
+            "Fatiga",
+            "Ataque",
+            "Reparacion",
+            "Pilotaje",
+            "Ciencia",
+            "Ingenieria",
+            "Habilidad",
+            "HP",
+            "Arma",
+            "Entrenamiento",
+            "Equipo",
+            "Inspector IA",
+        ]
+        headers = (["Side"] if include_side else []) + base_headers
         table = QTableWidget(len(characters), len(headers))
         table.setHorizontalHeaderLabels(headers)
         for idx, character in enumerate(characters):
@@ -674,26 +694,40 @@ class BattleInspectorWindow(QMainWindow):
                 translated_name,
                 "character",
             )
+            stats = self.character_inspector.get_character_stats_summary(character)
             values = [
                 str(character.get("side") or "-"),
                 str(character.get("character_name") or "-"),
                 display_name,
                 str(character.get("level") or "-"),
                 str(character.get("xp") or "-"),
+                stats.get("room_id", "-"),
+                stats.get("stamina", "-"),
+                stats.get("fatigue", "-"),
+                stats.get("attack_improvement", "-"),
+                stats.get("repair_improvement", "-"),
+                stats.get("pilot_improvement", "-"),
+                stats.get("science_improvement", "-"),
+                stats.get("engine_improvement", "-"),
+                stats.get("ability_improvement", "-"),
+                stats.get("hp_improvement", "-"),
+                stats.get("weapon_improvement", "-"),
+                stats.get("training", "-"),
             ]
             if not include_side:
                 values = values[1:]
-            attrs = character.get("character_attributes_json")
-            if not isinstance(attrs, dict):
-                attrs = {}
-            for key in dynamic_headers:
-                value = attrs.get(key)
-                if value is None or str(value).strip() == "":
-                    values.append("-")
-                else:
-                    values.append(str(value))
             for col, value in enumerate(values):
                 table.setItem(idx, col, QTableWidgetItem(value))
+            equipment_col = len(headers) - 2
+            actions_col = len(headers) - 1
+            if self.character_inspector.has_items(character):
+                btn = QPushButton("Equipo")
+                btn.clicked.connect(lambda _, c=character: self.open_character_items_inspector(c))
+                table.setCellWidget(idx, equipment_col, btn)
+            if self.character_inspector.has_actions(character):
+                btn = QPushButton("Inspector IA")
+                btn.clicked.connect(lambda _, c=character: self.open_character_actions_inspector(c))
+                table.setCellWidget(idx, actions_col, btn)
         table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
         return table
@@ -769,6 +803,19 @@ class BattleInspectorWindow(QMainWindow):
                 rows.append((side, room_id, room_design_id, actions))
         return rows
 
+    def _has_room_actions(self, detail: dict[str, Any]) -> bool:
+        rooms = detail.get("rooms") or []
+        if not rooms:
+            return False
+        fallback_actions = self._room_actions_from_cleaned(detail)
+        for room in rooms:
+            attrs = room.get("room_attributes_json")
+            if not isinstance(attrs, dict):
+                attrs = {}
+            if self._room_actions_for_room(room, attrs, fallback_actions):
+                return True
+        return False
+
     def open_room_actions_inspector(self, detail: dict[str, Any], room: dict[str, Any] | None = None) -> None:
         if room is None:
             rows = self._collect_room_actions(detail)
@@ -822,6 +869,59 @@ class BattleInspectorWindow(QMainWindow):
         layout.addWidget(table)
         wrapper.setLayout(layout)
         self._open_child("Inspector IA", wrapper)
+
+    def open_character_actions_inspector(self, character: dict[str, Any]) -> None:
+        actions = self.character_inspector.get_character_actions(character)
+        table = QTableWidget(len(actions) or 1, 3)
+        table.setHorizontalHeaderLabels(["ID", "Condicion", "Accion"])
+        for row_idx, action in enumerate(actions):
+            table.setItem(row_idx, 0, QTableWidgetItem(action.get("index", "-")))
+            table.setItem(row_idx, 1, QTableWidgetItem(action.get("condition_label", "Sin traduccion")))
+            table.setItem(row_idx, 2, QTableWidgetItem(action.get("action_label", "Sin traduccion")))
+        if not actions:
+            table.setItem(0, 0, QTableWidgetItem("-"))
+            table.setItem(0, 1, QTableWidgetItem("-"))
+            table.setItem(0, 2, QTableWidgetItem("-"))
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(True)
+
+        wrapper = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+        title = QLabel("IA de Tripulante")
+        title.setObjectName("panelTitle")
+        layout.addWidget(title)
+        layout.addWidget(table)
+        wrapper.setLayout(layout)
+        self._open_child("Inspector IA", wrapper)
+
+    def open_character_items_inspector(self, character: dict[str, Any]) -> None:
+        items = self.character_inspector.get_character_items(character)
+        table = QTableWidget(len(items) or 1, 5)
+        table.setHorizontalHeaderLabels(["ID", "Objeto", "Bonus", "Valor", "Cantidad"])
+        for row_idx, item in enumerate(items):
+            table.setItem(row_idx, 0, QTableWidgetItem(item.get("index", "-")))
+            table.setItem(row_idx, 1, QTableWidgetItem(item.get("item_name", "Sin traduccion")))
+            table.setItem(row_idx, 2, QTableWidgetItem(item.get("bonus_type", "-")))
+            table.setItem(row_idx, 3, QTableWidgetItem(item.get("bonus_value", "-")))
+            table.setItem(row_idx, 4, QTableWidgetItem(item.get("quantity", "-")))
+        if not items:
+            for col in range(5):
+                table.setItem(0, col, QTableWidgetItem("-"))
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(True)
+
+        wrapper = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+        title = QLabel("Equipo")
+        title.setObjectName("panelTitle")
+        layout.addWidget(title)
+        layout.addWidget(table)
+        wrapper.setLayout(layout)
+        self._open_child("Equipo", wrapper)
 
     def _refresh_catalog_status(self) -> None:
         if self.catalog_status_label is None:

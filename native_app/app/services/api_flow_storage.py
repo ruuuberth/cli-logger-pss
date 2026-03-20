@@ -71,6 +71,9 @@ class ApiFlowRepository:
         rejected = 0
         for event in events:
             normalized = self._normalize_event(event)
+            if not self._should_persist_event(normalized):
+                rejected += 1
+                continue
             if not self._validate_normalized_event(normalized):
                 rejected += 1
                 continue
@@ -113,6 +116,18 @@ class ApiFlowRepository:
             return 0
         finally:
             db.close()
+
+    def _should_persist_event(self, normalized: dict[str, Any]) -> bool:
+        path = str(normalized.get("path") or "").strip()
+        if not path:
+            return False
+        base_path = path.split("?", 1)[0].rstrip("/") or "/"
+        allowlist = settings.API_FLOW_CAPTURE_PATH_ALLOWLIST or ["/BattleService/GetBattle3"]
+        for allowed in allowlist:
+            allowed_base = str(allowed or "").split("?", 1)[0].rstrip("/") or "/"
+            if base_path == allowed_base:
+                return True
+        return False
 
     def list_events(
         self,
@@ -1244,6 +1259,14 @@ class ApiFlowRepository:
                 node_attrs = ship_node.get("attributes")
                 if isinstance(node_attrs, dict):
                     attrs = node_attrs
+            else:
+                battle_id = self._as_int(battle_attrs.get("BattleId"))
+                logger.warning(
+                    "event=missing_ship_xml side=%s battle_replay_id=%s battle_id=%s",
+                    side,
+                    battle_replay_id,
+                    battle_id,
+                )
 
             # Fallback: algunos replays no incluyen la nave del defensor en XML.
             default_ship_id = (
@@ -1315,6 +1338,7 @@ class ApiFlowRepository:
                 for key_name, value in nested_attrs.items():
                     if key_name not in attrs:
                         attrs[key_name] = value
+                attrs = self._normalize_character_attributes(attrs)
                 out.append(
                     BattleReplayCharacter(
                         battle_replay_id=battle_replay_id,
@@ -1400,6 +1424,56 @@ class ApiFlowRepository:
             return cleaned
 
         return attrs
+
+    def _normalize_character_attributes(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        character_actions: dict[int, dict[str, Any]] = {}
+        character_items: dict[int, dict[str, Any]] = {}
+        action_pattern = re.compile(r"^CharacterActions\.CharacterAction\[(\d+)\]\.(.+)$")
+        item_pattern = re.compile(r"^Items\.Item\[(\d+)\]\.(.+)$")
+
+        for key, value in attrs.items():
+            key_text = str(key)
+            action_match = action_pattern.match(key_text)
+            if action_match:
+                idx = int(action_match.group(1))
+                field = action_match.group(2)
+                character_actions.setdefault(idx, {})[field] = value
+                continue
+            item_match = item_pattern.match(key_text)
+            if item_match:
+                idx = int(item_match.group(1))
+                field = item_match.group(2)
+                character_items.setdefault(idx, {})[field] = value
+
+        if not character_actions and not character_items:
+            return attrs
+
+        cleaned = dict(attrs)
+        if character_actions:
+            cleaned["CharacterActionsNormalized"] = [
+                {
+                    "index": payload.get("CharacterActionIndex", idx),
+                    "condition_type_id": payload.get("ConditionTypeId"),
+                    "action_type_id": payload.get("ActionTypeId"),
+                    "character_action_id": payload.get("CharacterActionId"),
+                }
+                for idx, payload in sorted(character_actions.items())
+            ]
+        if character_items:
+            cleaned["CharacterItemsNormalized"] = [
+                {
+                    "index": idx,
+                    "item_id": payload.get("ItemId"),
+                    "item_design_id": payload.get("ItemDesignId"),
+                    "quantity": payload.get("Quantity"),
+                    "is_new": payload.get("IsNew"),
+                    "skin_key": payload.get("SkinKey"),
+                    "bonus_enhancement_type": payload.get("BonusEnhancementType"),
+                    "bonus_enhancement_value": payload.get("BonusEnhancementValue"),
+                }
+                for idx, payload in sorted(character_items.items())
+            ]
+        return cleaned
 
     def _build_command_rows_for_replay(self, battle_replay_id: int, parsed: dict[str, Any]) -> list[BattleReplayCommand]:
         out: list[BattleReplayCommand] = []

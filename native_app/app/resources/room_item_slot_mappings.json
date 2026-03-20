@@ -217,6 +217,17 @@
         "1": { "item_name_en_base": "Long Distance Decoy Drone" }
       }
     },
+    "405": {
+      "room_name": "Lanzamisiles auxiliar",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Scarlet" },
+        "2": { "item_name_en_base": "Jungler" },
+        "3": { "item_name_en_base": "Penetrator" },
+        "4": { "item_name_en_base": "EMP Missile" },
+        "5": { "item_name_en_base": "Javelin" }
+      }
+    },
     "298": {
       "room_name": "Taller de androides",
       "slots": {
@@ -306,6 +317,48 @@
       "slots": {
         "0": { "item_name_en_base": "Service Droid" },
         "1": { "item_name_en_base": "Defender Droid" }
+      }
+    },
+    "794": {
+      "room_name": "Cápsula de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Tracker Missile" }
+      }
+    },
+    "813": {
+      "room_name": "Cápsula de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Tracker Missile" }
+      }
+    },
+    "814": {
+      "room_name": "Cápsula de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Tracker Missile" }
+      }
+    },
+    "818": {
+      "room_name": "Cápsula de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Tracker Missile" }
+      }
+    },
+    "819": {
+      "room_name": "Cápsula de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Tracker Missile" }
+      }
+    },
+    "820": {
+      "room_name": "Cápsula de misiles",
+      "slots": {
+        "0": { "item_name_en_base": "Rocket" },
+        "1": { "item_name_en_base": "Tracker Missile" }
       }
     },
     "9": {

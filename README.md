@@ -85,6 +85,15 @@ del inspector de IA. Ese mapping vive en
 - `RoomDesignId + slot -> nombre canonico del item`
 - nombre canonico -> nombre visible via `ItemDesigns.txt`, ignorando nivel
 
+En tripulación, el inspector ya no expone `character_attributes_json` crudo
+en la tabla principal. Ahora normaliza y consume:
+
+- `CharacterActionsNormalized`
+- `CharacterItemsNormalized`
+
+La IA de tripulantes se traduce con `ActionTypes.txt` y `ConditionTypes.txt`.
+El equipamiento se traduce con `ItemDesigns.txt`.
+
 ## Ramas
 
 - Desarrollo nativo: `develop`
