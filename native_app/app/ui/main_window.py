@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import json
 from functools import partial
 from datetime import datetime
 from threading import Thread
@@ -16,7 +14,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -147,7 +144,6 @@ class MainWindow(QMainWindow):
         self.api_flow_table.horizontalHeader().setStretchLastSection(True)
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.api_flow_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.api_flow_table.itemSelectionChanged.connect(self._on_api_flow_row_selected)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
         self.api_flow_prev_page_button.clicked.connect(self.api_flow_prev_page)
@@ -162,9 +158,6 @@ class MainWindow(QMainWindow):
         pagination.addStretch()
 
         self.api_flow_count_label = QLabel("Registros: 0")
-        self.api_flow_detail = QPlainTextEdit()
-        self.api_flow_detail.setReadOnly(True)
-        self.api_flow_detail.setPlaceholderText("Selecciona un evento para ver detalles...")
 
         content.addLayout(controls)
         content.addLayout(filters)
@@ -174,7 +167,6 @@ class MainWindow(QMainWindow):
         content.addWidget(self.api_flow_session_label)
         content.addWidget(self.api_flow_count_label)
         content.addWidget(self.api_flow_table)
-        content.addWidget(self.api_flow_detail)
         tab.setLayout(content)
 
         self.reload_api_flow_page()
@@ -353,7 +345,6 @@ class MainWindow(QMainWindow):
             self.api_flow_page_label.setText("Pagina: 0")
             self.api_flow_prev_page_button.setEnabled(False)
             self.api_flow_next_page_button.setEnabled(False)
-            self.api_flow_detail.setPlainText("")
             return
 
         max_page = (total - 1) // self.api_flow_page_size
@@ -403,32 +394,6 @@ class MainWindow(QMainWindow):
         self.api_flow_total_live_events = 0
         self.api_flow_counter_label.setText("Eventos (sesion): 0")
         self.reload_api_flow_page()
-
-    def _on_api_flow_row_selected(self) -> None:
-        selected = self.api_flow_table.selectedItems()
-        if not selected:
-            return
-        row_index = selected[0].row()
-        if row_index < 0 or row_index >= len(self.api_flow_current_rows):
-            return
-        row = self.api_flow_current_rows[row_index]
-        detail = {
-            "captured_at": row.get("captured_at"),
-            "session_id": row.get("session_id"),
-            "method": row.get("method"),
-            "url_full": row.get("url_full"),
-            "status_code": row.get("status_code"),
-            "duration_ms": row.get("duration_ms"),
-            "tls": row.get("tls"),
-            "request_size_bytes": row.get("request_size_bytes"),
-            "response_size_bytes": row.get("response_size_bytes"),
-            "error_text": row.get("error_text"),
-            "request_headers": row.get("request_headers_json"),
-            "response_headers": row.get("response_headers_json"),
-            "request_body_preview": row.get("request_body_preview"),
-            "response_body_preview": row.get("response_body_preview"),
-        }
-        self.api_flow_detail.setPlainText(json.dumps(detail, indent=2, ensure_ascii=False))
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:
         if battle_replay_id is None:
