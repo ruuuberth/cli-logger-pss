@@ -10,12 +10,14 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -487,8 +489,8 @@ class BattleInspectorWindow(QMainWindow):
                 values = values[1:]
             for col, value in enumerate(values):
                 table.setItem(idx, col, QTableWidgetItem(value))
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
         return table
 
     def _build_ship_attributes_table(self, ships: list[dict[str, Any]]) -> QTableWidget:
@@ -542,8 +544,8 @@ class BattleInspectorWindow(QMainWindow):
         for idx, (key, value) in enumerate(rows):
             table.setItem(idx, 0, QTableWidgetItem(key))
             table.setItem(idx, 1, QTableWidgetItem(value))
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
         return table
 
     def _build_ship_info_table(
@@ -586,8 +588,8 @@ class BattleInspectorWindow(QMainWindow):
         for row_idx, (key, value) in enumerate(rows):
             table.setItem(row_idx, 0, QTableWidgetItem(key))
             table.setItem(row_idx, 1, QTableWidgetItem(value))
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
         return table
 
     def _build_rooms_table(self, rooms: list[dict[str, Any]], *, include_side: bool = True) -> QTableWidget:
@@ -655,10 +657,11 @@ class BattleInspectorWindow(QMainWindow):
             actions = self._room_actions_for_room(room, attrs, fallback_actions)
             if actions:
                 btn = QPushButton("Inspector IA")
+                self._configure_button(btn)
                 btn.clicked.connect(lambda _, r=room: self.open_room_actions_inspector(self.detail, r))
                 table.setCellWidget(idx, len(headers) - 1, btn)
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
         return table
 
     def _build_characters_table(
@@ -722,14 +725,16 @@ class BattleInspectorWindow(QMainWindow):
             actions_col = len(headers) - 1
             if self.character_inspector.has_items(character):
                 btn = QPushButton("Equipo")
+                self._configure_button(btn)
                 btn.clicked.connect(lambda _, c=character: self.open_character_items_inspector(c))
                 table.setCellWidget(idx, equipment_col, btn)
             if self.character_inspector.has_actions(character):
                 btn = QPushButton("Inspector IA")
+                self._configure_button(btn)
                 btn.clicked.connect(lambda _, c=character: self.open_character_actions_inspector(c))
                 table.setCellWidget(idx, actions_col, btn)
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
         return table
 
     def _build_commands_table(self, commands: list[dict[str, Any]]) -> QTableWidget:
@@ -739,8 +744,8 @@ class BattleInspectorWindow(QMainWindow):
             order = command.get("command_order")
             table.setItem(idx, 0, QTableWidgetItem(str(order if order is not None else "-")))
             table.setItem(idx, 1, QTableWidgetItem(str(command.get("command_tag") or "-")))
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
         return table
 
     def _collect_attribute_keys(
@@ -856,8 +861,8 @@ class BattleInspectorWindow(QMainWindow):
             table.setItem(0, 0, QTableWidgetItem("-"))
             table.setItem(0, 1, QTableWidgetItem("-"))
             table.setItem(0, 2, QTableWidgetItem("-"))
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
 
         wrapper = QWidget()
         layout = QVBoxLayout()
@@ -882,8 +887,8 @@ class BattleInspectorWindow(QMainWindow):
             table.setItem(0, 0, QTableWidgetItem("-"))
             table.setItem(0, 1, QTableWidgetItem("-"))
             table.setItem(0, 2, QTableWidgetItem("-"))
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
 
         wrapper = QWidget()
         layout = QVBoxLayout()
@@ -909,8 +914,8 @@ class BattleInspectorWindow(QMainWindow):
         if not items:
             for col in range(5):
                 table.setItem(0, col, QTableWidgetItem("-"))
-        table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+        self._configure_table(table)
 
         wrapper = QWidget()
         layout = QVBoxLayout()
@@ -944,6 +949,19 @@ class BattleInspectorWindow(QMainWindow):
             "parse_error": "Catalogos: error al leer archivos",
         }
         self.catalog_status_label.setText(messages.get(status, "Catalogos: estado desconocido"))
+
+    def _configure_table(self, table: QTableWidget) -> None:
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        table.resizeColumnsToContents()
+        table.resizeRowsToContents()
+
+    def _configure_button(self, button: QPushButton) -> None:
+        button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        hint = button.sizeHint()
+        if hint.isValid():
+            button.setMinimumWidth(hint.width())
 
     def _apply_catalog_dir(self) -> None:
         value = self.catalog_path_input.text().strip()

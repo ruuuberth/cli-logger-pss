@@ -9,12 +9,14 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -141,9 +143,9 @@ class MainWindow(QMainWindow):
         self.api_flow_table.setHorizontalHeaderLabels(
             ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId", "Inspector", "Eliminar"]
         )
-        self.api_flow_table.horizontalHeader().setStretchLastSection(True)
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.api_flow_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._configure_table(self.api_flow_table)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
         self.api_flow_prev_page_button.clicked.connect(self.api_flow_prev_page)
@@ -338,13 +340,16 @@ class MainWindow(QMainWindow):
             self.api_flow_table.setItem(idx, 5, QTableWidgetItem(copas))
             self.api_flow_table.setItem(idx, 6, QTableWidgetItem(battle_id))
             inspect_button = QPushButton("Inspeccionar")
+            self._configure_button(inspect_button)
             inspect_button.clicked.connect(partial(self.open_battle_inspector, row.get("id")))
             self.api_flow_table.setCellWidget(idx, 7, inspect_button)
             delete_button = QPushButton("Eliminar")
+            self._configure_button(delete_button)
             delete_button.clicked.connect(
                 partial(self.delete_api_flow_event, row.get("api_flow_event_id"), battle_id)
             )
             self.api_flow_table.setCellWidget(idx, 8, delete_button)
+        self._configure_table(self.api_flow_table)
 
         if total == 0:
             self.api_flow_page_label.setText("Pagina: 0")
@@ -416,6 +421,19 @@ class MainWindow(QMainWindow):
         if deleted <= 0:
             QMessageBox.warning(self, "Eliminar evento", "No se pudo eliminar el evento.")
         self.reload_api_flow_page()
+
+    def _configure_table(self, table: QTableWidget) -> None:
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        table.resizeColumnsToContents()
+        table.resizeRowsToContents()
+
+    def _configure_button(self, button: QPushButton) -> None:
+        button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        hint = button.sizeHint()
+        if hint.isValid():
+            button.setMinimumWidth(hint.width())
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:
         if battle_replay_id is None:
