@@ -692,6 +692,7 @@ class BattleInspectorWindow(QMainWindow):
         headers = (["Side"] if include_side else []) + base_headers
         table = QTableWidget(len(characters), len(headers))
         table.setHorizontalHeaderLabels(headers)
+        room_name_map = self._build_room_name_map()
         for idx, character in enumerate(characters):
             translated_name = str(character.get("character_design_name") or "").strip()
             display_name = self.catalogo.resolve_design_name(
@@ -700,13 +701,14 @@ class BattleInspectorWindow(QMainWindow):
                 "character",
             )
             stats = self.character_inspector.get_character_stats_summary(character)
+            room_display_name = room_name_map.get(str(stats.get("room_id") or ""), stats.get("room_id", "-"))
             values = [
                 str(character.get("side") or "-"),
                 str(character.get("character_name") or "-"),
                 display_name,
                 str(character.get("level") or "-"),
                 str(character.get("xp") or "-"),
-                stats.get("room_id", "-"),
+                room_display_name,
                 stats.get("stamina", "-"),
                 stats.get("fatigue", "-"),
                 stats.get("attack_improvement", "-"),
@@ -738,6 +740,21 @@ class BattleInspectorWindow(QMainWindow):
         table.setAlternatingRowColors(True)
         self._configure_table(table)
         return table
+
+    def _build_room_name_map(self) -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        for room in self.detail.get("rooms") or []:
+            room_id = str(room.get("room_id") or "").strip()
+            if not room_id:
+                continue
+            translated_name = str(room.get("room_design_name") or "").strip()
+            display_name = self.catalogo.resolve_design_name(
+                room.get("room_design_id"),
+                translated_name,
+                "room",
+            )
+            mapping[room_id] = display_name
+        return mapping
 
     def _build_commands_table(self, commands: list[dict[str, Any]]) -> QTableWidget:
         table = QTableWidget(len(commands), 2)
