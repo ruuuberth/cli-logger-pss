@@ -141,9 +141,9 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.api_flow_time_to)
         filters.addWidget(self.api_flow_reset_filters_button)
 
-        self.api_flow_table = QTableWidget(0, 10)
+        self.api_flow_table = QTableWidget(0, 9)
         self.api_flow_table.setHorizontalHeaderLabels(
-            ["Hora", "Atacante", "Defensor", "Copas Act.", "Resultado", "Botin", "Copas", "BattleId", "Inspector", "Eliminar"]
+            ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId", "Inspector", "Eliminar"]
         )
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.api_flow_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -325,9 +325,10 @@ class MainWindow(QMainWindow):
         self.api_flow_table.setRowCount(len(rows))
         for idx, row in enumerate(rows):
             captured_at = str(row.get("captured_at") or "")
-            attacker = str(row.get("attacker_name") or "-")
-            defender = str(row.get("defender_name") or "-")
-            current_trophies = f"{row.get('attacker_trophy') or 0}/{row.get('defender_trophy') or 0}"
+            attacker_name = str(row.get("attacker_name") or "-")
+            defender_name = str(row.get("defender_name") or "-")
+            attacker = f"({row.get('attacker_trophy') or 0}){attacker_name}"
+            defender = f"({row.get('defender_trophy') or 0}){defender_name}"
             outcome = str(row.get("outcome_type") or "-")
             botin = (
                 f"M {row.get('win_minerals_result') or 0}/{row.get('lose_minerals_result') or 0}"
@@ -338,21 +339,20 @@ class MainWindow(QMainWindow):
             self.api_flow_table.setItem(idx, 0, QTableWidgetItem(captured_at[:19].replace("T", " ")))
             self.api_flow_table.setItem(idx, 1, QTableWidgetItem(attacker))
             self.api_flow_table.setItem(idx, 2, QTableWidgetItem(defender))
-            self.api_flow_table.setItem(idx, 3, QTableWidgetItem(current_trophies))
-            self.api_flow_table.setItem(idx, 4, QTableWidgetItem(outcome))
-            self.api_flow_table.setItem(idx, 5, QTableWidgetItem(botin))
-            self.api_flow_table.setItem(idx, 6, QTableWidgetItem(copas))
-            self.api_flow_table.setItem(idx, 7, QTableWidgetItem(battle_id))
+            self.api_flow_table.setItem(idx, 3, QTableWidgetItem(outcome))
+            self.api_flow_table.setItem(idx, 4, QTableWidgetItem(botin))
+            self.api_flow_table.setItem(idx, 5, QTableWidgetItem(copas))
+            self.api_flow_table.setItem(idx, 6, QTableWidgetItem(battle_id))
             inspect_button = QPushButton("Inspeccionar")
             self._configure_button(inspect_button)
             inspect_button.clicked.connect(partial(self.open_battle_inspector, row.get("id")))
-            self.api_flow_table.setCellWidget(idx, 8, inspect_button)
+            self.api_flow_table.setCellWidget(idx, 7, inspect_button)
             delete_button = QPushButton("Eliminar")
             self._configure_button(delete_button)
             delete_button.clicked.connect(
                 partial(self.delete_api_flow_event, row.get("api_flow_event_id"), battle_id)
             )
-            self.api_flow_table.setCellWidget(idx, 9, delete_button)
+            self.api_flow_table.setCellWidget(idx, 8, delete_button)
         self._configure_table(self.api_flow_table)
 
         if total == 0:
