@@ -963,11 +963,25 @@ class ApiFlowRepository:
         if value is None:
             return None
         normalized = unicodedata.normalize("NFKC", str(value))
+        normalized = self._repair_mojibake_text(normalized)
         normalized = normalized.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
         normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
         if not normalized:
             return None
         return normalized
+
+    def _repair_mojibake_text(self, value: str) -> str:
+        text = str(value)
+        if not text:
+            return text
+        suspicious_markers = ("Ã", "Â", "æ", "ç", "ð", "ã", "œ", "š")
+        if not any(marker in text for marker in suspicious_markers):
+            return text
+        try:
+            repaired = text.encode("latin1").decode("utf-8")
+        except Exception:
+            return text
+        return repaired if repaired.strip() else text
 
     def _build_battle_replay_rows(self, rows: list[ApiFlowEvent]) -> list[BattleReplayNormalized]:
         out: list[BattleReplayNormalized] = []
@@ -1024,10 +1038,10 @@ class ApiFlowRepository:
             "battle_end_frame": row.battle_end_frame,
             "client_end_frame": row.client_end_frame,
             "attacker_user_id": row.attacker_user_id,
-            "attacker_name": row.attacker_name,
+            "attacker_name": self._normalize_text(row.attacker_name),
             "attacker_trophy": row.attacker_trophy,
             "defender_user_id": row.defender_user_id,
-            "defender_name": row.defender_name,
+            "defender_name": self._normalize_text(row.defender_name),
             "defender_trophy": row.defender_trophy,
             "battle_attributes_json": row.battle_attributes_json,
             "attacker_user_attributes_json": row.attacker_user_attributes_json,
@@ -1053,7 +1067,7 @@ class ApiFlowRepository:
             "ship_id": row.ship_id,
             "ship_design_id": row.ship_design_id,
             "ship_design_name": design_name,
-            "ship_name": row.ship_name,
+            "ship_name": self._normalize_text(row.ship_name),
             "ship_level": row.ship_level,
             "power_score": row.power_score,
             "hp": row.hp,
@@ -1107,7 +1121,7 @@ class ApiFlowRepository:
             "ship_id": row.ship_id,
             "character_design_id": row.character_design_id,
             "character_design_name": design_name,
-            "character_name": row.character_name,
+            "character_name": self._normalize_text(row.character_name),
             "level": row.level,
             "xp": row.xp,
             "character_attributes_json": row.character_attributes_json,
@@ -1137,13 +1151,13 @@ class ApiFlowRepository:
             if map_es:
                 value = map_es.get(int(design_id))
                 if value and str(value).strip():
-                    return str(value).strip()
+                    return self._normalize_text(value) or str(value).strip()
             if map_en:
                 value = map_en.get(int(design_id))
                 if value and str(value).strip():
-                    return str(value).strip()
+                    return self._normalize_text(value) or str(value).strip()
         if raw_name and str(raw_name).strip():
-            return str(raw_name).strip()
+            return self._normalize_text(raw_name) or str(raw_name).strip()
         if design_id is not None:
             return str(design_id)
         return "Sin traduccion"

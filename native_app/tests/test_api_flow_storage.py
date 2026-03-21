@@ -81,6 +81,12 @@ def test_generates_cleaned_response_body_for_developer_readability() -> None:
     assert battle_node["attributes"]["AttackingShipXml"]["attributes"]["ShipName"] == "Ruuuberth4"
 
 
+def test_normalize_text_repairs_common_mojibake() -> None:
+    repo = ApiFlowRepository()
+    assert repo._normalize_text("æ¢¦ç1") == "梦熊1"
+    assert repo._normalize_text("ç®ç®030") == "皮皮030"
+
+
 def test_extracts_normalized_battle_payload_from_cleaned() -> None:
     repo = ApiFlowRepository()
     cleaned_payload = json.dumps(
