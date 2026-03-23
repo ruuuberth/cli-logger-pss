@@ -337,6 +337,8 @@ class MainWindow(QMainWindow):
         self.api_flow_current_rows = rows
         self.api_flow_count_label.setText(f"Registros: {total}")
 
+        self.api_flow_table.setUpdatesEnabled(False)
+        self.api_flow_table.clearContents()
         self.api_flow_table.setRowCount(len(rows))
         for idx, row in enumerate(rows):
             captured_at = str(row.get("captured_at") or "")
@@ -368,6 +370,7 @@ class MainWindow(QMainWindow):
                 partial(self.delete_api_flow_event, row.get("api_flow_event_id"), battle_id)
             )
             self.api_flow_table.setCellWidget(idx, 8, delete_button)
+        self.api_flow_table.setUpdatesEnabled(True)
         self._configure_table(self.api_flow_table, resize_contents=False)
 
         if total == 0:
@@ -435,11 +438,12 @@ class MainWindow(QMainWindow):
         header = table.horizontalHeader()
         if resize_contents:
             header.setSectionResizeMode(QHeaderView.ResizeToContents)
-            table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+            table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+            table.verticalHeader().setDefaultSectionSize(34)
             table.resizeColumnsToContents()
-            table.resizeRowsToContents()
             return
-        table.resizeRowsToContents()
+        table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        table.verticalHeader().setDefaultSectionSize(34)
 
     def _configure_button(self, button: QPushButton) -> None:
         button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
