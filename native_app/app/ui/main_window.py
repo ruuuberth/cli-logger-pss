@@ -91,11 +91,8 @@ class MainWindow(QMainWindow):
         self.api_flow_counter_label = QLabel("Eventos: 0")
         self.api_flow_session_label = QLabel("Sesion: -")
 
-        self.api_flow_start_button = QPushButton("Iniciar captura")
-        self.api_flow_start_button.clicked.connect(self.start_api_flow_capture)
-        self.api_flow_stop_button = QPushButton("Detener")
-        self.api_flow_stop_button.clicked.connect(self.stop_api_flow_capture)
-        self.api_flow_stop_button.setEnabled(False)
+        self.api_flow_capture_button = QPushButton("Iniciar captura")
+        self.api_flow_capture_button.clicked.connect(self.toggle_api_flow_capture)
         self.api_flow_refresh_button = QPushButton("Refrescar")
         self.api_flow_refresh_button.clicked.connect(self.reload_api_flow_page)
         self.api_flow_clear_button = QPushButton("Limpiar historial")
@@ -104,8 +101,7 @@ class MainWindow(QMainWindow):
         self.api_flow_auto_scroll_checkbox.setChecked(True)
 
         controls = QHBoxLayout()
-        controls.addWidget(self.api_flow_start_button)
-        controls.addWidget(self.api_flow_stop_button)
+        controls.addWidget(self.api_flow_capture_button)
         controls.addWidget(self.api_flow_refresh_button)
         controls.addWidget(self.api_flow_clear_button)
         controls.addWidget(self.api_flow_auto_scroll_checkbox)
@@ -170,17 +166,21 @@ class MainWindow(QMainWindow):
         self.api_flow_status_label.setText(
             f"Estado: activo en {session.listen_host}:{session.listen_port}"
         )
-        self.api_flow_start_button.setEnabled(False)
-        self.api_flow_stop_button.setEnabled(True)
+        self._sync_capture_button()
         if not self.api_flow_flush_timer.isActive():
             self.api_flow_flush_timer.start()
 
     def stop_api_flow_capture(self) -> None:
         self.api_flow_capture_manager.stop_capture()
-        self.api_flow_start_button.setEnabled(True)
-        self.api_flow_stop_button.setEnabled(False)
+        self._sync_capture_button()
         self.api_flow_flush_timer.stop()
         self._flush_api_flow_events()
+
+    def toggle_api_flow_capture(self) -> None:
+        if self.api_flow_capture_manager.is_running():
+            self.stop_api_flow_capture()
+            return
+        self.start_api_flow_capture()
 
     @Slot(dict)
     def _on_api_flow_event(self, payload: dict) -> None:
@@ -198,9 +198,7 @@ class MainWindow(QMainWindow):
     def _on_api_flow_status(self, message: str) -> None:
         self.api_flow_last_capture_status = message
         self.api_flow_status_label.setText(f"Estado: {message}")
-        if not self.api_flow_capture_manager.is_running():
-            self.api_flow_start_button.setEnabled(True)
-            self.api_flow_stop_button.setEnabled(False)
+        self._sync_capture_button()
 
     @Slot()
     def _flush_api_flow_events(self) -> None:
@@ -465,6 +463,12 @@ class MainWindow(QMainWindow):
             f"{label}: CPU {stats['cpu_percent']:.1f}%"
             f", RAM {stats['rss_mb']:.0f} MB ({stats['mem_percent']:.1f}%)"
         )
+
+    def _sync_capture_button(self) -> None:
+        if self.api_flow_capture_manager.is_running():
+            self.api_flow_capture_button.setText("Detener captura")
+        else:
+            self.api_flow_capture_button.setText("Iniciar captura")
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:
         if battle_replay_id is None:
