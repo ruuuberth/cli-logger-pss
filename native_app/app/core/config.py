@@ -80,7 +80,9 @@ class Settings(BaseSettings):
     API_FLOW_RETENTION_DAYS: int = 7
     API_FLOW_MAX_DB_MB: int = 512
     API_FLOW_CAPTURE_HTTPS: bool = True
-    API_FLOW_IGNORE_HOSTS: List[str] = []
+    API_FLOW_IGNORE_HOSTS: List[str] = [
+        "perf-events.cloud.unity3d.com",
+    ]
     API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = ["api.pixelstarships.com"]
     API_FLOW_CAPTURE_PATH_ALLOWLIST: List[str] = ["/BattleService/GetBattle3"]
 
