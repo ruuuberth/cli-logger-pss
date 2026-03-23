@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -91,6 +90,7 @@ class MainWindow(QMainWindow):
         content = QVBoxLayout()
 
         self.api_flow_status_label = QLabel("Estado: detenido")
+        self.api_flow_sync_label = QLabel("Historial: listo")
         self.api_flow_counter_label = QLabel("Eventos: 0")
         self.api_flow_session_label = QLabel("Sesion: -")
 
@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         )
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.api_flow_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.api_flow_table.cellClicked.connect(self._on_api_flow_table_cell_clicked)
         self._configure_table(self.api_flow_table, resize_contents=True)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
@@ -146,6 +147,7 @@ class MainWindow(QMainWindow):
         content.addLayout(filters)
         content.addLayout(pagination)
         content.addWidget(self.api_flow_status_label)
+        content.addWidget(self.api_flow_sync_label)
         content.addWidget(self.api_flow_counter_label)
         content.addWidget(self.api_flow_session_label)
         content.addWidget(self.api_flow_count_label)
@@ -243,7 +245,7 @@ class MainWindow(QMainWindow):
         if self.startup_sync_running:
             return
         self.startup_sync_running = True
-        self.api_flow_status_label.setText("Estado: inicializando historial de batallas...")
+        self.api_flow_sync_label.setText("Historial: inicializando...")
         thread = Thread(target=self._run_startup_sync_worker, daemon=True, name="startup-sync")
         self.startup_sync_thread = thread
         thread.start()
@@ -304,13 +306,12 @@ class MainWindow(QMainWindow):
     def _on_startup_sync_finished(self, payload: dict) -> None:
         self.startup_sync_running = False
         if not payload.get("ok", True):
-            self.api_flow_status_label.setText(
-                f"Estado: error en inicializacion ({payload.get('error', 'desconocido')})"
+            self.api_flow_sync_label.setText(
+                f"Historial: error ({payload.get('error', 'desconocido')})"
             )
             return
 
-        if not self.api_flow_capture_manager.is_running():
-            self.api_flow_status_label.setText(f"Estado: {self.api_flow_last_capture_status}")
+        self.api_flow_sync_label.setText("Historial: listo")
         self.reload_api_flow_page()
 
     @Slot(dict)
@@ -360,16 +361,10 @@ class MainWindow(QMainWindow):
             self.api_flow_table.setItem(idx, 4, QTableWidgetItem(botin))
             self.api_flow_table.setItem(idx, 5, QTableWidgetItem(copas))
             self.api_flow_table.setItem(idx, 6, QTableWidgetItem(battle_id))
-            inspect_button = QPushButton("Inspeccionar")
-            self._configure_button(inspect_button)
-            inspect_button.clicked.connect(partial(self.open_battle_inspector, row.get("id")))
-            self.api_flow_table.setCellWidget(idx, 7, inspect_button)
-            delete_button = QPushButton("Eliminar")
-            self._configure_button(delete_button)
-            delete_button.clicked.connect(
-                partial(self.delete_api_flow_event, row.get("api_flow_event_id"), battle_id)
-            )
-            self.api_flow_table.setCellWidget(idx, 8, delete_button)
+            inspect_item = QTableWidgetItem("Inspeccionar")
+            delete_item = QTableWidgetItem("Eliminar")
+            self.api_flow_table.setItem(idx, 7, inspect_item)
+            self.api_flow_table.setItem(idx, 8, delete_item)
         self.api_flow_table.setUpdatesEnabled(True)
         self._configure_table(self.api_flow_table, resize_contents=False)
 
@@ -445,12 +440,6 @@ class MainWindow(QMainWindow):
         table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         table.verticalHeader().setDefaultSectionSize(34)
 
-    def _configure_button(self, button: QPushButton) -> None:
-        button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-        hint = button.sizeHint()
-        if hint.isValid():
-            button.setMinimumWidth(hint.width())
-
     def _refresh_resource_labels(self) -> None:
         app_stats = self._read_process_usage(os.getpid())
         app_text = self._format_process_usage("App", app_stats)
@@ -521,6 +510,16 @@ class MainWindow(QMainWindow):
             self.api_flow_capture_button.setText("Detener captura")
         else:
             self.api_flow_capture_button.setText("Iniciar captura")
+
+    def _on_api_flow_table_cell_clicked(self, row: int, column: int) -> None:
+        if row < 0 or row >= len(self.api_flow_current_rows):
+            return
+        payload = self.api_flow_current_rows[row]
+        if column == 7:
+            self.open_battle_inspector(payload.get("id"))
+            return
+        if column == 8:
+            self.delete_api_flow_event(payload.get("api_flow_event_id"), str(payload.get("battle_id") or "-"))
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:
         if battle_replay_id is None:
