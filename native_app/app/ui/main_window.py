@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 760)
         self.setStyleSheet(window_font_qss())
         self.setCentralWidget(self._build_api_flow_tab())
+        QTimer.singleShot(0, self.start_api_flow_capture)
         QTimer.singleShot(0, self._start_startup_sync)
         self.resource_monitor_timer.start()
 
