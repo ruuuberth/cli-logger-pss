@@ -254,13 +254,17 @@ class MainWindow(QMainWindow):
         repo = ApiFlowRepository()
         result = {"ok": True}
         try:
-            while repo.backfill_response_body_cleaned(batch_size=100) > 0:
+            snapshot = repo.get_startup_sync_snapshot()
+            max_event_id = int(snapshot.get("max_event_id") or 0)
+            while repo.backfill_response_body_cleaned(batch_size=100, max_event_id=max_event_id) > 0:
                 pass
-            while repo.sync_battle_replays_from_api_flow(batch_size=500) > 0:
+            while repo.sync_battle_replays_from_api_flow(batch_size=500, max_event_id=max_event_id) > 0:
                 pass
-            while repo.sync_battle_replay_children(batch_size=200) > 0:
+            post_sync_snapshot = repo.get_startup_sync_snapshot()
+            max_replay_id = int(post_sync_snapshot.get("max_replay_id") or 0)
+            while repo.sync_battle_replay_children(batch_size=200, max_replay_id=max_replay_id) > 0:
                 pass
-            while repo.backfill_room_attributes(batch_size=200) > 0:
+            while repo.backfill_room_attributes(batch_size=200, max_replay_id=max_replay_id) > 0:
                 pass
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}

@@ -476,13 +476,13 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def sync_battle_replays_from_api_flow(self, batch_size: int = 500) -> int:
+    def sync_battle_replays_from_api_flow(self, batch_size: int = 500, max_event_id: int | None = None) -> int:
         db = SessionLocal()
         inserted = 0
         try:
             last_seen_id = 0
             while True:
-                candidates = (
+                query = (
                     db.query(ApiFlowEvent)
                     .outerjoin(
                         BattleReplayNormalized,
@@ -492,10 +492,10 @@ class ApiFlowRepository:
                     .filter(ApiFlowEvent.path.like("/BattleService/GetBattle3%"))
                     .filter(ApiFlowEvent.response_body_cleaned.isnot(None))
                     .filter(ApiFlowEvent.id > last_seen_id)
-                    .order_by(ApiFlowEvent.id.asc())
-                    .limit(max(1, batch_size))
-                    .all()
                 )
+                if max_event_id is not None:
+                    query = query.filter(ApiFlowEvent.id <= int(max_event_id))
+                candidates = query.order_by(ApiFlowEvent.id.asc()).limit(max(1, batch_size)).all()
                 if not candidates:
                     return inserted
 
@@ -519,11 +519,29 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def backfill_response_body_cleaned(self, batch_size: int = 100) -> int:
+    def get_startup_sync_snapshot(self) -> dict[str, int]:
+        db = SessionLocal()
+        try:
+            max_event_id = db.query(ApiFlowEvent.id).order_by(ApiFlowEvent.id.desc()).limit(1).scalar() or 0
+            max_replay_id = (
+                db.query(BattleReplayNormalized.id)
+                .order_by(BattleReplayNormalized.id.desc())
+                .limit(1)
+                .scalar()
+                or 0
+            )
+            return {
+                "max_event_id": int(max_event_id),
+                "max_replay_id": int(max_replay_id),
+            }
+        finally:
+            db.close()
+
+    def backfill_response_body_cleaned(self, batch_size: int = 100, max_event_id: int | None = None) -> int:
         db = SessionLocal()
         updated = 0
         try:
-            candidates = (
+            query = (
                 db.query(ApiFlowEvent)
                 .filter(ApiFlowEvent.path.like("/BattleService/GetBattle3%"))
                 .filter(
@@ -532,10 +550,10 @@ class ApiFlowRepository:
                         ApiFlowEvent.response_body_cleaned == "",
                     )
                 )
-                .order_by(ApiFlowEvent.id.asc())
-                .limit(max(1, batch_size))
-                .all()
             )
+            if max_event_id is not None:
+                query = query.filter(ApiFlowEvent.id <= int(max_event_id))
+            candidates = query.order_by(ApiFlowEvent.id.asc()).limit(max(1, batch_size)).all()
             if not candidates:
                 return 0
 
@@ -556,21 +574,21 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def backfill_room_attributes(self, batch_size: int = 100) -> int:
+    def backfill_room_attributes(self, batch_size: int = 100, max_replay_id: int | None = None) -> int:
         db = SessionLocal()
         updated = 0
         try:
             last_seen_id = 0
             while True:
-                candidates = (
+                query = (
                     db.query(BattleReplayNormalized, ApiFlowEvent)
                     .join(ApiFlowEvent, ApiFlowEvent.id == BattleReplayNormalized.api_flow_event_id)
                     .filter(ApiFlowEvent.response_body_cleaned.isnot(None))
                     .filter(BattleReplayNormalized.id > last_seen_id)
-                    .order_by(BattleReplayNormalized.id.asc())
-                    .limit(max(1, batch_size))
-                    .all()
                 )
+                if max_replay_id is not None:
+                    query = query.filter(BattleReplayNormalized.id <= int(max_replay_id))
+                candidates = query.order_by(BattleReplayNormalized.id.asc()).limit(max(1, batch_size)).all()
                 if not candidates:
                     break
                 for replay, api_flow_event in candidates:
@@ -612,21 +630,21 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def sync_battle_replay_children(self, batch_size: int = 200) -> int:
+    def sync_battle_replay_children(self, batch_size: int = 200, max_replay_id: int | None = None) -> int:
         db = SessionLocal()
         inserted = 0
         try:
-            parents = (
+            query = (
                 db.query(BattleReplayNormalized)
                 .outerjoin(
                     BattleReplayShip,
                     BattleReplayShip.battle_replay_id == BattleReplayNormalized.id,
                 )
                 .filter(BattleReplayShip.id.is_(None))
-                .order_by(BattleReplayNormalized.id.asc())
-                .limit(max(1, batch_size))
-                .all()
             )
+            if max_replay_id is not None:
+                query = query.filter(BattleReplayNormalized.id <= int(max_replay_id))
+            parents = query.order_by(BattleReplayNormalized.id.asc()).limit(max(1, batch_size)).all()
             if not parents:
                 return 0
 
