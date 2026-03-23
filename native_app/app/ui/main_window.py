@@ -106,7 +106,6 @@ class MainWindow(QMainWindow):
         )
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.api_flow_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.api_flow_table.cellClicked.connect(self._on_api_flow_table_cell_clicked)
         self._configure_table(self.api_flow_table, resize_contents=True)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
@@ -209,10 +208,16 @@ class MainWindow(QMainWindow):
             self.api_flow_table.setItem(idx, 4, QTableWidgetItem(row.loot_label))
             self.api_flow_table.setItem(idx, 5, QTableWidgetItem(row.trophy_delta_label))
             self.api_flow_table.setItem(idx, 6, QTableWidgetItem(row.battle_id_label))
-            inspect_item = QTableWidgetItem("Inspeccionar")
-            delete_item = QTableWidgetItem("Eliminar")
-            self.api_flow_table.setItem(idx, 7, inspect_item)
-            self.api_flow_table.setItem(idx, 8, delete_item)
+            inspect_button = self._build_table_button("Inspeccionar")
+            inspect_button.clicked.connect(
+                partial(self.open_battle_inspector, row.battle_replay_id)
+            )
+            delete_button = self._build_table_button("Eliminar")
+            delete_button.clicked.connect(
+                partial(self.delete_api_flow_event, row.api_flow_event_id, row.battle_id_label)
+            )
+            self.api_flow_table.setCellWidget(idx, 7, inspect_button)
+            self.api_flow_table.setCellWidget(idx, 8, delete_button)
         self.api_flow_table.setUpdatesEnabled(True)
         self._configure_table(self.api_flow_table, resize_contents=False)
 
@@ -285,6 +290,14 @@ class MainWindow(QMainWindow):
         table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         table.verticalHeader().setDefaultSectionSize(34)
 
+    def _build_table_button(self, text: str) -> QPushButton:
+        button = QPushButton(text)
+        button.adjustSize()
+        size_hint = button.sizeHint()
+        button.setMinimumWidth(size_hint.width() + 8)
+        button.setMinimumHeight(max(28, size_hint.height()))
+        return button
+
     def _refresh_resource_labels(self) -> None:
         import os
 
@@ -305,16 +318,6 @@ class MainWindow(QMainWindow):
             self.api_flow_capture_button.setText("Detener captura")
         else:
             self.api_flow_capture_button.setText("Iniciar captura")
-
-    def _on_api_flow_table_cell_clicked(self, row: int, column: int) -> None:
-        if row < 0 or row >= len(self.api_flow_current_rows):
-            return
-        payload = self.api_flow_current_rows[row]
-        if column == 7:
-            self.open_battle_inspector(payload.battle_replay_id)
-            return
-        if column == 8:
-            self.delete_api_flow_event(payload.api_flow_event_id, payload.battle_id_label)
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:
         if battle_replay_id is None:
