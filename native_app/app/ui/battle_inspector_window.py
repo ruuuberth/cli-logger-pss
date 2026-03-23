@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QFrame,
     QFileDialog,
     QGridLayout,
@@ -19,8 +20,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSizePolicy,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
     QWidget,
 )
@@ -30,6 +30,8 @@ from app.services.catalogo import CatalogoResolver
 from app.services.character_inspector_resolver import CharacterInspectorResolver
 from app.services.perf_metrics import measure_perf
 from app.services.room_item_mapping import RoomItemMappingResolver
+from app.ui.delegates.row_action_delegate import RowActionDelegate
+from app.ui.models.simple_table_model import SimpleTableModel
 from app.ui.ui_theme import window_font_qss
 
 _DARK_STYLE = """
@@ -379,11 +381,11 @@ class BattleInspectorWindow(QMainWindow):
     def _build_split_side_widget(
         self,
         left_title: str,
-        left_primary: QTableWidget,
-        left_secondary: QTableWidget | None,
+        left_primary: QWidget,
+        left_secondary: QWidget | None,
         right_title: str,
-        right_primary: QTableWidget,
-        right_secondary: QTableWidget | None,
+        right_primary: QWidget,
+        right_secondary: QWidget | None,
         primary_label: str,
         secondary_label: str | None,
     ) -> QWidget:
@@ -402,8 +404,8 @@ class BattleInspectorWindow(QMainWindow):
     def _build_side_card(
         self,
         title: str,
-        primary: QTableWidget,
-        secondary: QTableWidget | None,
+        primary: QWidget,
+        secondary: QWidget | None,
         primary_label: str,
         secondary_label: str | None,
     ) -> QFrame:
@@ -473,12 +475,11 @@ class BattleInspectorWindow(QMainWindow):
     def _filter_by_side(self, rows: list[dict[str, Any]], side: str) -> list[dict[str, Any]]:
         return [row for row in rows if str(row.get("side") or "").lower() == side]
 
-    def _build_ships_table(self, ships: list[dict[str, Any]], *, include_side: bool = True) -> QTableWidget:
+    def _build_ships_table(self, ships: list[dict[str, Any]], *, include_side: bool = True) -> QWidget:
         headers = ["Nave", "Nivel", "PowerScore", "HP"]
         if include_side:
             headers = ["Side"] + headers
-        table = QTableWidget(len(ships), len(headers))
-        table.setHorizontalHeaderLabels(headers)
+        rows: list[list[str]] = []
         for idx, ship in enumerate(ships):
             translated_name = str(ship.get("ship_design_name") or "").strip()
             display_name = self.catalogo.resolve_design_name(
@@ -495,13 +496,10 @@ class BattleInspectorWindow(QMainWindow):
             ]
             if not include_side:
                 values = values[1:]
-            for col, value in enumerate(values):
-                table.setItem(idx, col, QTableWidgetItem(value))
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
-        return table
+            rows.append(values)
+        return self._build_table_view(headers, rows)
 
-    def _build_ship_attributes_table(self, ships: list[dict[str, Any]]) -> QTableWidget:
+    def _build_ship_attributes_rows(self, ships: list[dict[str, Any]]) -> list[tuple[str, str]]:
         excluded_keys = {
             "BrightnessValue",
             "FromStarSystemId",
@@ -547,21 +545,14 @@ class BattleInspectorWindow(QMainWindow):
                     continue
                 rows.append((key_text, str(value)))
 
-        table = QTableWidget(len(rows), 2)
-        table.setHorizontalHeaderLabels(["Attribute", "Value"])
-        for idx, (key, value) in enumerate(rows):
-            table.setItem(idx, 0, QTableWidgetItem(key))
-            table.setItem(idx, 1, QTableWidgetItem(value))
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
-        return table
+        return rows
 
     def _build_ship_info_table(
         self,
         ships: list[dict[str, Any]],
         *,
         side_name: str,
-    ) -> QTableWidget:
+    ) -> QWidget:
         rows: list[tuple[str, str]] = []
         if not ships:
             rows.append(("Nave", "Sin traduccion"))
@@ -578,29 +569,15 @@ class BattleInspectorWindow(QMainWindow):
             rows.append(("Nivel", str(ship.get("ship_level") or "-")))
             rows.append(("PowerScore", str(ship.get("power_score") or "-")))
             rows.append(("HP", str(ship.get("hp") or "-")))
-
-            attrs_table = self._build_ship_attributes_table([ship])
-            for attr_row in range(attrs_table.rowCount()):
-                key_item = attrs_table.item(attr_row, 0)
-                value_item = attrs_table.item(attr_row, 1)
-                key_text = key_item.text() if key_item else "-"
-                value_text = value_item.text() if value_item else "-"
-                rows.append((key_text, value_text))
+            rows.extend(self._build_ship_attributes_rows([ship]))
 
         if ships and not any(key == "missing_ship_xml" for key, _ in rows):
             # Garantiza trazabilidad visual por lado en casos normales.
             rows.append(("side", side_name))
 
-        table = QTableWidget(len(rows), 2)
-        table.setHorizontalHeaderLabels(["Attribute", "Value"])
-        for row_idx, (key, value) in enumerate(rows):
-            table.setItem(row_idx, 0, QTableWidgetItem(key))
-            table.setItem(row_idx, 1, QTableWidgetItem(value))
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
-        return table
+        return self._build_table_view(["Attribute", "Value"], [[key, value] for key, value in rows])
 
-    def _build_rooms_table(self, rooms: list[dict[str, Any]], *, include_side: bool = True) -> QTableWidget:
+    def _build_rooms_table(self, rooms: list[dict[str, Any]], *, include_side: bool = True) -> QWidget:
         base_headers = ["Diseno", "Fila", "Columna"]
         dynamic_headers = self._collect_attribute_keys(
             rooms,
@@ -630,8 +607,8 @@ class BattleInspectorWindow(QMainWindow):
             exclude_prefixes={"RoomActions.", "RoomAction."},
         )
         headers = (["Side"] if include_side else []) + base_headers + dynamic_headers + ["IA"]
-        table = QTableWidget(len(rooms), len(headers))
-        table.setHorizontalHeaderLabels(headers)
+        rows_data: list[list[str]] = []
+        actions_by_row: dict[int, dict[str, Any]] = {}
         fallback_actions = self._room_actions_from_cleaned(self.detail)
         for idx, room in enumerate(rooms):
             translated_name = str(room.get("room_design_name") or "").strip()
@@ -657,24 +634,26 @@ class BattleInspectorWindow(QMainWindow):
                     values.append("-")
                 else:
                     values.append(str(value))
-            for col, value in enumerate(values):
-                table.setItem(idx, col, QTableWidgetItem(value))
             attrs = room.get("room_attributes_json")
             if not isinstance(attrs, dict):
                 attrs = {}
             actions = self._room_actions_for_room(room, attrs, fallback_actions)
+            values.append("Inspector IA" if actions else "")
+            rows_data.append(values)
             if actions:
-                btn = QPushButton("Inspector IA")
-                self._configure_button(btn)
-                btn.clicked.connect(lambda _, r=room: self.open_room_actions_inspector(self.detail, r))
-                table.setCellWidget(idx, len(headers) - 1, btn)
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
-        return table
+                actions_by_row[idx] = room
+        return self._build_table_view(
+            headers,
+            rows_data,
+            action_map={len(headers) - 1: "room_ia"},
+            action_handler=lambda action, row: self.open_room_actions_inspector(self.detail, actions_by_row[row])
+            if action == "room_ia" and row in actions_by_row
+            else None,
+        )
 
     def _build_characters_table(
         self, characters: list[dict[str, Any]], *, include_side: bool = True
-    ) -> QTableWidget:
+    ) -> QWidget:
         base_headers = [
             "Nombre",
             "Diseno",
@@ -696,8 +675,9 @@ class BattleInspectorWindow(QMainWindow):
             "Inspector IA",
         ]
         headers = (["Side"] if include_side else []) + base_headers
-        table = QTableWidget(len(characters), len(headers))
-        table.setHorizontalHeaderLabels(headers)
+        rows_data: list[list[str]] = []
+        items_by_row: dict[int, dict[str, Any]] = {}
+        actions_by_row: dict[int, dict[str, Any]] = {}
         room_name_map = self._build_room_name_map()
         for idx, character in enumerate(characters):
             translated_name = str(character.get("character_design_name") or "").strip()
@@ -729,23 +709,28 @@ class BattleInspectorWindow(QMainWindow):
             ]
             if not include_side:
                 values = values[1:]
-            for col, value in enumerate(values):
-                table.setItem(idx, col, QTableWidgetItem(value))
-            equipment_col = len(headers) - 2
-            actions_col = len(headers) - 1
             if self.character_inspector.has_items(character):
-                btn = QPushButton("Equipo")
-                self._configure_button(btn)
-                btn.clicked.connect(lambda _, c=character: self.open_character_items_inspector(c))
-                table.setCellWidget(idx, equipment_col, btn)
+                items_by_row[idx] = character
+                values.append("Equipo")
+            else:
+                values.append("")
             if self.character_inspector.has_actions(character):
-                btn = QPushButton("Inspector IA")
-                self._configure_button(btn)
-                btn.clicked.connect(lambda _, c=character: self.open_character_actions_inspector(c))
-                table.setCellWidget(idx, actions_col, btn)
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
-        return table
+                actions_by_row[idx] = character
+                values.append("Inspector IA")
+            else:
+                values.append("")
+            rows_data.append(values)
+        return self._build_table_view(
+            headers,
+            rows_data,
+            action_map={len(headers) - 2: "equipment", len(headers) - 1: "character_ia"},
+            action_handler=lambda action, row: self._handle_character_table_action(
+                action,
+                row,
+                items_by_row,
+                actions_by_row,
+            ),
+        )
 
     def _build_room_name_map(self) -> dict[str, str]:
         mapping: dict[str, str] = {}
@@ -762,16 +747,12 @@ class BattleInspectorWindow(QMainWindow):
             mapping[room_id] = display_name
         return mapping
 
-    def _build_commands_table(self, commands: list[dict[str, Any]]) -> QTableWidget:
-        table = QTableWidget(len(commands), 2)
-        table.setHorizontalHeaderLabels(["Orden", "Comando"])
-        for idx, command in enumerate(commands):
+    def _build_commands_table(self, commands: list[dict[str, Any]]) -> QWidget:
+        rows = []
+        for command in commands:
             order = command.get("command_order")
-            table.setItem(idx, 0, QTableWidgetItem(str(order if order is not None else "-")))
-            table.setItem(idx, 1, QTableWidgetItem(str(command.get("command_tag") or "-")))
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
-        return table
+            rows.append([str(order if order is not None else "-"), str(command.get("command_tag") or "-")])
+        return self._build_table_view(["Orden", "Comando"], rows)
 
     def _collect_attribute_keys(
         self,
@@ -859,8 +840,7 @@ class BattleInspectorWindow(QMainWindow):
             room_design_id = room.get("room_design_id")
             rows = [(side, room_id, room_design_id, actions)] if actions else []
         total_rows = sum(len(actions) for _, _, _, actions in rows)
-        table = QTableWidget(total_rows or 1, 3)
-        table.setHorizontalHeaderLabels(["ID", "RoomConditionID", "RoomActionID"])
+        table_rows: list[list[str]] = []
         row_idx = 0
         for side, room_id, room_design_id, actions in rows:
             for idx, action in enumerate(actions, start=1):
@@ -878,16 +858,11 @@ class BattleInspectorWindow(QMainWindow):
                     action_id,
                     fallback_action_name=action_label,
                 )
-                table.setItem(row_idx, 0, QTableWidgetItem(str(action_index)))
-                table.setItem(row_idx, 1, QTableWidgetItem(condition_label))
-                table.setItem(row_idx, 2, QTableWidgetItem(action_label))
+                table_rows.append([str(action_index), condition_label, action_label])
                 row_idx += 1
         if total_rows == 0:
-            table.setItem(0, 0, QTableWidgetItem("-"))
-            table.setItem(0, 1, QTableWidgetItem("-"))
-            table.setItem(0, 2, QTableWidgetItem("-"))
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
+            table_rows = [["-", "-", "-"]]
+        table = self._build_table_view(["ID", "RoomConditionID", "RoomActionID"], table_rows)
 
         wrapper = QWidget()
         layout = QVBoxLayout()
@@ -902,18 +877,16 @@ class BattleInspectorWindow(QMainWindow):
 
     def open_character_actions_inspector(self, character: dict[str, Any]) -> None:
         actions = self.character_inspector.get_character_actions(character)
-        table = QTableWidget(len(actions) or 1, 3)
-        table.setHorizontalHeaderLabels(["ID", "Condicion", "Accion"])
+        rows = []
         for row_idx, action in enumerate(actions):
-            table.setItem(row_idx, 0, QTableWidgetItem(action.get("index", "-")))
-            table.setItem(row_idx, 1, QTableWidgetItem(action.get("condition_label", "Sin traduccion")))
-            table.setItem(row_idx, 2, QTableWidgetItem(action.get("action_label", "Sin traduccion")))
+            rows.append([
+                action.get("index", "-"),
+                action.get("condition_label", "Sin traduccion"),
+                action.get("action_label", "Sin traduccion"),
+            ])
         if not actions:
-            table.setItem(0, 0, QTableWidgetItem("-"))
-            table.setItem(0, 1, QTableWidgetItem("-"))
-            table.setItem(0, 2, QTableWidgetItem("-"))
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
+            rows = [["-", "-", "-"]]
+        table = self._build_table_view(["ID", "Condicion", "Accion"], rows)
 
         wrapper = QWidget()
         layout = QVBoxLayout()
@@ -928,19 +901,18 @@ class BattleInspectorWindow(QMainWindow):
 
     def open_character_items_inspector(self, character: dict[str, Any]) -> None:
         items = self.character_inspector.get_character_items(character)
-        table = QTableWidget(len(items) or 1, 5)
-        table.setHorizontalHeaderLabels(["ID", "Objeto", "Bonus", "Valor", "Cantidad"])
+        rows = []
         for row_idx, item in enumerate(items):
-            table.setItem(row_idx, 0, QTableWidgetItem(item.get("index", "-")))
-            table.setItem(row_idx, 1, QTableWidgetItem(item.get("item_name", "Sin traduccion")))
-            table.setItem(row_idx, 2, QTableWidgetItem(item.get("bonus_type", "-")))
-            table.setItem(row_idx, 3, QTableWidgetItem(item.get("bonus_value", "-")))
-            table.setItem(row_idx, 4, QTableWidgetItem(item.get("quantity", "-")))
+            rows.append([
+                item.get("index", "-"),
+                item.get("item_name", "Sin traduccion"),
+                item.get("bonus_type", "-"),
+                item.get("bonus_value", "-"),
+                item.get("quantity", "-"),
+            ])
         if not items:
-            for col in range(5):
-                table.setItem(0, col, QTableWidgetItem("-"))
-        table.setAlternatingRowColors(True)
-        self._configure_table(table)
+            rows = [["-", "-", "-", "-", "-"]]
+        table = self._build_table_view(["ID", "Objeto", "Bonus", "Valor", "Cantidad"], rows)
 
         wrapper = QWidget()
         layout = QVBoxLayout()
@@ -975,18 +947,62 @@ class BattleInspectorWindow(QMainWindow):
         }
         self.catalog_status_label.setText(messages.get(status, "Catalogos: estado desconocido"))
 
-    def _configure_table(self, table: QTableWidget) -> None:
+    def _configure_table(self, table) -> None:
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
         table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         table.verticalHeader().setDefaultSectionSize(32)
-        table.resizeColumnsToContents()
+        if hasattr(table, "resizeColumnsToContents"):
+            table.resizeColumnsToContents()
 
     def _configure_button(self, button: QPushButton) -> None:
         button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         hint = button.sizeHint()
         if hint.isValid():
             button.setMinimumWidth(hint.width())
+
+    def _build_table_view(
+        self,
+        headers: list[str],
+        rows: list[list[str]],
+        *,
+        action_map: dict[int, str] | None = None,
+        action_handler=None,
+    ) -> QWidget:
+        view = QTableView()
+        model = SimpleTableModel(headers, rows)
+        view.setModel(model)
+        view.setAlternatingRowColors(True)
+        view.setSelectionBehavior(QAbstractItemView.SelectRows)
+        view.setSelectionMode(QAbstractItemView.SingleSelection)
+        view.setWordWrap(False)
+        self._configure_table(view)
+        if action_map:
+            delegate = RowActionDelegate(action_map, view)
+            if action_handler is not None:
+                delegate.action_requested.connect(action_handler)
+            for column in action_map.keys():
+                view.setItemDelegateForColumn(column, delegate)
+                view.horizontalHeader().setSectionResizeMode(column, QHeaderView.Fixed)
+                header_text = headers[column] if column < len(headers) else ""
+                width = 110 if header_text in {"Equipo", "IA", "Inspector IA"} else 90
+                view.setColumnWidth(column, width)
+            view._action_delegate = delegate
+        view._table_model = model
+        return view
+
+    def _handle_character_table_action(
+        self,
+        action: str,
+        row: int,
+        items_by_row: dict[int, dict[str, Any]],
+        actions_by_row: dict[int, dict[str, Any]],
+    ) -> None:
+        if action == "equipment" and row in items_by_row:
+            self.open_character_items_inspector(items_by_row[row])
+            return
+        if action == "character_ia" and row in actions_by_row:
+            self.open_character_actions_inspector(actions_by_row[row])
 
     def _apply_catalog_dir(self) -> None:
         value = self.catalog_path_input.text().strip()

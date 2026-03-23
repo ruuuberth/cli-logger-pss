@@ -39,6 +39,8 @@
 - `ProcessResourceMonitor` encapsula la lectura de `/proc` y el cálculo de CPU/RAM.
 - La tabla principal del flujo debe mantenerse en `QTableView + model + delegate`,
   no volver a `QTableWidget` con widgets por fila.
+- Las tablas grandes del `BattleInspectorWindow` deben seguir el mismo patrón y
+  evitar `resizeRowsToContents()` global.
 
 ## Tablas de replay
 

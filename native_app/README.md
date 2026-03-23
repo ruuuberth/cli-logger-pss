@@ -72,6 +72,10 @@ La tabla principal del flujo ya no usa `QTableWidget` ni `setCellWidget()` por
 fila. Usa `QTableView + model + delegate`, con lo que el scroll y el repintado
 son bastante más baratos en CPU y RAM.
 
+El `BattleInspectorWindow` sigue la misma dirección para sus tablas más pesadas
+(`Salas`, `Tripulación`, `Comandos`, `IA`, `Equipo`), y evita `resizeRowsToContents()`
+global para no pagar ese coste en cada apertura.
+
 La apertura de detalles de batalla usa cache en memoria para replays recientes,
 y el listado principal usa una query más ligera que evita materializar filas ORM
 completas cuando no hace falta.

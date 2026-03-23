@@ -6,11 +6,16 @@ from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionButton, QStyledI
 
 
 class RowActionDelegate(QStyledItemDelegate):
+    action_requested = Signal(str, int)
     inspect_requested = Signal(int)
     delete_requested = Signal(int)
 
+    def __init__(self, action_map: dict[int, str] | None = None, parent=None) -> None:
+        super().__init__(parent)
+        self._action_map = dict(action_map or {7: "inspect", 8: "delete"})
+
     def paint(self, painter: QPainter, option, index) -> None:
-        if index.column() not in {7, 8}:
+        if index.column() not in self._action_map:
             super().paint(painter, option, index)
             return
         button = self._button_option(option.rect, str(index.data() or ""))
@@ -21,13 +26,15 @@ class RowActionDelegate(QStyledItemDelegate):
         style.drawControl(QStyle.CE_PushButton, button, painter, option.widget)
 
     def editorEvent(self, event, model, option, index) -> bool:
-        if index.column() not in {7, 8}:
+        if index.column() not in self._action_map:
             return super().editorEvent(event, model, option, index)
         if event.type() == QEvent.MouseButtonRelease and isinstance(event, QMouseEvent):
             if self._button_rect(option.rect).contains(event.position().toPoint()):
-                if index.column() == 7:
+                action_key = self._action_map[index.column()]
+                self.action_requested.emit(action_key, index.row())
+                if action_key == "inspect":
                     self.inspect_requested.emit(index.row())
-                else:
+                elif action_key == "delete":
                     self.delete_requested.emit(index.row())
                 return True
         return False
