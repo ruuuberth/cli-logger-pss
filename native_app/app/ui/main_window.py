@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+import time
 from functools import partial
 from datetime import datetime
 from threading import Thread
@@ -66,16 +68,21 @@ class MainWindow(QMainWindow):
         self.battle_inspector_windows: list[BattleInspectorWindow] = []
         self.startup_sync_running = False
         self.startup_sync_thread: Thread | None = None
+        self._process_sample_cache: dict[int, tuple[float, int]] = {}
 
         self.api_flow_flush_timer = QTimer(self)
         self.api_flow_flush_timer.setInterval(1000)
         self.api_flow_flush_timer.timeout.connect(self._flush_api_flow_events)
+        self.resource_monitor_timer = QTimer(self)
+        self.resource_monitor_timer.setInterval(2000)
+        self.resource_monitor_timer.timeout.connect(self._refresh_resource_labels)
 
         self.setWindowTitle("PixelStarships Battle Logger Native")
         self.resize(1200, 760)
         self.setStyleSheet(window_font_qss())
         self.setCentralWidget(self._build_api_flow_tab())
         QTimer.singleShot(0, self._start_startup_sync)
+        self.resource_monitor_timer.start()
 
     def _build_api_flow_tab(self) -> QWidget:
         tab = QWidget()
@@ -162,6 +169,8 @@ class MainWindow(QMainWindow):
         pagination.addStretch()
 
         self.api_flow_count_label = QLabel("Registros: 0")
+        self.app_resource_label = QLabel("App: CPU -, RAM -")
+        self.proxy_resource_label = QLabel("Proxy: CPU -, RAM -")
 
         content.addLayout(controls)
         content.addLayout(filters)
@@ -170,9 +179,12 @@ class MainWindow(QMainWindow):
         content.addWidget(self.api_flow_counter_label)
         content.addWidget(self.api_flow_session_label)
         content.addWidget(self.api_flow_count_label)
+        content.addWidget(self.app_resource_label)
+        content.addWidget(self.proxy_resource_label)
         content.addWidget(self.api_flow_table)
         tab.setLayout(content)
 
+        self._refresh_resource_labels()
         self.reload_api_flow_page()
         return tab
 
@@ -438,6 +450,71 @@ class MainWindow(QMainWindow):
         hint = button.sizeHint()
         if hint.isValid():
             button.setMinimumWidth(hint.width())
+
+    def _refresh_resource_labels(self) -> None:
+        app_stats = self._read_process_usage(os.getpid())
+        app_text = self._format_process_usage("App", app_stats)
+        self.app_resource_label.setText(app_text)
+
+        proxy_pid = None
+        session = self.api_flow_capture_manager.current_session()
+        if session is not None:
+            proxy_pid = session.pid
+        proxy_stats = self._read_process_usage(proxy_pid) if proxy_pid else None
+        proxy_text = self._format_process_usage("Proxy", proxy_stats)
+        self.proxy_resource_label.setText(proxy_text)
+
+    def _read_process_usage(self, pid: int | None) -> dict[str, float] | None:
+        if not pid:
+            return None
+        try:
+            with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as handle:
+                stat_fields = handle.read().split()
+            with open(f"/proc/{pid}/status", "r", encoding="utf-8") as handle:
+                status_lines = handle.readlines()
+            total_jiffies = float(stat_fields[13]) + float(stat_fields[14])
+            rss_pages = float(stat_fields[23])
+        except Exception:
+            self._process_sample_cache.pop(pid, None)
+            return None
+
+        rss_mb = (rss_pages * os.sysconf("SC_PAGE_SIZE")) / (1024 * 1024)
+        sample_time = time.monotonic()
+        previous = self._process_sample_cache.get(pid)
+        self._process_sample_cache[pid] = (sample_time, total_jiffies)
+        cpu_percent = 0.0
+        if previous is not None:
+            prev_time, prev_jiffies = previous
+            elapsed = sample_time - prev_time
+            if elapsed > 0:
+                ticks_per_second = float(os.sysconf("SC_CLK_TCK"))
+                cpu_count = float(os.cpu_count() or 1)
+                cpu_percent = max(
+                    0.0,
+                    ((total_jiffies - prev_jiffies) / ticks_per_second) / elapsed * 100.0 / cpu_count,
+                )
+
+        mem_percent = 0.0
+        for line in status_lines:
+            if line.startswith("VmRSS:"):
+                break
+        total_mem_pages = os.sysconf("SC_PHYS_PAGES")
+        total_mem_mb = (total_mem_pages * os.sysconf("SC_PAGE_SIZE")) / (1024 * 1024)
+        if total_mem_mb > 0:
+            mem_percent = (rss_mb / total_mem_mb) * 100.0
+        return {
+            "cpu_percent": cpu_percent,
+            "rss_mb": rss_mb,
+            "mem_percent": mem_percent,
+        }
+
+    def _format_process_usage(self, label: str, stats: dict[str, float] | None) -> str:
+        if not stats:
+            return f"{label}: CPU -, RAM -"
+        return (
+            f"{label}: CPU {stats['cpu_percent']:.1f}%"
+            f", RAM {stats['rss_mb']:.0f} MB ({stats['mem_percent']:.1f}%)"
+        )
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:
         if battle_replay_id is None:
