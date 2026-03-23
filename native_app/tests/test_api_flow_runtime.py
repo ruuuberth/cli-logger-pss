@@ -12,6 +12,7 @@ class _Repo:
         self.purge_calls = 0
         self.snapshot = {"max_event_id": 3, "max_replay_id": 4}
         self.sync_calls: list[tuple[str, int | None]] = []
+        self.matchup_backfill_calls = 0
 
     def save_events(self, events: list[dict]) -> int:
         self.saved_batches.append(list(events))
@@ -38,6 +39,14 @@ class _Repo:
     def backfill_room_attributes(self, batch_size: int = 200, max_replay_id: int | None = None) -> int:
         self.sync_calls.append(("rooms", max_replay_id))
         return 0
+
+    def backfill_matchup_history_and_prune(self, batch_size_pairs: int = 200) -> dict[str, int]:
+        self.matchup_backfill_calls += 1
+        return {
+            "inserted_logs": 0,
+            "updated_pairs": 0,
+            "deleted_obsolete_replays": 0,
+        }
 
 
 class _CaptureManager:
@@ -159,11 +168,21 @@ def test_startup_sync_runs_until_snapshot_limit(monkeypatch) -> None:
 
     runtime.start_startup_sync()
 
-    assert payloads == [{"ok": True}]
+    assert payloads == [
+        {
+            "ok": True,
+            "matchup_backfill": {
+                "inserted_logs": 0,
+                "updated_pairs": 0,
+                "deleted_obsolete_replays": 0,
+            },
+        }
+    ]
     assert ("cleaned", 3) in repo.sync_calls
     assert ("replays", 3) in repo.sync_calls
     assert ("children", 4) in repo.sync_calls
     assert ("rooms", 4) in repo.sync_calls
+    assert repo.matchup_backfill_calls == 1
     assert runtime.snapshot_state().startup_sync_running is False
 
 

@@ -372,6 +372,43 @@ def ensure_sqlite_schema() -> None:
             )
             """
         )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS player_matchup_logs (
+                id INTEGER NOT NULL PRIMARY KEY,
+                player_low_user_id INTEGER NOT NULL,
+                player_high_user_id INTEGER NOT NULL,
+                battle_id INTEGER NOT NULL,
+                winner_user_id INTEGER,
+                outcome_type VARCHAR(64),
+                captured_at DATETIME,
+                source_battle_replay_id INTEGER,
+                source_api_flow_event_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS player_matchup_stats (
+                id INTEGER NOT NULL PRIMARY KEY,
+                player_low_user_id INTEGER NOT NULL,
+                player_high_user_id INTEGER NOT NULL,
+                player_low_name VARCHAR(255),
+                player_high_name VARCHAR(255),
+                total_battles INTEGER NOT NULL DEFAULT 0,
+                player_low_wins INTEGER NOT NULL DEFAULT 0,
+                player_high_wins INTEGER NOT NULL DEFAULT 0,
+                unknown_results INTEGER NOT NULL DEFAULT 0,
+                last_battle_id INTEGER,
+                last_winner_user_id INTEGER,
+                last_captured_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME
+            )
+            """
+        )
 
 
 def ensure_sqlite_indexes() -> None:
@@ -525,6 +562,24 @@ def ensure_sqlite_indexes() -> None:
             conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_battle_replay_commands_user_id "
                 "ON battle_replay_commands (user_id)"
+            )
+        if "player_matchup_logs" in tables:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_player_matchup_logs_pair_battle "
+                "ON player_matchup_logs (player_low_user_id, player_high_user_id, battle_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_player_matchup_logs_pair "
+                "ON player_matchup_logs (player_low_user_id, player_high_user_id)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_player_matchup_logs_winner "
+                "ON player_matchup_logs (winner_user_id)"
+            )
+        if "player_matchup_stats" in tables:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_player_matchup_stats_pair "
+                "ON player_matchup_stats (player_low_user_id, player_high_user_id)"
             )
 
 

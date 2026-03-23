@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from html import unescape
 from typing import Any
 
-from sqlalchemy import String, cast, or_, text
+from sqlalchemy import String, and_, cast, or_, text
 from sqlalchemy.exc import OperationalError as SQLAlchemyOperationalError
 
 from app.core.config import settings
@@ -28,6 +28,8 @@ from app.models.pss_models import (
     BattleReplayRoom,
     BattleReplayShip,
     CrewDesign,
+    PlayerMatchupLog,
+    PlayerMatchupStat,
     RoomDesign,
     ShipDesign,
 )
@@ -113,6 +115,11 @@ class ApiFlowRepository:
                 child_rows = self._build_battle_replay_child_rows(rows, battle_rows)
                 if child_rows:
                     self._persist_rows_one_by_one(db, child_rows)
+                matchup_result = self._record_matchup_log_for_rows(db, battle_rows)
+                affected_pairs = matchup_result["affected_pairs"]
+                if affected_pairs:
+                    self._prune_obsolete_replays_for_pairs(db, affected_pairs)
+                    self._recompute_matchup_stats_for_pairs(db, affected_pairs)
             design_catalog_updated = self._sync_design_catalogs_from_saved_rows(db, rows)
             db.commit()
             if design_catalog_updated:
@@ -294,6 +301,8 @@ class ApiFlowRepository:
             db.query(BattleReplayCharacter).delete(synchronize_session=False)
             db.query(BattleReplayRoom).delete(synchronize_session=False)
             db.query(BattleReplayShip).delete(synchronize_session=False)
+            db.query(PlayerMatchupLog).delete(synchronize_session=False)
+            db.query(PlayerMatchupStat).delete(synchronize_session=False)
             deleted = db.query(BattleReplayNormalized).delete(synchronize_session=False)
             db.commit()
             return int(deleted or 0)
@@ -309,7 +318,25 @@ class ApiFlowRepository:
             return 0
         db = SessionLocal()
         try:
+            replay = (
+                db.query(BattleReplayNormalized)
+                .filter(BattleReplayNormalized.api_flow_event_id == int(event_id))
+                .first()
+            )
+            pair = (
+                self._pair_key(replay.attacker_user_id, replay.defender_user_id)
+                if replay is not None
+                else None
+            )
+            battle_id = int(replay.battle_id) if replay is not None and replay.battle_id is not None else None
             deleted = self._delete_events_and_normalized(db, [int(event_id)])
+            if pair is not None and battle_id is not None:
+                db.query(PlayerMatchupLog).filter(
+                    PlayerMatchupLog.player_low_user_id == pair[0],
+                    PlayerMatchupLog.player_high_user_id == pair[1],
+                    PlayerMatchupLog.battle_id == battle_id,
+                ).delete(synchronize_session=False)
+                self._recompute_matchup_stats_for_pairs(db, {pair})
             db.commit()
             return int(deleted or 0)
         except Exception:
@@ -530,6 +557,59 @@ class ApiFlowRepository:
                 .order_by(BattleReplayCommand.command_order.asc(), BattleReplayCommand.id.asc())
                 .all()
             )
+            matchup_summary: dict[str, Any] | None = None
+            matchup_recent_log: list[dict[str, Any]] = []
+            pair = self._pair_key(replay.attacker_user_id, replay.defender_user_id)
+            if pair is not None:
+                low_id, high_id = pair
+                stat = (
+                    db.query(PlayerMatchupStat)
+                    .filter(
+                        PlayerMatchupStat.player_low_user_id == low_id,
+                        PlayerMatchupStat.player_high_user_id == high_id,
+                    )
+                    .first()
+                )
+                low_name = replay.attacker_name if replay.attacker_user_id == low_id else replay.defender_name
+                high_name = replay.attacker_name if replay.attacker_user_id == high_id else replay.defender_name
+                if stat is not None:
+                    matchup_summary = {
+                        "player_low_user_id": int(stat.player_low_user_id),
+                        "player_high_user_id": int(stat.player_high_user_id),
+                        "player_low_name": stat.player_low_name or low_name,
+                        "player_high_name": stat.player_high_name or high_name,
+                        "total_battles": int(stat.total_battles or 0),
+                        "player_low_wins": int(stat.player_low_wins or 0),
+                        "player_high_wins": int(stat.player_high_wins or 0),
+                        "unknown_results": int(stat.unknown_results or 0),
+                        "last_battle_id": stat.last_battle_id,
+                        "last_winner_user_id": stat.last_winner_user_id,
+                        "last_captured_at": (
+                            stat.last_captured_at.isoformat()
+                            if stat.last_captured_at is not None
+                            else None
+                        ),
+                    }
+
+                recent_logs = (
+                    db.query(PlayerMatchupLog)
+                    .filter(
+                        PlayerMatchupLog.player_low_user_id == low_id,
+                        PlayerMatchupLog.player_high_user_id == high_id,
+                    )
+                    .order_by(PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc())
+                    .limit(5)
+                    .all()
+                )
+                matchup_recent_log = [
+                    {
+                        "battle_id": row.battle_id,
+                        "winner_user_id": row.winner_user_id,
+                        "captured_at": row.captured_at.isoformat() if row.captured_at is not None else None,
+                        "outcome_type": row.outcome_type,
+                    }
+                    for row in recent_logs
+                ]
             return {
                 "replay": self._serialize_battle_replay_row(replay),
                 "api_flow_event": self._serialize_row(api_flow_event) if api_flow_event else None,
@@ -558,6 +638,8 @@ class ApiFlowRepository:
                     for row in characters
                 ],
                 "commands": [self._serialize_battle_replay_command_row(row) for row in commands],
+                "matchup_summary": matchup_summary,
+                "matchup_recent_log": matchup_recent_log,
             }
         finally:
             db.close()
@@ -595,6 +677,11 @@ class ApiFlowRepository:
                 child_rows = self._build_battle_replay_child_rows(candidates, new_rows)
                 if child_rows:
                     self._persist_rows_one_by_one(db, child_rows)
+                matchup_result = self._record_matchup_log_for_rows(db, new_rows)
+                affected_pairs = matchup_result["affected_pairs"]
+                if affected_pairs:
+                    self._prune_obsolete_replays_for_pairs(db, affected_pairs)
+                    self._recompute_matchup_stats_for_pairs(db, affected_pairs)
                 db.commit()
                 inserted += len(new_rows)
                 return inserted
@@ -602,6 +689,59 @@ class ApiFlowRepository:
             db.rollback()
             logger.exception("event=battle_replay_sync_error")
             return inserted
+        finally:
+            db.close()
+
+    def backfill_matchup_history_and_prune(self, batch_size_pairs: int = 200) -> dict[str, int]:
+        db = SessionLocal()
+        metrics = {
+            "inserted_logs": 0,
+            "updated_pairs": 0,
+            "deleted_obsolete_replays": 0,
+        }
+        try:
+            replay_rows = (
+                db.query(BattleReplayNormalized)
+                .order_by(BattleReplayNormalized.id.asc())
+                .all()
+            )
+            log_result = self._record_matchup_log_for_rows(db, replay_rows)
+            metrics["inserted_logs"] = int(log_result["inserted_logs"])
+
+            affected_pairs = set(log_result["affected_pairs"])
+            pair_rows = (
+                db.query(PlayerMatchupLog.player_low_user_id, PlayerMatchupLog.player_high_user_id)
+                .distinct()
+                .all()
+            )
+            affected_pairs.update(
+                {
+                    (int(row.player_low_user_id), int(row.player_high_user_id))
+                    for row in pair_rows
+                }
+            )
+
+            pair_list = sorted(affected_pairs)
+            pair_batch_size = max(1, int(batch_size_pairs))
+            if not pair_list:
+                db.query(PlayerMatchupStat).delete(synchronize_session=False)
+            for index in range(0, len(pair_list), pair_batch_size):
+                chunk_pairs = set(pair_list[index : index + pair_batch_size])
+                metrics["deleted_obsolete_replays"] += self._prune_obsolete_replays_for_pairs(db, chunk_pairs)
+                metrics["updated_pairs"] += self._recompute_matchup_stats_for_pairs(db, chunk_pairs)
+
+            db.commit()
+            logger.info(
+                "event=matchup_backfill_completed inserted_logs=%s updated_pairs=%s deleted_obsolete_replays=%s",
+                metrics["inserted_logs"],
+                metrics["updated_pairs"],
+                metrics["deleted_obsolete_replays"],
+            )
+            return metrics
+        except Exception:
+            db.rollback()
+            logger.exception("event=matchup_backfill_error")
+            return metrics
         finally:
             db.close()
 
@@ -1936,6 +2076,255 @@ class ApiFlowRepository:
 
         db.flush()
         return updated
+
+    def _pair_key(self, attacker_user_id: Any, defender_user_id: Any) -> tuple[int, int] | None:
+        attacker = self._as_int(attacker_user_id)
+        defender = self._as_int(defender_user_id)
+        if attacker is None or defender is None:
+            return None
+        if attacker <= 0 or defender <= 0:
+            return None
+        if attacker == defender:
+            return None
+        return (attacker, defender) if attacker < defender else (defender, attacker)
+
+    def _winner_user_id(self, row: BattleReplayNormalized) -> int | None:
+        outcome = str(row.outcome_type or "").strip().lower()
+        attacker_id = self._as_int(row.attacker_user_id)
+        defender_id = self._as_int(row.defender_user_id)
+        if outcome == "attacker won":
+            return attacker_id
+        if outcome == "defender won":
+            return defender_id
+        return None
+
+    def _record_matchup_log_for_rows(self, db, replay_rows: list[BattleReplayNormalized]) -> dict[str, Any]:
+        candidates: list[tuple[tuple[int, int], int, BattleReplayNormalized]] = []
+        affected_pairs: set[tuple[int, int]] = set()
+        for row in replay_rows:
+            pair = self._pair_key(row.attacker_user_id, row.defender_user_id)
+            battle_id = self._as_int(row.battle_id)
+            if pair is None or battle_id is None:
+                continue
+            affected_pairs.add(pair)
+            candidates.append((pair, battle_id, row))
+
+        if not candidates:
+            return {"inserted_logs": 0, "affected_pairs": affected_pairs}
+
+        existing_keys: set[tuple[int, int, int]] = set()
+        pair_filters = [
+            and_(
+                PlayerMatchupLog.player_low_user_id == low_id,
+                PlayerMatchupLog.player_high_user_id == high_id,
+            )
+            for low_id, high_id in affected_pairs
+        ]
+        if pair_filters:
+            existing_rows = (
+                db.query(
+                    PlayerMatchupLog.player_low_user_id,
+                    PlayerMatchupLog.player_high_user_id,
+                    PlayerMatchupLog.battle_id,
+                )
+                .filter(or_(*pair_filters))
+                .all()
+            )
+            existing_keys = {
+                (
+                    int(row.player_low_user_id),
+                    int(row.player_high_user_id),
+                    int(row.battle_id),
+                )
+                for row in existing_rows
+                if row.battle_id is not None
+            }
+
+        inserted_logs = 0
+        for pair, battle_id, row in candidates:
+            key = (pair[0], pair[1], int(battle_id))
+            if key in existing_keys:
+                continue
+            db.add(
+                PlayerMatchupLog(
+                    player_low_user_id=pair[0],
+                    player_high_user_id=pair[1],
+                    battle_id=battle_id,
+                    winner_user_id=self._winner_user_id(row),
+                    outcome_type=self._as_text(row.outcome_type, 64),
+                    captured_at=row.captured_at,
+                    source_battle_replay_id=row.id,
+                    source_api_flow_event_id=row.api_flow_event_id,
+                )
+            )
+            existing_keys.add(key)
+            inserted_logs += 1
+
+        if inserted_logs:
+            db.flush()
+            logger.info(
+                "event=matchup_log_inserted inserted_logs=%s affected_pairs=%s",
+                inserted_logs,
+                len(affected_pairs),
+            )
+        return {"inserted_logs": inserted_logs, "affected_pairs": affected_pairs}
+
+    def _recompute_matchup_stats_for_pairs(self, db, pairs: set[tuple[int, int]]) -> int:
+        if not pairs:
+            return 0
+
+        pair_filters = [
+            and_(
+                PlayerMatchupStat.player_low_user_id == low_id,
+                PlayerMatchupStat.player_high_user_id == high_id,
+            )
+            for low_id, high_id in pairs
+        ]
+        existing_stats_rows = (
+            db.query(PlayerMatchupStat).filter(or_(*pair_filters)).all()
+            if pair_filters
+            else []
+        )
+        stats_by_pair = {
+            (int(row.player_low_user_id), int(row.player_high_user_id)): row
+            for row in existing_stats_rows
+        }
+
+        recomputed = 0
+        for low_id, high_id in sorted(pairs):
+            logs = (
+                db.query(PlayerMatchupLog)
+                .filter(
+                    PlayerMatchupLog.player_low_user_id == low_id,
+                    PlayerMatchupLog.player_high_user_id == high_id,
+                )
+                .order_by(PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc())
+                .all()
+            )
+            existing_stat = stats_by_pair.get((low_id, high_id))
+            if not logs:
+                if existing_stat is not None:
+                    db.delete(existing_stat)
+                    recomputed += 1
+                continue
+
+            low_wins = 0
+            high_wins = 0
+            unknown_results = 0
+            for log_row in logs:
+                winner_id = self._as_int(log_row.winner_user_id)
+                if winner_id == low_id:
+                    low_wins += 1
+                elif winner_id == high_id:
+                    high_wins += 1
+                else:
+                    unknown_results += 1
+
+            latest_replay = (
+                db.query(BattleReplayNormalized)
+                .filter(
+                    or_(
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == low_id,
+                            BattleReplayNormalized.defender_user_id == high_id,
+                        ),
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == high_id,
+                            BattleReplayNormalized.defender_user_id == low_id,
+                        ),
+                    )
+                )
+                .order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .first()
+            )
+            low_name = existing_stat.player_low_name if existing_stat is not None else None
+            high_name = existing_stat.player_high_name if existing_stat is not None else None
+            if latest_replay is not None:
+                if self._as_int(latest_replay.attacker_user_id) == low_id:
+                    low_name = latest_replay.attacker_name or low_name
+                    high_name = latest_replay.defender_name or high_name
+                else:
+                    low_name = latest_replay.defender_name or low_name
+                    high_name = latest_replay.attacker_name or high_name
+
+            latest_log = logs[0]
+            payload = {
+                "player_low_name": self._as_text(self._normalize_text(low_name), 255),
+                "player_high_name": self._as_text(self._normalize_text(high_name), 255),
+                "total_battles": len(logs),
+                "player_low_wins": low_wins,
+                "player_high_wins": high_wins,
+                "unknown_results": unknown_results,
+                "last_battle_id": latest_log.battle_id,
+                "last_winner_user_id": latest_log.winner_user_id,
+                "last_captured_at": latest_log.captured_at,
+            }
+            if existing_stat is None:
+                db.add(
+                    PlayerMatchupStat(
+                        player_low_user_id=low_id,
+                        player_high_user_id=high_id,
+                        **payload,
+                    )
+                )
+            else:
+                existing_stat.player_low_name = payload["player_low_name"]
+                existing_stat.player_high_name = payload["player_high_name"]
+                existing_stat.total_battles = payload["total_battles"]
+                existing_stat.player_low_wins = payload["player_low_wins"]
+                existing_stat.player_high_wins = payload["player_high_wins"]
+                existing_stat.unknown_results = payload["unknown_results"]
+                existing_stat.last_battle_id = payload["last_battle_id"]
+                existing_stat.last_winner_user_id = payload["last_winner_user_id"]
+                existing_stat.last_captured_at = payload["last_captured_at"]
+            recomputed += 1
+
+        if recomputed:
+            db.flush()
+            logger.info("event=matchup_stats_recomputed pairs=%s", recomputed)
+        return recomputed
+
+    def _prune_obsolete_replays_for_pairs(self, db, pairs: set[tuple[int, int]]) -> int:
+        if not pairs:
+            return 0
+
+        obsolete_event_ids: set[int] = set()
+        deleted_replay_count = 0
+        for low_id, high_id in sorted(pairs):
+            replay_rows = (
+                db.query(BattleReplayNormalized.id, BattleReplayNormalized.api_flow_event_id)
+                .filter(
+                    or_(
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == low_id,
+                            BattleReplayNormalized.defender_user_id == high_id,
+                        ),
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == high_id,
+                            BattleReplayNormalized.defender_user_id == low_id,
+                        ),
+                    )
+                )
+                .order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .all()
+            )
+            if len(replay_rows) <= 1:
+                continue
+            obsolete_rows = replay_rows[1:]
+            deleted_replay_count += len(obsolete_rows)
+            for row in obsolete_rows:
+                if row.api_flow_event_id is not None:
+                    obsolete_event_ids.add(int(row.api_flow_event_id))
+
+        if obsolete_event_ids:
+            self._delete_events_and_normalized(db, sorted(obsolete_event_ids))
+        if deleted_replay_count:
+            logger.info(
+                "event=matchup_prune_obsolete_replays deleted_replays=%s affected_pairs=%s",
+                deleted_replay_count,
+                len(pairs),
+            )
+        return deleted_replay_count
 
     def _delete_events_and_normalized(self, db, event_ids: list[int]) -> int:
         if not event_ids:

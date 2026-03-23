@@ -313,3 +313,53 @@ class BattleReplayCommand(Base):
     room_id = Column(Integer, index=True)
     character_id = Column(Integer, index=True)
     command_attributes_json = Column(JSON)
+
+
+class PlayerMatchupLog(Base):
+    __tablename__ = "player_matchup_logs"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_low_user_id",
+            "player_high_user_id",
+            "battle_id",
+            name="ux_player_matchup_logs_pair_battle",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    player_low_user_id = Column(Integer, index=True, nullable=False)
+    player_high_user_id = Column(Integer, index=True, nullable=False)
+    battle_id = Column(Integer, nullable=False)
+    winner_user_id = Column(Integer, nullable=True)
+    outcome_type = Column(String(64), nullable=True)
+    captured_at = Column(DateTime(timezone=True), nullable=True)
+    source_battle_replay_id = Column(Integer, nullable=True)
+    source_api_flow_event_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class PlayerMatchupStat(Base):
+    __tablename__ = "player_matchup_stats"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_low_user_id",
+            "player_high_user_id",
+            name="ux_player_matchup_stats_pair",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    player_low_user_id = Column(Integer, index=True, nullable=False)
+    player_high_user_id = Column(Integer, index=True, nullable=False)
+    player_low_name = Column(String(255), nullable=True)
+    player_high_name = Column(String(255), nullable=True)
+    total_battles = Column(Integer, nullable=False, default=0)
+    player_low_wins = Column(Integer, nullable=False, default=0)
+    player_high_wins = Column(Integer, nullable=False, default=0)
+    unknown_results = Column(Integer, nullable=False, default=0)
+    last_battle_id = Column(Integer, nullable=True)
+    last_winner_user_id = Column(Integer, nullable=True)
+    last_captured_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

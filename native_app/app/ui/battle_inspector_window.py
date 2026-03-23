@@ -457,6 +457,7 @@ class BattleInspectorWindow(QMainWindow):
             f"WIN M={replay.get('win_minerals_result') or 0} G={replay.get('win_gas_result') or 0} T={replay.get('win_trophy_result') or 0} | "
             f"LOSE M={replay.get('lose_minerals_result') or 0} G={replay.get('lose_gas_result') or 0} T={replay.get('lose_trophy_result') or 0}",
         ]
+        lines.extend(self._build_matchup_summary_lines(detail))
         lines.extend(self._build_user_attributes_summary("Atacante", replay.get("attacker_user_attributes_json")))
         lines.extend(self._build_user_attributes_summary("Defensor", replay.get("defender_user_attributes_json")))
         return lines
@@ -471,6 +472,74 @@ class BattleInspectorWindow(QMainWindow):
                 continue
             lines.append(f"  - {key}: {value}")
         return lines
+
+    def _build_matchup_summary_lines(self, detail: dict[str, Any]) -> list[str]:
+        summary = detail.get("matchup_summary")
+        recent = detail.get("matchup_recent_log")
+        if not isinstance(summary, dict) and not isinstance(recent, list):
+            return []
+
+        low_id = summary.get("player_low_user_id") if isinstance(summary, dict) else None
+        high_id = summary.get("player_high_user_id") if isinstance(summary, dict) else None
+        low_name = self._display_player_name(
+            summary.get("player_low_name") if isinstance(summary, dict) else None,
+            low_id,
+        )
+        high_name = self._display_player_name(
+            summary.get("player_high_name") if isinstance(summary, dict) else None,
+            high_id,
+        )
+
+        total = int(summary.get("total_battles") or 0) if isinstance(summary, dict) else 0
+        low_wins = int(summary.get("player_low_wins") or 0) if isinstance(summary, dict) else 0
+        high_wins = int(summary.get("player_high_wins") or 0) if isinstance(summary, dict) else 0
+        unknown = int(summary.get("unknown_results") or 0) if isinstance(summary, dict) else 0
+        last_battle_id = summary.get("last_battle_id") if isinstance(summary, dict) else None
+        last_winner_id = summary.get("last_winner_user_id") if isinstance(summary, dict) else None
+        last_winner = self._matchup_winner_label(last_winner_id, low_id, high_id, low_name, high_name)
+
+        lines = [
+            f"H2H: {low_name} vs {high_name}",
+            f"H2H Resumen: {low_name} wins {low_wins} | {high_name} wins {high_wins} | Total {total} | Unknown {unknown}",
+            f"H2H Last: {last_winner} (battle #{last_battle_id or '-'})",
+        ]
+        if isinstance(recent, list) and recent:
+            lines.append("H2H Ultimos 5:")
+            for row in recent[:5]:
+                if not isinstance(row, dict):
+                    continue
+                winner_label = self._matchup_winner_label(
+                    row.get("winner_user_id"),
+                    low_id,
+                    high_id,
+                    low_name,
+                    high_name,
+                )
+                lines.append(f"  - #{row.get('battle_id') or '-'} -> {winner_label}")
+        return lines
+
+    def _display_player_name(self, name: Any, user_id: Any) -> str:
+        if name is not None and str(name).strip():
+            return str(name).strip()
+        if user_id is None or str(user_id).strip() == "":
+            return "-"
+        return f"User {user_id}"
+
+    def _matchup_winner_label(
+        self,
+        winner_user_id: Any,
+        low_id: Any,
+        high_id: Any,
+        low_name: str,
+        high_name: str,
+    ) -> str:
+        if winner_user_id is None or str(winner_user_id).strip() == "":
+            return "Desconocido"
+        if low_id is not None and str(winner_user_id) == str(low_id):
+            return low_name
+        if high_id is not None and str(winner_user_id) == str(high_id):
+            return high_name
+        return f"User {winner_user_id}"
 
     def _filter_by_side(self, rows: list[dict[str, Any]], side: str) -> list[dict[str, Any]]:
         return [row for row in rows if str(row.get("side") or "").lower() == side]

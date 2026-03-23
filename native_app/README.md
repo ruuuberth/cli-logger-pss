@@ -29,6 +29,7 @@ Pipeline:
 3. Limpieza a `response_body_cleaned`.
 4. Normalización a tablas replay.
 5. Sync de catálogos de diseño (`ship_designs`, `room_designs`, `crew_designs`).
+6. Consolidación H2H por pareja (`player_matchup_logs`, `player_matchup_stats`) y poda de replay obsoleto.
 
 Arquitectura de ventana principal:
 - `app/ui/main_window.py`: solo UI, timers y wiring.
@@ -112,6 +113,16 @@ Backfill:
 - `battle_replay_rooms`
 - `battle_replay_characters`
 - `battle_replay_commands`
+- `player_matchup_logs`
+- `player_matchup_stats`
+
+## Politica H2H
+
+- Pareja canonica: `(min(attacker_user_id, defender_user_id), max(...))`.
+- Solo queda 1 replay vigente por pareja (el mas reciente por `captured_at/id`).
+- El mini logger H2H guarda ganador por `battle_id` sin duplicados por pareja.
+- El resumen H2H se recalcula desde logger y se muestra en el `Battle Inspector`.
+- Purga por TTL/tamano borra replay viejo, pero conserva logger/resumen.
 
 ## Build
 

@@ -163,6 +163,7 @@ class ApiFlowRuntime:
                 pass
             while repo.backfill_room_attributes(batch_size=200, max_replay_id=max_replay_id) > 0:
                 pass
+            result["matchup_backfill"] = repo.backfill_matchup_history_and_prune(batch_size_pairs=200)
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
         with self._lock:

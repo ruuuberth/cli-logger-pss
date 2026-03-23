@@ -34,11 +34,23 @@ Tablas clave:
 - `battle_replay_rooms`
 - `battle_replay_characters`
 - `battle_replay_commands`
+- `player_matchup_logs` (historial minimo H2H por pareja y battle_id)
+- `player_matchup_stats` (resumen H2H agregado por pareja)
 - `ship_designs`
 - `room_designs`
 - `crew_designs`
 
 La limpieza por retención/tamaño también elimina datos normalizados asociados.
+El historial H2H (`player_matchup_logs`/`player_matchup_stats`) se conserva.
+
+## Politica H2H (pareja de jugadores)
+
+- La app conserva solo la batalla mas reciente por pareja de `user_id` (sin direccion).
+- Si entra una batalla nueva para la misma pareja, elimina el replay anterior como obsoleto.
+- Mantiene un mini logger historico en `player_matchup_logs` para calcular promedio.
+- `delete_event` individual descuenta del logger/resumen.
+- `clear history` limpia replay + logger + resumen.
+- El `Battle Inspector` muestra el resumen y los ultimos resultados H2H.
 
 ## Variables relevantes
 

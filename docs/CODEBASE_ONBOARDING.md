@@ -28,6 +28,7 @@
 6. Se normaliza replay en tablas relacionales.
 7. Se sincronizan catálogos (`ship_designs`, `room_designs`, `crew_designs`) desde `DesignService/ListAllStaticDesigns2` (fallback).
 8. La UI usa catálogos locales (`Data/Prod`) como fuente principal de traducciones.
+9. Se aplica ciclo H2H por pareja: logger minimo + stats + poda de replay obsoleto.
 
 ## Responsabilidades
 
@@ -49,6 +50,23 @@
 - `battle_replay_rooms`
 - `battle_replay_characters`
 - `battle_replay_commands`
+- `player_matchup_logs`
+- `player_matchup_stats`
+
+## Ciclo H2H por pareja
+
+- Clave de pareja: `user_id` sin direccion (A vs B = B vs A).
+- Insercion nueva:
+  1. Inserta log minimo (`pair + battle_id + winner`).
+  2. Elimina replay obsoleto de esa pareja, dejando solo el mas reciente.
+  3. Recalcula stats agregadas de la pareja.
+- Backfill de arranque:
+  - Pobla logger historico faltante.
+  - Recalcula stats.
+  - Poda replays obsoletos existentes.
+- `delete_event` individual:
+  - elimina replay/evento
+  - descuenta del logger/stats de la pareja
 
 ## UI de inspección
 
