@@ -33,9 +33,12 @@ Pipeline:
 Arquitectura de ventana principal:
 - `app/ui/main_window.py`: solo UI, timers y wiring.
 - `app/services/api_flow_runtime.py`: captura, backlog, flush y startup sync.
-- `app/services/api_flow_list_service.py`: búsqueda, paginación y formateo de filas.
+- `app/services/api_flow_list_service.py`: búsqueda, paginación, formateo de filas y cache de detalle.
 - `app/services/process_resource_monitor.py`: lectura de CPU/RAM desde `/proc`.
 - `app/ui/api_flow_runtime_bridge.py`: bridge Qt fino entre runtime y ventana.
+- `app/ui/models/api_flow_table_model.py`: modelo de la tabla principal del flujo.
+- `app/ui/delegates/row_action_delegate.py`: acciones por fila sin `QPushButton` reales.
+- `app/services/perf_metrics.py`: medición ligera de hotspots en desarrollo.
 
 ## Catalogos locales (UI)
 
@@ -62,6 +65,16 @@ El inspector de tripulación usa una capa equivalente, pero sin mapping manual:
 
 La tabla principal de tripulantes ya no muestra `character_attributes_json`
 crudo; expone stats limpias y botones de `Equipo` e `Inspector IA`.
+
+## Rendimiento
+
+La tabla principal del flujo ya no usa `QTableWidget` ni `setCellWidget()` por
+fila. Usa `QTableView + model + delegate`, con lo que el scroll y el repintado
+son bastante más baratos en CPU y RAM.
+
+La apertura de detalles de batalla usa cache en memoria para replays recientes,
+y el listado principal usa una query más ligera que evita materializar filas ORM
+completas cuando no hace falta.
 
 ## Variables de entorno
 

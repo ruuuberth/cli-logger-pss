@@ -12,23 +12,27 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
     QWidget,
 )
 
 from app.services.api_flow_list_service import ApiFlowListService, ApiFlowRowView
+from app.services.perf_metrics import measure_perf
 from app.services.api_flow_runtime import ApiFlowRuntime, ApiFlowRuntimeState
 from app.services.process_resource_monitor import ProcessResourceMonitor
 from app.ui.battle_inspector_window import BattleInspectorWindow
+from app.ui.delegates.row_action_delegate import RowActionDelegate
+from app.ui.models.api_flow_table_model import ApiFlowTableModel
 from app.ui.api_flow_runtime_bridge import ApiFlowRuntimeBridge
 from app.ui.ui_theme import window_font_qss
+import logging
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.logger = logging.getLogger(__name__)
         self.api_flow_runtime = ApiFlowRuntime()
         self.api_flow_list_service = ApiFlowListService(self.api_flow_runtime.repository)
         self.resource_monitor = ProcessResourceMonitor()
@@ -52,7 +56,6 @@ class MainWindow(QMainWindow):
 
         self.api_flow_page = 0
         self.api_flow_page_size = 200
-        self.api_flow_current_rows: list[ApiFlowRowView] = []
         self.battle_inspector_windows: list[BattleInspectorWindow] = []
 
         self.api_flow_flush_timer = QTimer(self)
@@ -100,12 +103,27 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.api_flow_search_input)
         filters.addStretch()
 
-        self.api_flow_table = QTableWidget(0, 9)
-        self.api_flow_table.setHorizontalHeaderLabels(
-            ["Hora", "Atacante", "Defensor", "Resultado", "Botin", "Copas", "BattleId", "Inspector", "Eliminar"]
-        )
+        self.api_flow_table_model = ApiFlowTableModel()
+        self.api_flow_table = QTableView()
+        self.api_flow_table.setModel(self.api_flow_table_model)
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.api_flow_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.api_flow_table.setAlternatingRowColors(True)
+        self.api_flow_table.setSortingEnabled(False)
+        self.api_flow_table.setWordWrap(False)
+        self.api_flow_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.api_flow_table.verticalHeader().setDefaultSectionSize(34)
+        self.api_flow_table.horizontalHeader().setStretchLastSection(False)
+        self.api_flow_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.api_flow_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.api_flow_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
+        self.api_flow_table.setColumnWidth(7, 110)
+        self.api_flow_table.setColumnWidth(8, 90)
+        self.api_flow_table_action_delegate = RowActionDelegate(self.api_flow_table)
+        self.api_flow_table_action_delegate.inspect_requested.connect(self._on_inspect_requested)
+        self.api_flow_table_action_delegate.delete_requested.connect(self._on_delete_requested)
+        self.api_flow_table.setItemDelegateForColumn(7, self.api_flow_table_action_delegate)
+        self.api_flow_table.setItemDelegateForColumn(8, self.api_flow_table_action_delegate)
         self._configure_table(self.api_flow_table, resize_contents=True)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
@@ -187,38 +205,16 @@ class MainWindow(QMainWindow):
         return
 
     def reload_api_flow_page(self) -> None:
-        payload = self.api_flow_list_service.list_page(
-            search=self.api_flow_search_input.text().strip(),
-            page=self.api_flow_page,
-            page_size=self.api_flow_page_size,
-        )
+        with measure_perf("reload_api_flow_page", self.logger):
+            payload = self.api_flow_list_service.list_page(
+                search=self.api_flow_search_input.text().strip(),
+                page=self.api_flow_page,
+                page_size=self.api_flow_page_size,
+            )
         total = payload.total
         rows = payload.rows
-        self.api_flow_current_rows = rows
         self.api_flow_count_label.setText(f"Registros: {total}")
-
-        self.api_flow_table.setUpdatesEnabled(False)
-        self.api_flow_table.clearContents()
-        self.api_flow_table.setRowCount(len(rows))
-        for idx, row in enumerate(rows):
-            self.api_flow_table.setItem(idx, 0, QTableWidgetItem(row.captured_at_label))
-            self.api_flow_table.setItem(idx, 1, QTableWidgetItem(row.attacker_label))
-            self.api_flow_table.setItem(idx, 2, QTableWidgetItem(row.defender_label))
-            self.api_flow_table.setItem(idx, 3, QTableWidgetItem(row.outcome_label))
-            self.api_flow_table.setItem(idx, 4, QTableWidgetItem(row.loot_label))
-            self.api_flow_table.setItem(idx, 5, QTableWidgetItem(row.trophy_delta_label))
-            self.api_flow_table.setItem(idx, 6, QTableWidgetItem(row.battle_id_label))
-            inspect_button = self._build_table_button("Inspeccionar")
-            inspect_button.clicked.connect(
-                partial(self.open_battle_inspector, row.battle_replay_id)
-            )
-            delete_button = self._build_table_button("Eliminar")
-            delete_button.clicked.connect(
-                partial(self.delete_api_flow_event, row.api_flow_event_id, row.battle_id_label)
-            )
-            self.api_flow_table.setCellWidget(idx, 7, inspect_button)
-            self.api_flow_table.setCellWidget(idx, 8, delete_button)
-        self.api_flow_table.setUpdatesEnabled(True)
+        self.api_flow_table_model.set_rows(rows)
         self._configure_table(self.api_flow_table, resize_contents=False)
 
         if total == 0:
@@ -279,24 +275,14 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Eliminar evento", "No se pudo eliminar el evento.")
         self.reload_api_flow_page()
 
-    def _configure_table(self, table: QTableWidget, *, resize_contents: bool = True) -> None:
+    def _configure_table(self, table, *, resize_contents: bool = True) -> None:
         header = table.horizontalHeader()
         if resize_contents:
-            header.setSectionResizeMode(QHeaderView.ResizeToContents)
-            table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            table.verticalHeader().setDefaultSectionSize(34)
-            table.resizeColumnsToContents()
+            for column in range(7):
+                header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
             return
         table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         table.verticalHeader().setDefaultSectionSize(34)
-
-    def _build_table_button(self, text: str) -> QPushButton:
-        button = QPushButton(text)
-        button.adjustSize()
-        size_hint = button.sizeHint()
-        button.setMinimumWidth(size_hint.width() + 8)
-        button.setMinimumHeight(max(28, size_hint.height()))
-        return button
 
     def _refresh_resource_labels(self) -> None:
         import os
@@ -318,6 +304,20 @@ class MainWindow(QMainWindow):
             self.api_flow_capture_button.setText("Detener captura")
         else:
             self.api_flow_capture_button.setText("Iniciar captura")
+
+    @Slot(int)
+    def _on_inspect_requested(self, row: int) -> None:
+        payload = self.api_flow_table_model.row_at(row)
+        if payload is None:
+            return
+        self.open_battle_inspector(payload.battle_replay_id)
+
+    @Slot(int)
+    def _on_delete_requested(self, row: int) -> None:
+        payload = self.api_flow_table_model.row_at(row)
+        if payload is None:
+            return
+        self.delete_api_flow_event(payload.api_flow_event_id, payload.battle_id_label)
 
     def open_battle_inspector(self, battle_replay_id: int | None) -> None:
         if battle_replay_id is None:

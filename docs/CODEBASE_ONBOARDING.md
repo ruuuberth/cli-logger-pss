@@ -7,11 +7,16 @@
 - Captura runtime: `native_app/app/services/api_flow_capture.py`
 - Coordinador runtime del flujo: `native_app/app/services/api_flow_runtime.py`
 - Servicio de listado/paginación: `native_app/app/services/api_flow_list_service.py`
+- Cache de detalle de batalla: `native_app/app/services/battle_detail_cache.py`
+- Métricas ligeras de rendimiento: `native_app/app/services/perf_metrics.py`
 - Monitor de recursos del sistema: `native_app/app/services/process_resource_monitor.py`
 - Addon mitm: `native_app/app/services/mitm_api_flow_addon.py`
 - Persistencia/normalización: `native_app/app/services/api_flow_storage.py`
 - Configuración: `native_app/app/core/config.py`
 - Modelos DB: `native_app/app/models/pss_models.py`
+- Modelos/delegates Qt del flujo:
+  - `native_app/app/ui/models/api_flow_table_model.py`
+  - `native_app/app/ui/delegates/row_action_delegate.py`
 
 ## Flujo principal
 
@@ -30,7 +35,10 @@
 - `ApiFlowRuntime` es la única capa que conoce simultáneamente `ApiFlowCaptureManager`
   y `ApiFlowRepository`.
 - `ApiFlowListService` prepara las filas visibles de la tabla principal.
+- `BattleDetailCache` evita recomputar serialización completa al reabrir batallas recientes.
 - `ProcessResourceMonitor` encapsula la lectura de `/proc` y el cálculo de CPU/RAM.
+- La tabla principal del flujo debe mantenerse en `QTableView + model + delegate`,
+  no volver a `QTableWidget` con widgets por fila.
 
 ## Tablas de replay
 

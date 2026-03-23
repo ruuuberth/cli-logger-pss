@@ -7,7 +7,7 @@ from types import ModuleType
 
 try:
     from PySide6.QtWidgets import QApplication as _QtAppProbe  # noqa: F401
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     pyside6 = ModuleType("PySide6")
     qtwidgets = ModuleType("PySide6.QtWidgets")
 

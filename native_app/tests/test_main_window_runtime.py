@@ -5,7 +5,7 @@ from types import ModuleType, SimpleNamespace
 
 try:
     from PySide6.QtCore import QObject as _QtObjectProbe  # noqa: F401
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     pyside6 = ModuleType("PySide6")
     qtcore = ModuleType("PySide6.QtCore")
     qtgui = ModuleType("PySide6.QtGui")
@@ -53,10 +53,23 @@ except ModuleNotFoundError:
             callback()
 
     qtcore.QObject = _Dummy
+    qtcore.QEvent = _Dummy
+    qtcore.QRect = _Dummy
     qtcore.QTimer = _Timer
     qtcore.Signal = _Signal
     qtcore.Slot = _slot
+    qtcore.QModelIndex = _Dummy
+    qtcore.QAbstractTableModel = _Dummy
+    qtcore.Qt = SimpleNamespace(
+        DisplayRole=0,
+        EditRole=1,
+        TextAlignmentRole=2,
+        Horizontal=1,
+        AlignCenter=4,
+    )
     qtgui.QCloseEvent = _Dummy
+    qtgui.QMouseEvent = _Dummy
+    qtgui.QPainter = _Dummy
     qtwidgets.QApplication = _Dummy
     qtwidgets.QAbstractItemView = SimpleNamespace(SelectRows=1, SingleSelection=1)
     qtwidgets.QCheckBox = _Dummy
@@ -71,11 +84,15 @@ except ModuleNotFoundError:
     qtwidgets.QPlainTextEdit = _Dummy
     qtwidgets.QPushButton = _Dummy
     qtwidgets.QSizePolicy = _Dummy
+    qtwidgets.QStyle = SimpleNamespace(State_Enabled=1, State_MouseOver=2, CE_PushButton=3)
+    qtwidgets.QStyleOptionButton = _Dummy
+    qtwidgets.QStyledItemDelegate = _Dummy
     qtwidgets.QTableWidget = _Dummy
     qtwidgets.QTableWidgetItem = _Dummy
+    qtwidgets.QTableView = _Dummy
     qtwidgets.QVBoxLayout = _Dummy
     qtwidgets.QWidget = _Dummy
-    qtwidgets.QHeaderView = SimpleNamespace(ResizeToContents=1, Fixed=1)
+    qtwidgets.QHeaderView = SimpleNamespace(ResizeToContents=1, Fixed=1, Interactive=2)
     pyside6.QtCore = qtcore
     pyside6.QtGui = qtgui
     pyside6.QtWidgets = qtwidgets

@@ -32,6 +32,9 @@ class CatalogoResolver:
         self._maps: dict[str, dict[str, str]] = {}
         self._db_cache: dict[str, dict[int, str | None]] = {}
         self._item_records_cache: list[dict[str, str]] | None = None
+        self._resolved_design_cache: dict[tuple[str, str, str], str] = {}
+        self._resolved_item_cache: dict[tuple[str, str], str] = {}
+        self._resolved_action_condition_cache: dict[tuple[str, str], tuple[str, str]] = {}
         self._warned: set[str] = set()
         self._last_status: str | None = None
 
@@ -40,6 +43,9 @@ class CatalogoResolver:
         self._maps.clear()
         self._db_cache.clear()
         self._item_records_cache = None
+        self._resolved_design_cache.clear()
+        self._resolved_item_cache.clear()
+        self._resolved_action_condition_cache.clear()
         if base_dir is None:
             self._emit_status("missing_path")
 
@@ -60,24 +66,40 @@ class CatalogoResolver:
 
     def resolve_design_name(self, design_id: Any, current_name: Any, kind: str) -> str:
         design_id_text = str(design_id) if design_id is not None else ""
+        current_name_text = str(current_name).strip() if current_name is not None else ""
+        cache_key = (kind, design_id_text, current_name_text)
+        cached = self._resolved_design_cache.get(cache_key)
+        if cached is not None:
+            return cached
         local_name = self._lookup_local_design_name(kind, design_id_text)
         if local_name:
             self._emit_status("local")
-            return self._normalize_item_name_base(local_name)
+            resolved = self._normalize_item_name_base(local_name)
+            self._resolved_design_cache[cache_key] = resolved
+            return resolved
 
         db_name = self._get_db_design_name(kind, design_id)
         if db_name:
             self._emit_status("db")
-            return self.format_name(db_name)
+            resolved = self.format_name(db_name)
+            self._resolved_design_cache[cache_key] = resolved
+            return resolved
 
-        if current_name and str(current_name).strip() and str(current_name) != "Sin traduccion":
+        if current_name and current_name_text and str(current_name) != "Sin traduccion":
             self._emit_status("current_name")
-            return self.format_name(str(current_name))
+            resolved = self.format_name(current_name_text)
+            self._resolved_design_cache[cache_key] = resolved
+            return resolved
 
         self._emit_status("placeholder")
+        self._resolved_design_cache[cache_key] = "Sin traduccion"
         return "Sin traduccion"
 
     def resolve_action_condition(self, action_id: Any, condition_id: Any) -> tuple[str, str]:
+        cache_key = (str(action_id) if action_id is not None else "", str(condition_id) if condition_id is not None else "")
+        cached = self._resolved_action_condition_cache.get(cache_key)
+        if cached is not None:
+            return cached
         action_name = self._lookup_local_map(
             "ActionTypes",
             "ActionTypes.txt",
@@ -100,10 +122,16 @@ class CatalogoResolver:
             self._emit_status("placeholder")
         action_label = self.format_name(action_name) if action_name else self._format_raw_id(action_id)
         condition_label = self.format_name(condition_name) if condition_name else self._format_raw_id(condition_id)
-        return action_label, condition_label
+        resolved = (action_label, condition_label)
+        self._resolved_action_condition_cache[cache_key] = resolved
+        return resolved
 
     def resolve_item_name(self, item_design_id: Any, fallback: str | None = None) -> str:
         item_design_text = str(item_design_id) if item_design_id is not None else ""
+        cache_key = (item_design_text, fallback or "")
+        cached = self._resolved_item_cache.get(cache_key)
+        if cached is not None:
+            return cached
         local_name = self._lookup_local_map(
             "ItemDesigns",
             "ItemDesigns.txt",
@@ -114,13 +142,20 @@ class CatalogoResolver:
         )
         if local_name:
             self._emit_status("local")
-            return self.format_name(local_name)
+            resolved = self.format_name(local_name)
+            self._resolved_item_cache[cache_key] = resolved
+            return resolved
         if fallback:
             self._emit_status("placeholder")
-            return self.format_name(fallback, fallback=fallback)
+            resolved = self.format_name(fallback, fallback=fallback)
+            self._resolved_item_cache[cache_key] = resolved
+            return resolved
         self._emit_status("placeholder")
         if item_design_text:
-            return f"ItemDesignId {item_design_text}"
+            resolved = f"ItemDesignId {item_design_text}"
+            self._resolved_item_cache[cache_key] = resolved
+            return resolved
+        self._resolved_item_cache[cache_key] = "Sin traduccion"
         return "Sin traduccion"
 
     def resolve_item_name_from_base(self, item_name_en_base: str, fallback: str | None = None) -> str:

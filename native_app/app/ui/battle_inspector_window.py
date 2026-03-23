@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 from app.models.database import SessionLocal
 from app.services.catalogo import CatalogoResolver
 from app.services.character_inspector_resolver import CharacterInspectorResolver
+from app.services.perf_metrics import measure_perf
 from app.services.room_item_mapping import RoomItemMappingResolver
 from app.ui.ui_theme import window_font_qss
 
@@ -125,6 +127,7 @@ class TableInspectorWindow(QMainWindow):
 class BattleInspectorWindow(QMainWindow):
     def __init__(self, detail: dict[str, Any], parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.logger = logging.getLogger(__name__)
         self.detail = detail
         self.child_inspectors: list[TableInspectorWindow] = []
         self.catalog_base_dir = CatalogoResolver.default_base_dir()
@@ -292,22 +295,23 @@ class BattleInspectorWindow(QMainWindow):
         return panel
 
     def open_ships_inspector(self) -> None:
-        widget = self._build_split_side_widget(
-            "Atacante",
-            self._build_ship_info_table(
-                self._filter_by_side(self.detail.get("ships") or [], "attacker"),
-                side_name="attacker",
-            ),
-            None,
-            "Defensor",
-            self._build_ship_info_table(
-                self._filter_by_side(self.detail.get("ships") or [], "defender"),
-                side_name="defender",
-            ),
-            None,
-            "Nave",
-            None,
-        )
+        with measure_perf("battle_inspector_open_ships", self.logger):
+            widget = self._build_split_side_widget(
+                "Atacante",
+                self._build_ship_info_table(
+                    self._filter_by_side(self.detail.get("ships") or [], "attacker"),
+                    side_name="attacker",
+                ),
+                None,
+                "Defensor",
+                self._build_ship_info_table(
+                    self._filter_by_side(self.detail.get("ships") or [], "defender"),
+                    side_name="defender",
+                ),
+                None,
+                "Nave",
+                None,
+            )
         if self._has_room_actions(self.detail):
             wrapper = QWidget()
             layout = QVBoxLayout()
@@ -323,29 +327,31 @@ class BattleInspectorWindow(QMainWindow):
         self._open_child("Inspector de Naves", widget)
 
     def open_rooms_inspector(self) -> None:
-        widget = self._build_split_side_widget(
-            "Atacante",
-            self._build_rooms_table(self._filter_by_side(self.detail.get("rooms") or [], "attacker"), include_side=False),
-            None,
-            "Defensor",
-            self._build_rooms_table(self._filter_by_side(self.detail.get("rooms") or [], "defender"), include_side=False),
-            None,
-            "Salas",
-            None,
-        )
+        with measure_perf("battle_inspector_open_rooms", self.logger):
+            widget = self._build_split_side_widget(
+                "Atacante",
+                self._build_rooms_table(self._filter_by_side(self.detail.get("rooms") or [], "attacker"), include_side=False),
+                None,
+                "Defensor",
+                self._build_rooms_table(self._filter_by_side(self.detail.get("rooms") or [], "defender"), include_side=False),
+                None,
+                "Salas",
+                None,
+            )
         self._open_child("Inspector de Salas", widget)
 
     def open_characters_inspector(self) -> None:
-        widget = self._build_split_side_widget(
-            "Atacante",
-            self._build_characters_table(self._filter_by_side(self.detail.get("characters") or [], "attacker"), include_side=False),
-            None,
-            "Defensor",
-            self._build_characters_table(self._filter_by_side(self.detail.get("characters") or [], "defender"), include_side=False),
-            None,
-            "Tripulacion",
-            None,
-        )
+        with measure_perf("battle_inspector_open_characters", self.logger):
+            widget = self._build_split_side_widget(
+                "Atacante",
+                self._build_characters_table(self._filter_by_side(self.detail.get("characters") or [], "attacker"), include_side=False),
+                None,
+                "Defensor",
+                self._build_characters_table(self._filter_by_side(self.detail.get("characters") or [], "defender"), include_side=False),
+                None,
+                "Tripulacion",
+                None,
+            )
         self._open_child("Inspector de Tripulacion", widget)
 
     def open_commands_inspector(self) -> None:
@@ -972,9 +978,9 @@ class BattleInspectorWindow(QMainWindow):
     def _configure_table(self, table: QTableWidget) -> None:
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        table.verticalHeader().setDefaultSectionSize(32)
         table.resizeColumnsToContents()
-        table.resizeRowsToContents()
 
     def _configure_button(self, button: QPushButton) -> None:
         button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)

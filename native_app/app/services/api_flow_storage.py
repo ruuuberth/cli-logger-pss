@@ -55,6 +55,25 @@ class ApiFlowFilters:
     time_to: datetime | None = None
 
 
+@dataclass(frozen=True)
+class BattleReplayListRow:
+    id: int
+    api_flow_event_id: int | None
+    captured_at: datetime | None
+    attacker_name: str | None
+    attacker_trophy: int | None
+    defender_name: str | None
+    defender_trophy: int | None
+    outcome_type: str | None
+    win_minerals_result: int | None
+    lose_minerals_result: int | None
+    win_gas_result: int | None
+    lose_gas_result: int | None
+    win_trophy_result: int | None
+    lose_trophy_result: int | None
+    battle_id: int | None
+
+
 class ApiFlowRepository:
     _ALLOWED_DIRECTIONS = {"request", "response", "error"}
     _ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT"}
@@ -335,6 +354,73 @@ class ApiFlowRepository:
                 "page_size": page_size,
                 "rows": [self._serialize_battle_replay_row(row) for row in rows],
             }
+        finally:
+            db.close()
+
+    def list_battle_replay_rows(
+        self,
+        search: str,
+        page: int,
+        page_size: int,
+    ) -> tuple[int, list[BattleReplayListRow]]:
+        db = SessionLocal()
+        try:
+            query = db.query(
+                BattleReplayNormalized.id,
+                BattleReplayNormalized.api_flow_event_id,
+                BattleReplayNormalized.captured_at,
+                BattleReplayNormalized.attacker_name,
+                BattleReplayNormalized.attacker_trophy,
+                BattleReplayNormalized.defender_name,
+                BattleReplayNormalized.defender_trophy,
+                BattleReplayNormalized.outcome_type,
+                BattleReplayNormalized.win_minerals_result,
+                BattleReplayNormalized.lose_minerals_result,
+                BattleReplayNormalized.win_gas_result,
+                BattleReplayNormalized.lose_gas_result,
+                BattleReplayNormalized.win_trophy_result,
+                BattleReplayNormalized.lose_trophy_result,
+                BattleReplayNormalized.battle_id,
+            )
+            if search:
+                token = f"%{search.strip()}%"
+                query = query.filter(
+                    or_(
+                        BattleReplayNormalized.attacker_name.ilike(token),
+                        BattleReplayNormalized.defender_name.ilike(token),
+                        BattleReplayNormalized.outcome_type.ilike(token),
+                        cast(BattleReplayNormalized.battle_id, String).ilike(token),
+                    )
+                )
+            total = int(query.order_by(None).count())
+            page = max(0, page)
+            page_size = max(1, page_size)
+            rows = (
+                query.order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .offset(page * page_size)
+                .limit(page_size)
+                .all()
+            )
+            return total, [
+                BattleReplayListRow(
+                    id=int(row.id),
+                    api_flow_event_id=int(row.api_flow_event_id) if row.api_flow_event_id is not None else None,
+                    captured_at=row.captured_at,
+                    attacker_name=row.attacker_name,
+                    attacker_trophy=row.attacker_trophy,
+                    defender_name=row.defender_name,
+                    defender_trophy=row.defender_trophy,
+                    outcome_type=row.outcome_type,
+                    win_minerals_result=row.win_minerals_result,
+                    lose_minerals_result=row.lose_minerals_result,
+                    win_gas_result=row.win_gas_result,
+                    lose_gas_result=row.lose_gas_result,
+                    win_trophy_result=row.win_trophy_result,
+                    lose_trophy_result=row.lose_trophy_result,
+                    battle_id=row.battle_id,
+                )
+                for row in rows
+            ]
         finally:
             db.close()
 

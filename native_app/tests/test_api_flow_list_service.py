@@ -1,36 +1,36 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.services.api_flow_list_service import ApiFlowListService
+from app.services.api_flow_storage import BattleReplayListRow
 
 
 class _Repo:
     def __init__(self) -> None:
         self.last_args = None
 
-    def list_battle_replays(self, search: str, page: int, page_size: int) -> dict:
+    def list_battle_replay_rows(self, search: str, page: int, page_size: int):
         self.last_args = (search, page, page_size)
-        return {
-            "total": 1,
-            "rows": [
-                {
-                    "id": 11,
-                    "api_flow_event_id": 22,
-                    "captured_at": "2026-02-20T10:00:00",
-                    "attacker_name": "lord stella",
-                    "attacker_trophy": 5327,
-                    "defender_name": "Ruuuberth4",
-                    "defender_trophy": 5023,
-                    "outcome_type": "Attacker Won",
-                    "win_minerals_result": 100,
-                    "lose_minerals_result": 0,
-                    "win_gas_result": 50,
-                    "lose_gas_result": 0,
-                    "win_trophy_result": 15,
-                    "lose_trophy_result": 0,
-                    "battle_id": 99,
-                }
-            ],
-        }
+        return 1, [
+            BattleReplayListRow(
+                id=11,
+                api_flow_event_id=22,
+                captured_at=datetime.fromisoformat("2026-02-20T10:00:00"),
+                attacker_name="lord stella",
+                attacker_trophy=5327,
+                defender_name="Ruuuberth4",
+                defender_trophy=5023,
+                outcome_type="Attacker Won",
+                win_minerals_result=100,
+                lose_minerals_result=0,
+                win_gas_result=50,
+                lose_gas_result=0,
+                win_trophy_result=15,
+                lose_trophy_result=0,
+                battle_id=99,
+            )
+        ]
 
     def delete_event(self, event_id: int) -> int:
         return 1 if event_id == 22 else 0
