@@ -75,7 +75,7 @@ class MainWindow(QMainWindow):
         self.api_flow_flush_timer.setInterval(1000)
         self.api_flow_flush_timer.timeout.connect(self._flush_api_flow_events)
         self.resource_monitor_timer = QTimer(self)
-        self.resource_monitor_timer.setInterval(2000)
+        self.resource_monitor_timer.setInterval(5000)
         self.resource_monitor_timer.timeout.connect(self._refresh_resource_labels)
 
         self.setWindowTitle("PixelStarships Battle Logger Native")
@@ -124,7 +124,7 @@ class MainWindow(QMainWindow):
         )
         self.api_flow_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.api_flow_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._configure_table(self.api_flow_table)
+        self._configure_table(self.api_flow_table, resize_contents=True)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
         self.api_flow_prev_page_button.clicked.connect(self.api_flow_prev_page)
@@ -368,7 +368,7 @@ class MainWindow(QMainWindow):
                 partial(self.delete_api_flow_event, row.get("api_flow_event_id"), battle_id)
             )
             self.api_flow_table.setCellWidget(idx, 8, delete_button)
-        self._configure_table(self.api_flow_table)
+        self._configure_table(self.api_flow_table, resize_contents=False)
 
         if total == 0:
             self.api_flow_page_label.setText("Pagina: 0")
@@ -431,11 +431,14 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Eliminar evento", "No se pudo eliminar el evento.")
         self.reload_api_flow_page()
 
-    def _configure_table(self, table: QTableWidget) -> None:
+    def _configure_table(self, table: QTableWidget, *, resize_contents: bool = True) -> None:
         header = table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        table.resizeColumnsToContents()
+        if resize_contents:
+            header.setSectionResizeMode(QHeaderView.ResizeToContents)
+            table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+            table.resizeColumnsToContents()
+            table.resizeRowsToContents()
+            return
         table.resizeRowsToContents()
 
     def _configure_button(self, button: QPushButton) -> None:
