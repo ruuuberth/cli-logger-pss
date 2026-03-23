@@ -10,7 +10,7 @@ class RowActionDelegate(QStyledItemDelegate):
     inspect_requested = Signal(int)
     delete_requested = Signal(int)
 
-    def __init__(self, action_map: dict[int, str] | None = None, parent=None) -> None:
+    def __init__(self, parent=None, action_map: dict[int, str] | None = None) -> None:
         super().__init__(parent)
         self._action_map = dict(action_map or {7: "inspect", 8: "delete"})
 

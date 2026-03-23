@@ -978,7 +978,7 @@ class BattleInspectorWindow(QMainWindow):
         view.setWordWrap(False)
         self._configure_table(view)
         if action_map:
-            delegate = RowActionDelegate(action_map, view)
+            delegate = RowActionDelegate(view, action_map)
             if action_handler is not None:
                 delegate.action_requested.connect(action_handler)
             for column in action_map.keys():
