@@ -5,7 +5,6 @@ from PySide6.QtCore import QTimer, Slot
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
     QHeaderView,
     QHBoxLayout,
     QLabel,
@@ -86,14 +85,11 @@ class MainWindow(QMainWindow):
         self.api_flow_refresh_button.clicked.connect(self.reload_api_flow_page)
         self.api_flow_clear_button = QPushButton("Limpiar historial")
         self.api_flow_clear_button.clicked.connect(self.clear_api_flow_history)
-        self.api_flow_auto_scroll_checkbox = QCheckBox("Auto-scroll")
-        self.api_flow_auto_scroll_checkbox.setChecked(True)
 
         controls = QHBoxLayout()
         controls.addWidget(self.api_flow_capture_button)
         controls.addWidget(self.api_flow_refresh_button)
         controls.addWidget(self.api_flow_clear_button)
-        controls.addWidget(self.api_flow_auto_scroll_checkbox)
         controls.addStretch()
 
         self.api_flow_search_input = QLineEdit()
@@ -189,9 +185,7 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_events_flushed(self, _payload: dict) -> None:
-        if self.api_flow_auto_scroll_checkbox.isChecked():
-            self.api_flow_page = 0
-            self.reload_api_flow_page()
+        return
 
     def reload_api_flow_page(self) -> None:
         payload = self.api_flow_list_service.list_page(
