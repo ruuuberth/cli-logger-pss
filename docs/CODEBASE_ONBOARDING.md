@@ -3,7 +3,11 @@
 ## Arquitectura
 
 - UI: `native_app/app/ui/main_window.py`
+- Bridge Qt del runtime: `native_app/app/ui/api_flow_runtime_bridge.py`
 - Captura runtime: `native_app/app/services/api_flow_capture.py`
+- Coordinador runtime del flujo: `native_app/app/services/api_flow_runtime.py`
+- Servicio de listado/paginación: `native_app/app/services/api_flow_list_service.py`
+- Monitor de recursos del sistema: `native_app/app/services/process_resource_monitor.py`
 - Addon mitm: `native_app/app/services/mitm_api_flow_addon.py`
 - Persistencia/normalización: `native_app/app/services/api_flow_storage.py`
 - Configuración: `native_app/app/core/config.py`
@@ -13,11 +17,20 @@
 
 1. Se captura tráfico vía proxy.
 2. Se aplica passthrough por `API_FLOW_IGNORE_HOSTS`.
-3. Se guarda evento en `api_flow_events`.
-4. Se limpia payload en `response_body_cleaned`.
-5. Se normaliza replay en tablas relacionales.
-6. Se sincronizan catálogos (`ship_designs`, `room_designs`, `crew_designs`) desde `DesignService/ListAllStaticDesigns2` (fallback).
-7. La UI usa catálogos locales (`Data/Prod`) como fuente principal de traducciones.
+3. `ApiFlowRuntime` mantiene backlog, flush periódico y flush final.
+4. Se guarda evento en `api_flow_events`.
+5. Se limpia payload en `response_body_cleaned`.
+6. Se normaliza replay en tablas relacionales.
+7. Se sincronizan catálogos (`ship_designs`, `room_designs`, `crew_designs`) desde `DesignService/ListAllStaticDesigns2` (fallback).
+8. La UI usa catálogos locales (`Data/Prod`) como fuente principal de traducciones.
+
+## Responsabilidades
+
+- `MainWindow` no debe contener parsing, persistencia ni lógica de captura.
+- `ApiFlowRuntime` es la única capa que conoce simultáneamente `ApiFlowCaptureManager`
+  y `ApiFlowRepository`.
+- `ApiFlowListService` prepara las filas visibles de la tabla principal.
+- `ProcessResourceMonitor` encapsula la lectura de `/proc` y el cálculo de CPU/RAM.
 
 ## Tablas de replay
 

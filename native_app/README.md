@@ -30,6 +30,13 @@ Pipeline:
 4. Normalización a tablas replay.
 5. Sync de catálogos de diseño (`ship_designs`, `room_designs`, `crew_designs`).
 
+Arquitectura de ventana principal:
+- `app/ui/main_window.py`: solo UI, timers y wiring.
+- `app/services/api_flow_runtime.py`: captura, backlog, flush y startup sync.
+- `app/services/api_flow_list_service.py`: búsqueda, paginación y formateo de filas.
+- `app/services/process_resource_monitor.py`: lectura de CPU/RAM desde `/proc`.
+- `app/ui/api_flow_runtime_bridge.py`: bridge Qt fino entre runtime y ventana.
+
 ## Catalogos locales (UI)
 
 La UI usa los catálogos locales del juego (`Data/Prod`) como fuente principal
