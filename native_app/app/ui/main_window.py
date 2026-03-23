@@ -35,6 +35,7 @@ class ApiFlowBridge(QObject):
     event_received = Signal(dict)
     status_changed = Signal(str)
     startup_sync_finished = Signal(dict)
+    stop_flush_finished = Signal(dict)
 
 
 class MainWindow(QMainWindow):
@@ -48,6 +49,7 @@ class MainWindow(QMainWindow):
         self.api_flow_bridge.event_received.connect(self._on_api_flow_event)
         self.api_flow_bridge.status_changed.connect(self._on_api_flow_status)
         self.api_flow_bridge.startup_sync_finished.connect(self._on_startup_sync_finished)
+        self.api_flow_bridge.stop_flush_finished.connect(self._on_stop_flush_finished)
         self.api_flow_capture_manager.subscribe(
             lambda event: self.api_flow_bridge.event_received.emit(event)
         )
@@ -66,6 +68,7 @@ class MainWindow(QMainWindow):
         self.battle_inspector_windows: list[BattleInspectorWindow] = []
         self.startup_sync_running = False
         self.startup_sync_thread: Thread | None = None
+        self.stop_flush_running = False
         self._process_sample_cache: dict[int, tuple[float, int]] = {}
 
         self.api_flow_flush_timer = QTimer(self)
@@ -174,7 +177,7 @@ class MainWindow(QMainWindow):
         self.api_flow_capture_manager.stop_capture()
         self._sync_capture_button()
         self.api_flow_flush_timer.stop()
-        self._flush_api_flow_events()
+        self._start_stop_flush()
 
     def toggle_api_flow_capture(self) -> None:
         if self.api_flow_capture_manager.is_running():
@@ -261,6 +264,42 @@ class MainWindow(QMainWindow):
             result = {"ok": False, "error": str(exc)}
         self.api_flow_bridge.startup_sync_finished.emit(result)
 
+    def _start_stop_flush(self) -> None:
+        if self.stop_flush_running:
+            return
+        self.stop_flush_running = True
+        self.api_flow_status_label.setText("Estado: guardando eventos pendientes...")
+        thread = Thread(target=self._run_stop_flush_worker, daemon=True, name="stop-flush")
+        thread.start()
+
+    def _run_stop_flush_worker(self) -> None:
+        try:
+            pending = list(self.api_flow_pending_events)
+            self.api_flow_pending_events.clear()
+            saved_count = self.api_flow_repository.save_events(pending) if pending else 0
+            if pending and saved_count < len(pending):
+                unsaved = pending[max(0, saved_count) :]
+                self.api_flow_pending_events = unsaved + self.api_flow_pending_events
+                dropped = self._enforce_pending_limit()
+                if dropped:
+                    self.api_flow_dropped_pending_events += dropped
+                payload = {
+                    "ok": False,
+                    "message": (
+                        "Estado: error de persistencia, pendientes="
+                        f"{len(self.api_flow_pending_events)}"
+                    ),
+                }
+            else:
+                self.api_flow_repository.purge(
+                    retention_days=settings.API_FLOW_RETENTION_DAYS,
+                    max_db_mb=settings.API_FLOW_MAX_DB_MB,
+                )
+                payload = {"ok": True, "message": f"Estado: {self.api_flow_last_capture_status}"}
+        except Exception as exc:
+            payload = {"ok": False, "message": f"Estado: error al cerrar captura ({exc})"}
+        self.api_flow_bridge.stop_flush_finished.emit(payload)
+
     @Slot(dict)
     def _on_startup_sync_finished(self, payload: dict) -> None:
         self.startup_sync_running = False
@@ -272,6 +311,12 @@ class MainWindow(QMainWindow):
 
         if not self.api_flow_capture_manager.is_running():
             self.api_flow_status_label.setText(f"Estado: {self.api_flow_last_capture_status}")
+        self.reload_api_flow_page()
+
+    @Slot(dict)
+    def _on_stop_flush_finished(self, payload: dict) -> None:
+        self.stop_flush_running = False
+        self.api_flow_status_label.setText(str(payload.get("message") or "Estado: detenido"))
         self.reload_api_flow_page()
 
     def _enforce_pending_limit(self) -> int:
