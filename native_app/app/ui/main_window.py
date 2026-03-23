@@ -10,7 +10,6 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
-    QComboBox,
     QHeaderView,
     QHBoxLayout,
     QLabel,
@@ -19,7 +18,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
-    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -115,38 +113,10 @@ class MainWindow(QMainWindow):
         self.api_flow_search_input = QLineEdit()
         self.api_flow_search_input.setPlaceholderText("Buscar atacante/defensor/battle id...")
         self.api_flow_search_input.textChanged.connect(self.apply_api_flow_filters)
-        self.api_flow_method_combo = QComboBox()
-        self.api_flow_method_combo.addItems(["Todos", "GET", "POST", "PUT", "PATCH", "DELETE"])
-        self.api_flow_method_combo.currentTextChanged.connect(self.apply_api_flow_filters)
-        self.api_flow_status_min = QSpinBox()
-        self.api_flow_status_min.setRange(0, 999)
-        self.api_flow_status_min.setPrefix("Min ")
-        self.api_flow_status_min.valueChanged.connect(self.apply_api_flow_filters)
-        self.api_flow_status_max = QSpinBox()
-        self.api_flow_status_max.setRange(0, 999)
-        self.api_flow_status_max.setPrefix("Max ")
-        self.api_flow_status_max.valueChanged.connect(self.apply_api_flow_filters)
-        self.api_flow_only_errors = QCheckBox("Solo errores")
-        self.api_flow_only_errors.stateChanged.connect(self.apply_api_flow_filters)
-        self.api_flow_time_from = QLineEdit()
-        self.api_flow_time_from.setPlaceholderText("Desde ISO (YYYY-MM-DDTHH:MM:SS)")
-        self.api_flow_time_from.editingFinished.connect(self.apply_api_flow_filters)
-        self.api_flow_time_to = QLineEdit()
-        self.api_flow_time_to.setPlaceholderText("Hasta ISO (YYYY-MM-DDTHH:MM:SS)")
-        self.api_flow_time_to.editingFinished.connect(self.apply_api_flow_filters)
-        self.api_flow_reset_filters_button = QPushButton("Limpiar filtros")
-        self.api_flow_reset_filters_button.clicked.connect(self.reset_api_flow_filters)
 
         filters = QHBoxLayout()
         filters.addWidget(self.api_flow_search_input)
-        filters.addWidget(QLabel("Metodo"))
-        filters.addWidget(self.api_flow_method_combo)
-        filters.addWidget(self.api_flow_status_min)
-        filters.addWidget(self.api_flow_status_max)
-        filters.addWidget(self.api_flow_only_errors)
-        filters.addWidget(self.api_flow_time_from)
-        filters.addWidget(self.api_flow_time_to)
-        filters.addWidget(self.api_flow_reset_filters_button)
+        filters.addStretch()
 
         self.api_flow_table = QTableWidget(0, 9)
         self.api_flow_table.setHorizontalHeaderLabels(
@@ -312,17 +282,6 @@ class MainWindow(QMainWindow):
         del self.api_flow_pending_events[:dropped]
         return dropped
 
-    def _parse_iso_datetime(self, value: str) -> datetime | None:
-        if not value:
-            return None
-        try:
-            normalized = value
-            if normalized.endswith("Z"):
-                normalized = normalized[:-1] + "+00:00"
-            return datetime.fromisoformat(normalized)
-        except ValueError:
-            return None
-
     def reload_api_flow_page(self) -> None:
         payload = self.api_flow_repository.list_battle_replays(
             search=self.api_flow_search_input.text().strip(),
@@ -384,16 +343,6 @@ class MainWindow(QMainWindow):
 
     def apply_api_flow_filters(self, *_) -> None:
         self.api_flow_page = 0
-        self.reload_api_flow_page()
-
-    def reset_api_flow_filters(self) -> None:
-        self.api_flow_search_input.setText("")
-        self.api_flow_method_combo.setCurrentText("Todos")
-        self.api_flow_status_min.setValue(0)
-        self.api_flow_status_max.setValue(0)
-        self.api_flow_only_errors.setChecked(False)
-        self.api_flow_time_from.setText("")
-        self.api_flow_time_to.setText("")
         self.reload_api_flow_page()
 
     def api_flow_next_page(self) -> None:
