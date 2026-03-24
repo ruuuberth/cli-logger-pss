@@ -14,6 +14,7 @@ class ApiFlowTableModel(QAbstractTableModel):
         "Botin",
         "Copas",
         "BattleId",
+        "H2H",
         "Inspector",
         "Eliminar",
     ]
@@ -55,10 +56,13 @@ class ApiFlowTableModel(QAbstractTableModel):
                 4: row.loot_label,
                 5: row.trophy_delta_label,
                 6: row.battle_id_label,
-                7: "Inspeccionar",
-                8: "Eliminar",
+                7: row.h2h_label,
+                8: "Inspeccionar",
+                9: "Eliminar",
             }
             return mapping.get(index.column(), "")
+        if role == Qt.ToolTipRole and index.column() == 7:
+            return row.h2h_tooltip
         if role == Qt.TextAlignmentRole and index.column() >= 7:
             return int(Qt.AlignCenter)
         return None

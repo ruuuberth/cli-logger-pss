@@ -27,7 +27,7 @@ class RowActionDelegate(QStyledItemDelegate):
 
     def editorEvent(self, event, model, option, index) -> bool:
         if index.column() not in self._action_map:
-            return super().editorEvent(event, model, option, index)
+            return False
         if event.type() == QEvent.MouseButtonRelease and isinstance(event, QMouseEvent):
             if self._button_rect(option.rect).contains(event.position().toPoint()):
                 action_key = self._action_map[index.column()]

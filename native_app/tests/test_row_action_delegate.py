@@ -26,6 +26,9 @@ except (ModuleNotFoundError, ImportError):
         def __init__(self, *args, **kwargs) -> None:
             pass
 
+        def editorEvent(self, *args, **kwargs) -> bool:
+            return False
+
     class _Point:
         def __init__(self, x: int = 0, y: int = 0) -> None:
             self.x = x
@@ -91,7 +94,7 @@ class _Index:
 
 def test_delegate_emits_inspect_for_action_column() -> None:
     delegate_module.QEvent.MouseButtonRelease = 1
-    delegate = RowActionDelegate()
+    delegate = RowActionDelegate(action_map={8: "inspect", 9: "delete"})
     seen: list[int] = []
     delegate.inspect_requested.connect(seen.append)
     option = SimpleNamespace(rect=SimpleNamespace(adjusted=lambda *args: SimpleNamespace(contains=lambda _p: True)))
@@ -105,7 +108,23 @@ def test_delegate_emits_inspect_for_action_column() -> None:
 
     event = _Event()
 
-    handled = delegate.editorEvent(event, None, option, _Index(3, 7))
+    handled = delegate.editorEvent(event, None, option, _Index(3, 8))
 
     assert handled is True
     assert seen == [3]
+
+
+def test_delegate_does_not_handle_h2h_column() -> None:
+    delegate_module.QEvent.MouseButtonRelease = 1
+    delegate = RowActionDelegate(action_map={8: "inspect", 9: "delete"})
+    option = SimpleNamespace(rect=SimpleNamespace(adjusted=lambda *args: SimpleNamespace(contains=lambda _p: True)))
+
+    class _Event(QMouseEvent):
+        def type(self):
+            return 1
+
+        def position(self):
+            return SimpleNamespace(toPoint=lambda: object())
+
+    handled = delegate.editorEvent(_Event(), None, option, _Index(1, 7))
+    assert handled is False

@@ -115,15 +115,18 @@ class MainWindow(QMainWindow):
         self.api_flow_table.verticalHeader().setDefaultSectionSize(34)
         self.api_flow_table.horizontalHeader().setStretchLastSection(False)
         self.api_flow_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.api_flow_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
         self.api_flow_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
-        self.api_flow_table.setColumnWidth(7, 110)
-        self.api_flow_table.setColumnWidth(8, 90)
-        self.api_flow_table_action_delegate = RowActionDelegate(self.api_flow_table)
+        self.api_flow_table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
+        self.api_flow_table.setColumnWidth(8, 110)
+        self.api_flow_table.setColumnWidth(9, 90)
+        self.api_flow_table_action_delegate = RowActionDelegate(
+            self.api_flow_table,
+            action_map={8: "inspect", 9: "delete"},
+        )
         self.api_flow_table_action_delegate.inspect_requested.connect(self._on_inspect_requested)
         self.api_flow_table_action_delegate.delete_requested.connect(self._on_delete_requested)
-        self.api_flow_table.setItemDelegateForColumn(7, self.api_flow_table_action_delegate)
         self.api_flow_table.setItemDelegateForColumn(8, self.api_flow_table_action_delegate)
+        self.api_flow_table.setItemDelegateForColumn(9, self.api_flow_table_action_delegate)
         self._configure_table(self.api_flow_table, resize_contents=True)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
@@ -278,7 +281,7 @@ class MainWindow(QMainWindow):
     def _configure_table(self, table, *, resize_contents: bool = True) -> None:
         header = table.horizontalHeader()
         if resize_contents:
-            for column in range(7):
+            for column in range(8):
                 header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
             return
         table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)

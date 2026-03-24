@@ -40,6 +40,7 @@ except (ModuleNotFoundError, ImportError):
         DisplayRole = 0
         EditRole = 1
         TextAlignmentRole = 2
+        ToolTipRole = 3
         Horizontal = 1
         AlignCenter = 4
         Orientation = int
@@ -50,6 +51,8 @@ except (ModuleNotFoundError, ImportError):
     pyside6.QtCore = qtcore
     sys.modules["PySide6"] = pyside6
     sys.modules["PySide6.QtCore"] = qtcore
+
+from PySide6.QtCore import Qt
 
 from app.services.api_flow_list_service import ApiFlowRowView
 from app.ui.models.api_flow_table_model import ApiFlowTableModel
@@ -67,14 +70,18 @@ def test_table_model_exposes_rows_and_headers() -> None:
         loot_label="M 1/0 | G 2/0",
         trophy_delta_label="3/0",
         battle_id_label="77",
+        h2h_label="A 3 | D 2 | U 1",
+        h2h_tooltip="H2H: A vs B",
     )
     model.set_rows([row])
 
     assert model.rowCount() == 1
-    assert model.columnCount() == 9
+    assert model.columnCount() == 10
     index = model.index(0, 1)
     assert model.data(index) == "(10)A"
-    assert model.headerData(7, 1) == "Inspector"
+    assert model.headerData(7, 1) == "H2H"
+    assert model.data(model.index(0, 7)) == "A 3 | D 2 | U 1"
+    assert model.data(model.index(0, 7), Qt.ToolTipRole) == "H2H: A vs B"
 
 
 def test_table_model_returns_action_labels() -> None:
@@ -89,7 +96,9 @@ def test_table_model_returns_action_labels() -> None:
         loot_label="-",
         trophy_delta_label="-",
         battle_id_label="-",
+        h2h_label="-",
+        h2h_tooltip="Sin datos H2H",
     )
     model.set_rows([row])
-    assert model.data(model.index(0, 7)) == "Inspeccionar"
-    assert model.data(model.index(0, 8)) == "Eliminar"
+    assert model.data(model.index(0, 8)) == "Inspeccionar"
+    assert model.data(model.index(0, 9)) == "Eliminar"

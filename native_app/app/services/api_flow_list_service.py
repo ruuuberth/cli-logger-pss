@@ -19,6 +19,8 @@ class ApiFlowRowView:
     loot_label: str
     trophy_delta_label: str
     battle_id_label: str
+    h2h_label: str
+    h2h_tooltip: str
 
 
 @dataclass(frozen=True)
@@ -52,7 +54,13 @@ class ApiFlowListService:
                 page=page,
                 page_size=page_size,
             )
-        rows = [self._to_row_view(row) for row in raw_rows]
+        pairs = {
+            self._pair_key(row.attacker_user_id, row.defender_user_id)
+            for row in raw_rows
+        }
+        pairs = {pair for pair in pairs if pair is not None}
+        matchup_summaries = self.repository.get_matchup_summaries_for_pairs(pairs)
+        rows = [self._to_row_view(row, matchup_summaries) for row in raw_rows]
         max_page = max(0, (total - 1) // page_size) if total else 0
         return ApiFlowPage(total=total, page=page, max_page=max_page, rows=rows)
 
@@ -83,7 +91,11 @@ class ApiFlowListService:
             self.detail_cache.set(battle_replay_id, detail)
         return detail
 
-    def _to_row_view(self, row: BattleReplayListRow) -> ApiFlowRowView:
+    def _to_row_view(
+        self,
+        row: BattleReplayListRow,
+        matchup_summaries: dict[tuple[int, int], dict],
+    ) -> ApiFlowRowView:
         captured_at = str(row.captured_at or "")[:19].replace("T", " ")
         attacker_name = str(row.attacker_name or "-")
         defender_name = str(row.defender_name or "-")
@@ -94,6 +106,10 @@ class ApiFlowListService:
             f" | G {row.win_gas_result or 0}/{row.lose_gas_result or 0}"
         )
         trophies = f"{row.win_trophy_result or 0}/{row.lose_trophy_result or 0}"
+        h2h_label, h2h_tooltip = self._build_h2h_labels(
+            row,
+            matchup_summaries.get(self._pair_key(row.attacker_user_id, row.defender_user_id)),
+        )
         return ApiFlowRowView(
             battle_replay_id=row.id,
             api_flow_event_id=row.api_flow_event_id,
@@ -104,4 +120,80 @@ class ApiFlowListService:
             loot_label=loot,
             trophy_delta_label=trophies,
             battle_id_label=str(row.battle_id or "-"),
+            h2h_label=h2h_label,
+            h2h_tooltip=h2h_tooltip,
         )
+
+    def _pair_key(self, attacker_user_id: int | None, defender_user_id: int | None) -> tuple[int, int] | None:
+        if attacker_user_id is None or defender_user_id is None:
+            return None
+        if attacker_user_id == defender_user_id:
+            return None
+        return (
+            (attacker_user_id, defender_user_id)
+            if attacker_user_id < defender_user_id
+            else (defender_user_id, attacker_user_id)
+        )
+
+    def _build_h2h_labels(
+        self,
+        row: BattleReplayListRow,
+        summary: dict | None,
+    ) -> tuple[str, str]:
+        if summary is None:
+            return "-", "Sin datos H2H"
+
+        attacker_id = row.attacker_user_id
+        defender_id = row.defender_user_id
+        if attacker_id is None or defender_id is None:
+            return "-", "Sin datos H2H"
+
+        low_id = summary.get("player_low_user_id")
+        high_id = summary.get("player_high_user_id")
+        low_name = str(summary.get("player_low_name") or row.attacker_name or f"User {low_id or '-'}")
+        high_name = str(summary.get("player_high_name") or row.defender_name or f"User {high_id or '-'}")
+        low_wins = int(summary.get("player_low_wins") or 0)
+        high_wins = int(summary.get("player_high_wins") or 0)
+        unknown = int(summary.get("unknown_results") or 0)
+        total = int(summary.get("total_battles") or 0)
+
+        if attacker_id == low_id and defender_id == high_id:
+            attacker_wins = low_wins
+            defender_wins = high_wins
+            attacker_name = low_name
+            defender_name = high_name
+        elif attacker_id == high_id and defender_id == low_id:
+            attacker_wins = high_wins
+            defender_wins = low_wins
+            attacker_name = high_name
+            defender_name = low_name
+        else:
+            attacker_wins = 0
+            defender_wins = 0
+            attacker_name = str(row.attacker_name or f"User {attacker_id}")
+            defender_name = str(row.defender_name or f"User {defender_id}")
+
+        label = f"A {attacker_wins} | D {defender_wins} | U {unknown}"
+        lines = [
+            f"H2H: {attacker_name} vs {defender_name}",
+            f"Total: {total} | A: {attacker_wins} | D: {defender_wins} | U: {unknown}",
+        ]
+        recent = summary.get("recent_log")
+        if isinstance(recent, list) and recent:
+            lines.append("Ultimos 5:")
+            for item in recent[:5]:
+                winner = item.get("winner_user_id")
+                if winner == attacker_id:
+                    winner_label = attacker_name
+                elif winner == defender_id:
+                    winner_label = defender_name
+                elif winner == low_id:
+                    winner_label = low_name
+                elif winner == high_id:
+                    winner_label = high_name
+                elif winner is None:
+                    winner_label = "Desconocido"
+                else:
+                    winner_label = f"User {winner}"
+                lines.append(f"#{item.get('battle_id') or '-'} -> {winner_label}")
+        return label, "\n".join(lines)

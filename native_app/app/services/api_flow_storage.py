@@ -74,6 +74,8 @@ class BattleReplayListRow:
     win_trophy_result: int | None
     lose_trophy_result: int | None
     battle_id: int | None
+    attacker_user_id: int | None
+    defender_user_id: int | None
 
 
 class ApiFlowRepository:
@@ -408,6 +410,8 @@ class ApiFlowRepository:
                 BattleReplayNormalized.win_trophy_result,
                 BattleReplayNormalized.lose_trophy_result,
                 BattleReplayNormalized.battle_id,
+                BattleReplayNormalized.attacker_user_id,
+                BattleReplayNormalized.defender_user_id,
             )
             if search:
                 token = f"%{search.strip()}%"
@@ -445,9 +449,129 @@ class ApiFlowRepository:
                     win_trophy_result=row.win_trophy_result,
                     lose_trophy_result=row.lose_trophy_result,
                     battle_id=row.battle_id,
+                    attacker_user_id=row.attacker_user_id,
+                    defender_user_id=row.defender_user_id,
                 )
                 for row in rows
             ]
+        finally:
+            db.close()
+
+    def get_matchup_summaries_for_pairs(
+        self,
+        pairs: set[tuple[int, int]],
+    ) -> dict[tuple[int, int], dict[str, Any]]:
+        if not pairs:
+            return {}
+        db = SessionLocal()
+        try:
+            pair_filters = [
+                and_(
+                    PlayerMatchupStat.player_low_user_id == low_id,
+                    PlayerMatchupStat.player_high_user_id == high_id,
+                )
+                for low_id, high_id in pairs
+            ]
+            stats_rows = (
+                db.query(PlayerMatchupStat)
+                .filter(or_(*pair_filters))
+                .all()
+                if pair_filters
+                else []
+            )
+            out: dict[tuple[int, int], dict[str, Any]] = {}
+            for row in stats_rows:
+                key = (int(row.player_low_user_id), int(row.player_high_user_id))
+                out[key] = {
+                    "player_low_user_id": key[0],
+                    "player_high_user_id": key[1],
+                    "player_low_name": row.player_low_name,
+                    "player_high_name": row.player_high_name,
+                    "total_battles": int(row.total_battles or 0),
+                    "player_low_wins": int(row.player_low_wins or 0),
+                    "player_high_wins": int(row.player_high_wins or 0),
+                    "unknown_results": int(row.unknown_results or 0),
+                    "last_battle_id": row.last_battle_id,
+                    "last_winner_user_id": row.last_winner_user_id,
+                    "last_captured_at": (
+                        row.last_captured_at.isoformat()
+                        if row.last_captured_at is not None
+                        else None
+                    ),
+                    "recent_log": [],
+                }
+
+            log_pair_filters = [
+                and_(
+                    PlayerMatchupLog.player_low_user_id == low_id,
+                    PlayerMatchupLog.player_high_user_id == high_id,
+                )
+                for low_id, high_id in pairs
+            ]
+            log_rows = (
+                db.query(PlayerMatchupLog)
+                .filter(or_(*log_pair_filters))
+                .order_by(
+                    PlayerMatchupLog.player_low_user_id.asc(),
+                    PlayerMatchupLog.player_high_user_id.asc(),
+                    PlayerMatchupLog.captured_at.desc(),
+                    PlayerMatchupLog.id.desc(),
+                )
+                .all()
+                if log_pair_filters
+                else []
+            )
+            logs_by_pair: dict[tuple[int, int], list[PlayerMatchupLog]] = {}
+            for row in log_rows:
+                key = (int(row.player_low_user_id), int(row.player_high_user_id))
+                logs_by_pair.setdefault(key, []).append(row)
+
+            for key in pairs:
+                logs = logs_by_pair.get(key, [])
+                if key not in out and logs:
+                    low_wins = 0
+                    high_wins = 0
+                    unknown_results = 0
+                    for log_row in logs:
+                        winner_id = self._as_int(log_row.winner_user_id)
+                        if winner_id == key[0]:
+                            low_wins += 1
+                        elif winner_id == key[1]:
+                            high_wins += 1
+                        else:
+                            unknown_results += 1
+                    latest = logs[0]
+                    out[key] = {
+                        "player_low_user_id": key[0],
+                        "player_high_user_id": key[1],
+                        "player_low_name": None,
+                        "player_high_name": None,
+                        "total_battles": len(logs),
+                        "player_low_wins": low_wins,
+                        "player_high_wins": high_wins,
+                        "unknown_results": unknown_results,
+                        "last_battle_id": latest.battle_id,
+                        "last_winner_user_id": latest.winner_user_id,
+                        "last_captured_at": (
+                            latest.captured_at.isoformat()
+                            if latest.captured_at is not None
+                            else None
+                        ),
+                        "recent_log": [],
+                    }
+                summary = out.get(key)
+                if summary is None:
+                    continue
+                summary["recent_log"] = [
+                    {
+                        "battle_id": row.battle_id,
+                        "winner_user_id": row.winner_user_id,
+                        "captured_at": row.captured_at.isoformat() if row.captured_at is not None else None,
+                        "outcome_type": row.outcome_type,
+                    }
+                    for row in logs[:5]
+                ]
+            return out
         finally:
             db.close()
 
