@@ -55,7 +55,7 @@ class MainWindow(QMainWindow):
         self.api_flow_bridge.events_flushed.connect(self._on_events_flushed)
 
         self.api_flow_page = 0
-        self.api_flow_page_size = 200
+        self.api_flow_page_size = 10
         self.battle_inspector_windows: list[BattleInspectorWindow] = []
 
         self.api_flow_flush_timer = QTimer(self)
@@ -64,6 +64,10 @@ class MainWindow(QMainWindow):
         self.resource_monitor_timer = QTimer(self)
         self.resource_monitor_timer.setInterval(5000)
         self.resource_monitor_timer.timeout.connect(self._refresh_resource_labels)
+        self.search_debounce_timer = QTimer(self)
+        self.search_debounce_timer.setInterval(250)
+        self.search_debounce_timer.setSingleShot(True)
+        self.search_debounce_timer.timeout.connect(self._apply_api_flow_filters_now)
 
         self.setWindowTitle("PixelStarships Battle Logger Native")
         self.resize(1200, 760)
@@ -128,6 +132,7 @@ class MainWindow(QMainWindow):
         self.api_flow_table.setItemDelegateForColumn(8, self.api_flow_table_action_delegate)
         self.api_flow_table.setItemDelegateForColumn(9, self.api_flow_table_action_delegate)
         self._configure_table(self.api_flow_table, resize_contents=True)
+        self._configure_table(self.api_flow_table, resize_contents=False)
 
         self.api_flow_prev_page_button = QPushButton("Anterior")
         self.api_flow_prev_page_button.clicked.connect(self.api_flow_prev_page)
@@ -218,7 +223,6 @@ class MainWindow(QMainWindow):
         rows = payload.rows
         self.api_flow_count_label.setText(f"Registros: {total}")
         self.api_flow_table_model.set_rows(rows)
-        self._configure_table(self.api_flow_table, resize_contents=False)
 
         if total == 0:
             self.api_flow_page_label.setText("Pagina: 0")
@@ -236,6 +240,9 @@ class MainWindow(QMainWindow):
         self.api_flow_next_page_button.setEnabled(self.api_flow_page < max_page)
 
     def apply_api_flow_filters(self, *_) -> None:
+        self.search_debounce_timer.start()
+
+    def _apply_api_flow_filters_now(self) -> None:
         self.api_flow_page = 0
         self.reload_api_flow_page()
 

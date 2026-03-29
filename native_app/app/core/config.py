@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     API_FLOW_MAX_DB_MB: int = 512
     API_FLOW_CAPTURE_HTTPS: bool = True
     API_FLOW_IGNORE_HOSTS: List[str] = [
+        "player-auth.services.api.unity.com",
+        "config.services.api.unity.com",
+        "config.uca.cloud.unity3d.com",
+        "collect.analytics.unity3d.com",
         "perf-events.cloud.unity3d.com",
     ]
     API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = ["api.pixelstarships.com"]

@@ -94,6 +94,11 @@ completas cuando no hace falta.
 - `API_FLOW_CAPTURE_HOST_ALLOWLIST`
 - `API_FLOW_CAPTURE_PATH_ALLOWLIST`
 
+Defaults recomendados para rendimiento:
+- `API_FLOW_CAPTURE_HOST_ALLOWLIST=api.pixelstarships.com`
+- `API_FLOW_CAPTURE_PATH_ALLOWLIST=/BattleService/GetBattle3`
+- `API_FLOW_IGNORE_HOSTS` debe incluir hosts Unity de auth/config/perf para evitar ruido TLS.
+
 ## DB local
 
 Con `.env.dev.example`:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from threading import Lock, Thread
+from time import monotonic
 from typing import Any, Callable
 
 from app.core.config import settings
@@ -27,6 +28,7 @@ class ApiFlowRuntimeState:
 
 class ApiFlowRuntime:
     pending_max_events = 10_000
+    state_emit_interval_seconds = 0.25
 
     def __init__(
         self,
@@ -50,6 +52,7 @@ class ApiFlowRuntime:
         self._startup_callbacks: list[Callable[[dict[str, Any]], None]] = []
         self._stop_flush_callbacks: list[Callable[[dict[str, Any]], None]] = []
         self._flush_callbacks: list[Callable[[dict[str, Any]], None]] = []
+        self._last_state_emit_ts = 0.0
         self.capture_manager.subscribe(self.enqueue_event)
         self.capture_manager.subscribe_status(self._handle_capture_status)
 
@@ -67,11 +70,11 @@ class ApiFlowRuntime:
 
     def start_capture(self) -> None:
         self.capture_manager.start_capture()
-        self._emit_state()
+        self._emit_state(force=True)
 
     def stop_capture(self) -> None:
         self.capture_manager.stop_capture()
-        self._emit_state()
+        self._emit_state(force=True)
         self.start_stop_flush()
 
     def toggle_capture(self) -> None:
@@ -93,13 +96,13 @@ class ApiFlowRuntime:
                     f"backlog limitado, descartados {self._dropped_pending_events} eventos"
                 )
             self._live_event_count += 1
-        self._emit_state()
+        self._emit_state(force=False)
 
     def flush_pending(self) -> None:
         payload = self._flush_pending_impl()
         if payload is not None:
             self._emit_flush(payload)
-        self._emit_state()
+        self._emit_state(force=False)
 
     def start_startup_sync(self) -> None:
         with self._lock:
@@ -107,7 +110,7 @@ class ApiFlowRuntime:
                 return
             self._startup_sync_running = True
             self._startup_sync_status = "inicializando..."
-        self._emit_state()
+        self._emit_state(force=True)
         Thread(target=self._run_startup_sync_worker, daemon=True, name="startup-sync").start()
 
     def start_stop_flush(self) -> None:
@@ -116,13 +119,13 @@ class ApiFlowRuntime:
                 return
             self._stop_flush_running = True
             self._last_capture_status = "guardando eventos pendientes..."
-        self._emit_state()
+        self._emit_state(force=True)
         Thread(target=self._run_stop_flush_worker, daemon=True, name="stop-flush").start()
 
     def close(self) -> None:
         self.flush_pending()
         self.capture_manager.stop_capture()
-        self._emit_state()
+        self._emit_state(force=True)
 
     def snapshot_state(self) -> ApiFlowRuntimeState:
         session = self.capture_manager.current_session()
@@ -145,7 +148,7 @@ class ApiFlowRuntime:
     def _handle_capture_status(self, message: str) -> None:
         with self._lock:
             self._last_capture_status = message
-        self._emit_state()
+        self._emit_state(force=True)
 
     def _run_startup_sync_worker(self) -> None:
         repo = ApiFlowRepository()
@@ -169,7 +172,7 @@ class ApiFlowRuntime:
         with self._lock:
             self._startup_sync_running = False
             self._startup_sync_status = "listo" if result.get("ok", True) else f"error ({result.get('error', 'desconocido')})"
-        self._emit_state()
+        self._emit_state(force=True)
         for callback in self._startup_callbacks:
             callback(result)
 
@@ -177,7 +180,7 @@ class ApiFlowRuntime:
         payload = self._flush_pending_impl(final_flush=True)
         with self._lock:
             self._stop_flush_running = False
-        self._emit_state()
+        self._emit_state(force=True)
         for callback in self._stop_flush_callbacks:
             callback(payload or {"ok": True, "message": f"Estado: {self.snapshot_state().capture_status}"})
 
@@ -235,7 +238,12 @@ class ApiFlowRuntime:
         del self._pending_events[:dropped]
         return dropped
 
-    def _emit_state(self) -> None:
+    def _emit_state(self, *, force: bool = False) -> None:
+        now = monotonic()
+        if not force:
+            if now - self._last_state_emit_ts < self.state_emit_interval_seconds:
+                return
+        self._last_state_emit_ts = now
         state = self.snapshot_state()
         for callback in self._state_callbacks:
             callback(state)

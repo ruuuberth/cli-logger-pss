@@ -107,6 +107,14 @@ class ApiFlowCaptureManager:
             self._emit_status(
                 f"Captura activa en {settings.MITMPROXY_LISTEN_HOST}:{settings.MITMPROXY_LISTEN_PORT}"
             )
+            self._emit_status(
+                "Capture policy: hosts="
+                f"{','.join(settings.API_FLOW_CAPTURE_HOST_ALLOWLIST) or '*'} "
+                "paths="
+                f"{','.join(settings.API_FLOW_CAPTURE_PATH_ALLOWLIST) or '*'} "
+                "ignore="
+                f"{','.join(settings.API_FLOW_IGNORE_HOSTS) or '-'}"
+            )
             if settings.API_FLOW_IGNORE_HOSTS:
                 self._emit_status(
                     "Passthrough hosts: " + ", ".join(settings.API_FLOW_IGNORE_HOSTS)

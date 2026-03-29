@@ -117,6 +117,21 @@ def test_enqueue_event_increments_live_count_and_pending() -> None:
     assert state.pending_count == 1
 
 
+def test_enqueue_event_throttles_state_emission(monkeypatch) -> None:
+    runtime = ApiFlowRuntime(repository=_Repo(), capture_manager=_CaptureManager())
+    runtime.state_emit_interval_seconds = 0.25
+    monkeypatch.setattr("app.services.api_flow_runtime.monotonic", lambda: 1.0)
+
+    emissions: list[object] = []
+    runtime.subscribe_state(emissions.append)
+    runtime.enqueue_event({"id": 1})
+    runtime.enqueue_event({"id": 2})
+    runtime.enqueue_event({"id": 3})
+
+    assert len(emissions) == 1
+    assert runtime.snapshot_state().live_event_count == 3
+
+
 def test_flush_pending_requeues_unsaved_events() -> None:
     repo = _Repo(save_return=1)
     runtime = ApiFlowRuntime(repository=repo, capture_manager=_CaptureManager())
