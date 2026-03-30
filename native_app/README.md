@@ -134,3 +134,30 @@ Backfill:
 ```bash
 ./scripts/build.sh
 ```
+
+## CI/CD de binarios
+
+Workflows:
+- `Native Build` (`.github/workflows/native-build.yml`):
+  - corre en `push`/`PR` a `develop` y `main`
+  - compila Linux + Windows
+  - publica artifacts de run:
+    - `pss-logger-native-linux`
+    - `pss-logger-native-windows.exe`
+- `Native Pre-release (develop)` (`.github/workflows/prerelease-develop.yml`):
+  - corre en `push` a `develop`
+  - publica canal `develop-latest` como pre-release
+  - adjunta binarios + `SHA256SUMS.txt` (+ firma opcional)
+- `Native Release` (`.github/workflows/release.yml`):
+  - corre en tags `v*`
+  - publica release estable con binarios Linux/Windows
+  - adjunta `SHA256SUMS.txt` (+ firma opcional)
+
+Firma opcional:
+- si existe `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`) se firma `SHA256SUMS.txt` como `SHA256SUMS.txt.asc`
+- si no existen secretos, el release sigue sin fallo
+
+Operación rápida:
+1. Pre-release: push a `develop`.
+2. Release estable: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. Verificar descarga: comparar hash local contra `SHA256SUMS.txt`.
