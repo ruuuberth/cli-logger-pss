@@ -6,6 +6,6 @@ Set-Location $RootDir
 
 python -m pip install -U pip setuptools wheel
 python -m pip install -e . pyinstaller
-python -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$RootDir" run.py
+python -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$RootDir" --collect-data app.services run.py
 
 Write-Host "Build generado en native_app/dist/"

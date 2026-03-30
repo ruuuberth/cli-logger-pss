@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import pkgutil
 import logging
 import re
 import subprocess
+import tempfile
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -36,6 +38,7 @@ class ApiFlowCaptureManager:
         self._event_callbacks: list[Callable[[dict[str, Any]], None]] = []
         self._status_callbacks: list[Callable[[str], None]] = []
         self._current_session: CaptureSession | None = None
+        self._temp_addon_path: Path | None = None
 
     def subscribe(self, callback: Callable[[dict[str, Any]], None]) -> None:
         self._event_callbacks.append(callback)
@@ -51,9 +54,7 @@ class ApiFlowCaptureManager:
             if not settings.API_FLOW_ENABLED:
                 raise RuntimeError("API Flow está deshabilitado por configuración (.env).")
 
-            addon_path = Path(__file__).resolve().parent / "mitm_api_flow_addon.py"
-            if not addon_path.exists():
-                raise RuntimeError(f"No se encontró el addon de mitmproxy: {addon_path}")
+            addon_path = self._resolve_addon_path()
 
             session_id = uuid4().hex
             cmd = [
@@ -140,6 +141,7 @@ class ApiFlowCaptureManager:
             finally:
                 self._process = None
                 self._current_session = None
+                self._cleanup_temp_addon_path()
                 self._emit_status("Captura detenida")
 
     def is_running(self) -> bool:
@@ -175,6 +177,7 @@ class ApiFlowCaptureManager:
             with self._lock:
                 self._process = None
                 self._current_session = None
+                self._cleanup_temp_addon_path()
 
     def _handle_event_line(self, raw_payload: str) -> None:
         try:
@@ -212,3 +215,34 @@ class ApiFlowCaptureManager:
             escaped = re.escape(host.lstrip("."))
             patterns.append(rf"(^|\\.){escaped}:\\d+$")
         return "|".join(patterns)
+
+    def _resolve_addon_path(self) -> Path:
+        source_path = Path(__file__).resolve().parent / "mitm_api_flow_addon.py"
+        if source_path.exists():
+            return source_path
+
+        addon_bytes = pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
+        if not addon_bytes:
+            raise RuntimeError("No se pudo resolver el addon mitmproxy (source/frozen).")
+
+        try:
+            tmp_dir = Path(tempfile.gettempdir()) / "pss_logger_addons"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            temp_path = tmp_dir / f"mitm_api_flow_addon_{uuid4().hex}.py"
+            temp_path.write_bytes(addon_bytes)
+        except Exception as exc:
+            raise RuntimeError(f"Fallo al extraer addon mitmproxy a temporal: {exc}") from exc
+
+        self._temp_addon_path = temp_path
+        return temp_path
+
+    def _cleanup_temp_addon_path(self) -> None:
+        path = self._temp_addon_path
+        self._temp_addon_path = None
+        if path is None:
+            return
+        try:
+            if path.exists():
+                path.unlink()
+        except Exception:
+            logger.warning("event=addon_temp_cleanup_failed path=%s", path)

@@ -53,6 +53,9 @@ jobs:
       - name: Build executable
         run: ./scripts/build.sh
 
+      - name: Run addon capture tests
+        run: python3 -m pytest -q tests/test_api_flow_capture.py
+
       - name: Prepare artifact payload
         run: |
           mkdir -p dist/upload

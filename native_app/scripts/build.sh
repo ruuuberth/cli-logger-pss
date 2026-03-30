@@ -6,6 +6,6 @@ cd "$ROOT_DIR"
 
 python3 -m pip install -U pip setuptools wheel
 python3 -m pip install -e . pyinstaller
-python3 -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$ROOT_DIR" run.py
+python3 -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$ROOT_DIR" --collect-data app.services run.py
 
 echo "Build generado en native_app/dist/"
