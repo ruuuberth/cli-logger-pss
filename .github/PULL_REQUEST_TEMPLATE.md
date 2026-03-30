@@ -9,11 +9,13 @@
 - [ ] chore
 
 ## Scope
-- Base branch: `main`
+- Base branch expected:
+  - `develop` for features/fixes/refactors/docs
+  - `main` only for controlled release/hotfix promotion
 - Related issue/task: 
 
 ## Checklist
-- [ ] Branch created from `main`
+- [ ] Branch created from `develop` (or release/hotfix branch explicitly justified)
 - [ ] App runs locally (`python -m app.main`)
 - [ ] Build script validated (`native_app/scripts/build.sh`) if applicable
 - [ ] No temporary artifacts committed (`__pycache__`, build outputs)

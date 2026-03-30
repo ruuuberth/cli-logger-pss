@@ -1,0 +1,63 @@
+name: Bug report
+description: Reporta un fallo reproducible
+labels: [bug]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Resumen
+      description: Describe el fallo en una frase
+      placeholder: La app se cierra al iniciar captura
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      description: Lista exacta de pasos
+      placeholder: |
+        1. Abrir app
+        2. Pulsar Iniciar captura
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado actual
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      description: Pega logs relevantes de consola o screenshot
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión / commit
+      placeholder: v0.2.3 o SHA
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Plataforma
+      options:
+        - Linux
+        - Windows
+        - macOS
+        - Otra
+    validations:
+      required: true

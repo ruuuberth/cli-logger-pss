@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/ruuuberth/Logger-PSS/blob/develop/README.md
+    about: Revisa la documentación principal antes de abrir un issue.
+  - name: Contributing Guide
+    url: https://github.com/ruuuberth/Logger-PSS/blob/develop/CONTRIBUTING.md
+    about: Flujo de ramas, PR y checklist del proyecto.

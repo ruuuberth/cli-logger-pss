@@ -73,11 +73,18 @@ El ejecutable se genera en `native_app/dist/`.
 
 ## Publicación automática de binarios
 
-- Push/PR a `develop` o `main`: compila Linux + Windows y sube artifacts de CI.
+- PR a `develop` o `main`: compila Linux + Windows y sube artifacts de CI.
 - Push a `develop`: actualiza pre-release `develop-latest` con binarios y `SHA256SUMS.txt`.
 - Push de tag `v*`: crea release estable con binarios Linux/Windows y `SHA256SUMS.txt`.
 
 Si configuras `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`), también se publica `SHA256SUMS.txt.asc`.
+
+## Flujo de ramas
+
+- `develop`: rama de desarrollo e integración.
+- `main`: rama de producción estable.
+- Features/fixes normales: PR hacia `develop`.
+- Publicación estable: merge controlado a `main` y tag `v*`.
 
 ## Documentacion relacionada
 

@@ -1,0 +1,39 @@
+name: Feature request
+description: Propuesta de mejora funcional
+labels: [enhancement]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Resumen de la propuesta
+      placeholder: Agregar filtro por resultado de batalla
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema que resuelve
+      description: Qué limitación actual quieres resolver
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta técnica/funcional
+      description: Describe comportamiento esperado y alcance
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Opcional
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impacto esperado
+      description: UX, rendimiento, mantenimiento, riesgos

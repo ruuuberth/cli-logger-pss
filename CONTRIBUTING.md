@@ -26,6 +26,23 @@ Este repositorio prioriza la app nativa de replay logger en `native_app/`.
 4. Actualizar docs si cambia comportamiento
 5. Abrir PR con alcance único
 
+## CI/CD contract
+
+- PR hacia `develop` o `main`:
+  - ejecuta `Native Build` (Linux + Windows) como control de calidad.
+- Push a `develop`:
+  - ejecuta `Native Pre-release (develop)` y actualiza `develop-latest`.
+- Push de tag `v*`:
+  - ejecuta `Native Release` y publica release estable.
+
+## Stable release process
+
+1. Asegurar que `develop` esté validado y fusionado en `main` por PR.
+2. Crear tag sobre `main`:
+   - `git tag vMAJOR.MINOR.PATCH`
+   - `git push origin vMAJOR.MINOR.PATCH`
+3. Verificar assets y checksums en GitHub Releases.
+
 ## PR checklist
 
 - Cambios acotados a un objetivo

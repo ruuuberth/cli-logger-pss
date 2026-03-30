@@ -1,0 +1,13 @@
+# Default owner
+* @ruuuberth
+
+# Native app core
+/native_app/** @ruuuberth
+
+# CI/CD workflows
+/.github/workflows/** @ruuuberth
+
+# Docs and process
+/docs/** @ruuuberth
+/CONTRIBUTING.md @ruuuberth
+/README.md @ruuuberth

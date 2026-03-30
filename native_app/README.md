@@ -139,7 +139,7 @@ Backfill:
 
 Workflows:
 - `Native Build` (`.github/workflows/native-build.yml`):
-  - corre en `push`/`PR` a `develop` y `main`
+  - corre en `PR` a `develop` y `main` (y manual)
   - compila Linux + Windows
   - publica artifacts de run:
     - `pss-logger-native-linux`
@@ -158,6 +158,7 @@ Firma opcional:
 - si no existen secretos, el release sigue sin fallo
 
 Operación rápida:
-1. Pre-release: push a `develop`.
-2. Release estable: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. Verificar descarga: comparar hash local contra `SHA256SUMS.txt`.
+1. CI: abrir PR hacia `develop` o `main`.
+2. Pre-release: push a `develop`.
+3. Release estable: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+4. Verificar descarga: comparar hash local contra `SHA256SUMS.txt`.
