@@ -162,3 +162,6 @@ Operación rápida:
 2. Pre-release: push a `develop`.
 3. Release estable: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 4. Verificar descarga: comparar hash local contra `SHA256SUMS.txt`.
+
+Gobernanza temporal (repo privado sin branch protection):
+- ver `../docs/TEMP_GOVERNANCE_PROTOCOL.md`

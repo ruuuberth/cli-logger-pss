@@ -9,6 +9,7 @@ Este repositorio prioriza la app nativa de replay logger en `native_app/`.
 - Base de desarrollo: `develop`
 - Base de release: `main`
 - PRs nativos: hacia `develop`
+- Sin GitHub branch protection activa: no se permite push directo a `develop` ni `main` (regla operativa obligatoria).
 
 ## Branch naming
 
@@ -42,6 +43,14 @@ Este repositorio prioriza la app nativa de replay logger en `native_app/`.
    - `git tag vMAJOR.MINOR.PATCH`
    - `git push origin vMAJOR.MINOR.PATCH`
 3. Verificar assets y checksums en GitHub Releases.
+
+## Protocolo temporal (repo privado sin branch protection)
+
+Mientras no exista GitHub Pro/Team en este repo privado, aplica el protocolo temporal:
+
+- Documento oficial: `docs/TEMP_GOVERNANCE_PROTOCOL.md`
+- Regla clave: todo cambio entra por PR.
+- Excepción hotfix: solo por PR abreviado con CI verde y motivo documentado.
 
 ## PR checklist
 

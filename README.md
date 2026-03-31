@@ -90,4 +90,5 @@ Si configuras `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`), tamb
 
 - `native_app/README.md` (detalle tecnico del modulo nativo)
 - `docs/CODEBASE_ONBOARDING.md`
+- `docs/TEMP_GOVERNANCE_PROTOCOL.md` (protocolo temporal sin branch protection)
 - `CONTRIBUTING.md`
