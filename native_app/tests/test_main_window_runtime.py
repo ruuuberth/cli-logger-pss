@@ -183,3 +183,11 @@ def test_runtime_error_status_is_not_hidden_while_running() -> None:
     )
 
     assert window.api_flow_status_label.value == "Estado: error de persistencia, reintentos=1, pendientes=2"
+
+
+def test_capture_error_code_and_friendly_message_helpers() -> None:
+    window = object.__new__(MainWindow)
+    code = MainWindow._extract_capture_error_code(window, "[capture_proxy_missing] missing proxy")
+    assert code == "capture_proxy_missing"
+    friendly = MainWindow._friendly_capture_error_message(window, code, "raw")
+    assert "No se encontró mitmproxy" in friendly

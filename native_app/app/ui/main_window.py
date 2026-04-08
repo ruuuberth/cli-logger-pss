@@ -27,6 +27,7 @@ from app.ui.models.api_flow_table_model import ApiFlowTableModel
 from app.ui.api_flow_runtime_bridge import ApiFlowRuntimeBridge
 from app.ui.ui_theme import window_font_qss
 import logging
+import re
 
 
 class MainWindow(QMainWindow):
@@ -73,7 +74,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 760)
         self.setStyleSheet(window_font_qss())
         self.setCentralWidget(self._build_api_flow_tab())
-        QTimer.singleShot(0, self.start_api_flow_capture)
+        QTimer.singleShot(0, lambda: self.start_api_flow_capture(user_initiated=False))
         QTimer.singleShot(0, self._start_startup_sync)
         self.resource_monitor_timer.start()
 
@@ -167,11 +168,16 @@ class MainWindow(QMainWindow):
         self.reload_api_flow_page()
         return tab
 
-    def start_api_flow_capture(self) -> None:
+    def start_api_flow_capture(self, *, user_initiated: bool = True) -> None:
         try:
             self.api_flow_runtime.start_capture()
         except Exception as exc:
-            QMessageBox.critical(self, "Error", f"No se pudo iniciar captura: {exc}")
+            message = str(exc)
+            code = self._extract_capture_error_code(message)
+            friendly = self._friendly_capture_error_message(code, message)
+            self.api_flow_status_label.setText(f"Estado: captura no disponible ({code or 'desconocido'})")
+            if user_initiated:
+                QMessageBox.warning(self, "Captura no disponible", friendly)
             return
         if not self.api_flow_flush_timer.isActive():
             self.api_flow_flush_timer.start()
@@ -181,9 +187,10 @@ class MainWindow(QMainWindow):
         self.api_flow_flush_timer.stop()
 
     def toggle_api_flow_capture(self) -> None:
-        self.api_flow_runtime.toggle_capture()
-        if self.api_flow_runtime.is_capture_running() and not self.api_flow_flush_timer.isActive():
-            self.api_flow_flush_timer.start()
+        if self.api_flow_runtime.is_capture_running():
+            self.stop_api_flow_capture()
+            return
+        self.start_api_flow_capture(user_initiated=True)
 
     @Slot()
     def _flush_api_flow_events(self) -> None:
@@ -314,6 +321,24 @@ class MainWindow(QMainWindow):
             self.api_flow_capture_button.setText("Detener captura")
         else:
             self.api_flow_capture_button.setText("Iniciar captura")
+
+    def _extract_capture_error_code(self, message: str) -> str | None:
+        match = re.match(r"\[(?P<code>[a-z_]+)\]\s*", message.strip())
+        return match.group("code") if match else None
+
+    def _friendly_capture_error_message(self, code: str | None, raw_message: str) -> str:
+        if code == "capture_proxy_missing":
+            return (
+                "No se encontró mitmproxy para iniciar captura.\n\n"
+                "Pasos:\n"
+                "1. Usa el ZIP portable oficial (incluye third_party/mitmproxy), o\n"
+                "2. Instala mitmproxy en el sistema y vuelve a intentar."
+            )
+        if code == "capture_addon_unresolvable":
+            return "No se pudo cargar el addon de captura. Reinstala el paquete o descarga de nuevo el release."
+        if code == "capture_addon_integrity_mismatch":
+            return "La integridad del addon de captura falló. Descarga nuevamente el release oficial."
+        return f"No se pudo iniciar captura: {raw_message}"
 
     @Slot(int)
     def _on_inspect_requested(self, row: int) -> None:

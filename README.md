@@ -28,18 +28,23 @@ cp ../.env.dev.example .env
 pss-native
 ```
 
-## Configuracion minima recomendada
+## Configuracion minima recomendada (opcional)
 
-En `native_app/.env`:
+La app funciona sin `.env` usando defaults.  
+Si quieres ajustar comportamiento avanzado, usa `native_app/.env`:
 
 - `API_FLOW_ENABLED=true`
 - `MITMPROXY_BINARY=mitmdump`
 - `MITMPROXY_LISTEN_HOST=127.0.0.1`
 - `MITMPROXY_LISTEN_PORT=8081`
-- `API_FLOW_CAPTURE_HOST_ALLOWLIST=api.pixelstarships.com`
-- `API_FLOW_CAPTURE_PATH_ALLOWLIST=/BattleService/GetBattle3`
+- `API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"]`
+- `API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"]`
 
 Con esto la captura queda enfocada en batallas y evita ruido de otros servicios.
+
+Formato recomendado para listas en `.env`: JSON array.
+Ejemplo: `API_FLOW_IGNORE_HOSTS=["host1","host2"]`
+Compatibilidad temporal: el formato CSV (`host1,host2`) sigue funcionando en esta release pero queda deprecado.
 
 ## Datos que guarda
 
@@ -69,15 +74,19 @@ cd native_app
 ./scripts/build.sh
 ```
 
-El ejecutable se genera en `native_app/dist/`.
+Salida principal:
+- `native_app/dist/pss-logger-native-linux-portable.zip` (Linux)
+- `native_app/dist/pss-logger-native-windows-portable.zip` (Windows, desde runner Windows)
 
 ## Publicación automática de binarios
 
-- PR a `develop` o `main`: compila Linux + Windows y sube artifacts de CI.
-- Push a `develop`: actualiza pre-release `develop-latest` con binarios y `SHA256SUMS.txt`.
-- Push de tag `v*`: crea release estable con binarios Linux/Windows y `SHA256SUMS.txt`.
+- PR a `develop` o `main`: compila Linux + Windows y sube ZIP portable de CI.
+- Push a `develop`: actualiza pre-release `develop-latest` con ZIPs + `SHA256SUMS.txt`.
+- Push de tag `v*`: crea release estable con ZIPs Linux/Windows + `SHA256SUMS.txt`.
 
 Si configuras `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`), también se publica `SHA256SUMS.txt.asc`.
+
+Los ZIPs incluyen runtime de mitmproxy y `THIRD_PARTY_NOTICES.txt`.
 
 ## Flujo de ramas
 
