@@ -83,6 +83,7 @@ Salida principal:
 - PR a `develop` o `main`: compila Linux + Windows y sube ZIP portable de CI.
 - Push a `develop`: actualiza pre-release `develop-latest` con ZIPs + `SHA256SUMS.txt`.
 - Push de tag `v*`: crea release estable con ZIPs Linux/Windows + `SHA256SUMS.txt`.
+- Política de assets: no se publican binarios sueltos (`pss-logger-native` / `.exe`), solo ZIP portable.
 
 Si configuras `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`), también se publica `SHA256SUMS.txt.asc`.
 

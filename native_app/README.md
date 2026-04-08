@@ -166,11 +166,12 @@ Workflows:
 - `Native Pre-release (develop)` (`.github/workflows/prerelease-develop.yml`):
   - corre en `push` a `develop`
   - publica canal `develop-latest` como pre-release
-  - adjunta binarios + `SHA256SUMS.txt` (+ firma opcional)
+  - adjunta ZIP portable + `SHA256SUMS.txt` (+ firma opcional)
 - `Native Release` (`.github/workflows/release.yml`):
   - corre en tags `v*`
-  - publica release estable con binarios Linux/Windows
+  - publica release estable con ZIP portable Linux/Windows
   - adjunta `SHA256SUMS.txt` (+ firma opcional)
+  - elimina assets legacy sueltos si existen en el release/tag
 
 Firma opcional:
 - si existe `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`) se firma `SHA256SUMS.txt` como `SHA256SUMS.txt.asc`

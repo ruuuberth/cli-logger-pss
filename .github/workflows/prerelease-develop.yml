@@ -135,6 +135,39 @@ jobs:
           git tag -f develop-latest "${GITHUB_SHA}"
           git push origin refs/tags/develop-latest --force
 
+      - name: Remove legacy assets from existing develop-latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/develop-latest" 2>/dev/null || true)"
+          if [ -z "${release_json}" ]; then
+            echo "No existing develop-latest release found. Skipping cleanup."
+            exit 0
+          fi
+          export RELEASE_JSON="${release_json}"
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          release = json.loads(os.environ["RELEASE_JSON"])
+          release_id = release["id"]
+          assets = subprocess.check_output(
+              ["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/{release_id}/assets"],
+              text=True,
+          )
+          asset_rows = json.loads(assets)
+          legacy_names = {"pss-logger-native", "pss-logger-native-windows.exe"}
+          for asset in asset_rows:
+              if asset.get("name") in legacy_names:
+                  asset_id = asset["id"]
+                  subprocess.check_call(
+                      ["gh", "api", "-X", "DELETE", f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/assets/{asset_id}"]
+                  )
+                  print(f"Deleted legacy asset: {asset['name']}")
+          PY
+
       - name: Download linux artifact
         uses: actions/download-artifact@v4
         with:
