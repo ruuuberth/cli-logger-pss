@@ -250,7 +250,8 @@ class ApiFlowCaptureManager:
         return pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
 
     def _validate_addon_integrity(self, addon_bytes: bytes) -> None:
-        digest = hashlib.sha256(addon_bytes).hexdigest()
+        normalized_bytes = self._normalize_addon_bytes(addon_bytes)
+        digest = hashlib.sha256(normalized_bytes).hexdigest()
         if digest != EXPECTED_MITM_ADDON_SHA256:
             logger.error(
                 "event=addon_integrity_mismatch expected=%s got=%s",
@@ -259,6 +260,10 @@ class ApiFlowCaptureManager:
             )
             raise RuntimeError("[capture_addon_integrity_mismatch] Integridad de addon inválida (SHA256 mismatch)")
         logger.info("event=addon_integrity_ok sha256=%s", digest)
+
+    def _normalize_addon_bytes(self, addon_bytes: bytes) -> bytes:
+        # Normalize line endings to avoid false mismatches across LF/CRLF checkouts.
+        return addon_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
 
     def _resolve_mitmproxy_binary_path(self) -> Path | str:
         configured = str(settings.MITMPROXY_BINARY or "").strip()

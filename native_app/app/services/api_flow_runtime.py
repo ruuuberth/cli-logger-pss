@@ -86,6 +86,11 @@ class ApiFlowRuntime:
     def is_capture_running(self) -> bool:
         return self.capture_manager.is_running()
 
+    def set_capture_error(self, message: str) -> None:
+        with self._lock:
+            self._last_capture_status = message
+        self._emit_state(force=True)
+
     def enqueue_event(self, payload: dict[str, Any]) -> None:
         with self._lock:
             self._pending_events.append(payload)

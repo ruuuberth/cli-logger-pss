@@ -121,6 +121,17 @@ class _Button:
         self.text = text
 
 
+class _Timer:
+    def __init__(self) -> None:
+        self.started = False
+
+    def isActive(self) -> bool:
+        return self.started
+
+    def start(self) -> None:
+        self.started = True
+
+
 def test_runtime_state_updates_visible_labels() -> None:
     window = object.__new__(MainWindow)
     window.api_flow_status_label = _Label()
@@ -191,3 +202,25 @@ def test_capture_error_code_and_friendly_message_helpers() -> None:
     assert code == "capture_proxy_missing"
     friendly = MainWindow._friendly_capture_error_message(window, code, "raw")
     assert "No se encontró mitmproxy" in friendly
+
+
+def test_start_capture_failure_updates_runtime_status() -> None:
+    class _Runtime:
+        def __init__(self) -> None:
+            self.error = ""
+
+        def start_capture(self) -> None:
+            raise RuntimeError("[capture_proxy_missing] missing")
+
+        def set_capture_error(self, message: str) -> None:
+            self.error = message
+
+    window = object.__new__(MainWindow)
+    window.api_flow_runtime = _Runtime()
+    window.api_flow_status_label = _Label()
+    window.api_flow_flush_timer = _Timer()
+
+    MainWindow.start_api_flow_capture(window, user_initiated=False)
+
+    assert window.api_flow_runtime.error == "captura no disponible (capture_proxy_missing)"
+    assert window.api_flow_status_label.value == "Estado: captura no disponible (capture_proxy_missing)"

@@ -175,7 +175,9 @@ class MainWindow(QMainWindow):
             message = str(exc)
             code = self._extract_capture_error_code(message)
             friendly = self._friendly_capture_error_message(code, message)
-            self.api_flow_status_label.setText(f"Estado: captura no disponible ({code or 'desconocido'})")
+            status_message = f"captura no disponible ({code or 'desconocido'})"
+            self.api_flow_runtime.set_capture_error(status_message)
+            self.api_flow_status_label.setText(f"Estado: {status_message}")
             if user_initiated:
                 QMessageBox.warning(self, "Captura no disponible", friendly)
             return

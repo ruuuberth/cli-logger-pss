@@ -213,9 +213,16 @@ def test_start_capture_fails_on_sha_mismatch(monkeypatch) -> None:
 def test_validate_addon_integrity_accepts_expected_hash() -> None:
     manager = ApiFlowCaptureManager()
     addon_bytes = _addon_bytes()
-    digest = hashlib.sha256(addon_bytes).hexdigest()
+    digest = hashlib.sha256(manager._normalize_addon_bytes(addon_bytes)).hexdigest()
     assert digest
     manager._validate_addon_integrity(addon_bytes)
+
+
+def test_validate_addon_integrity_accepts_crlf_variant() -> None:
+    manager = ApiFlowCaptureManager()
+    addon_bytes = _addon_bytes()
+    crlf_bytes = addon_bytes.replace(b"\n", b"\r\n")
+    manager._validate_addon_integrity(crlf_bytes)
 
 
 def test_temp_addon_is_cleaned_on_stop_capture(monkeypatch, tmp_path: Path) -> None:

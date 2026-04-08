@@ -216,3 +216,10 @@ def test_stop_capture_triggers_background_flush(monkeypatch) -> None:
     assert payloads
     assert payloads[0]["ok"] is True
     assert runtime.snapshot_state().pending_count == 0
+
+
+def test_set_capture_error_persists_runtime_status() -> None:
+    runtime = ApiFlowRuntime(repository=_Repo(), capture_manager=_CaptureManager())
+    runtime.set_capture_error("captura no disponible (capture_proxy_missing)")
+    state = runtime.snapshot_state()
+    assert state.capture_status == "captura no disponible (capture_proxy_missing)"
