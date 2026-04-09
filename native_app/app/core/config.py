@@ -1,3 +1,5 @@
+import logging
+
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
@@ -8,41 +10,46 @@ from pydantic_settings import (
 )
 from typing import List
 
+logger = logging.getLogger(__name__)
 
-class CsvEnvSettingsSource(EnvSettingsSource):
-    def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        list_fields = {
-            "ALLOWED_HOSTS",
-            "API_FLOW_IGNORE_HOSTS",
-            "API_FLOW_CAPTURE_HOST_ALLOWLIST",
-            "API_FLOW_CAPTURE_PATH_ALLOWLIST",
-        }
-        if field_name in list_fields and isinstance(value, str):
+
+_LIST_FIELDS = {
+    "ALLOWED_HOSTS",
+    "API_FLOW_IGNORE_HOSTS",
+    "API_FLOW_CAPTURE_HOST_ALLOWLIST",
+    "API_FLOW_CAPTURE_PATH_ALLOWLIST",
+}
+
+
+class _ListCompatMixin:
+    _warned_fields: set[str] = set()
+
+    def _prepare_list_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
+        if field_name in _LIST_FIELDS and isinstance(value, str):
             cleaned_value = value.strip()
             if not cleaned_value:
                 return []
             if cleaned_value.startswith("["):
                 return super().prepare_field_value(field_name, field, value, value_is_complex)
-            return [host.strip() for host in cleaned_value.split(",") if host.strip()]
+            if field_name not in self._warned_fields:
+                logger.warning(
+                    "event=config_list_csv_deprecated field=%s message=%s",
+                    field_name,
+                    'Usa JSON array en .env, ejemplo: ["api.pixelstarships.com"]',
+                )
+                self._warned_fields.add(field_name)
+            return [token.strip() for token in cleaned_value.split(",") if token.strip()]
         return super().prepare_field_value(field_name, field, value, value_is_complex)
 
 
-class CsvDotEnvSettingsSource(DotEnvSettingsSource):
+class ListCompatEnvSettingsSource(_ListCompatMixin, EnvSettingsSource):
     def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        list_fields = {
-            "ALLOWED_HOSTS",
-            "API_FLOW_IGNORE_HOSTS",
-            "API_FLOW_CAPTURE_HOST_ALLOWLIST",
-            "API_FLOW_CAPTURE_PATH_ALLOWLIST",
-        }
-        if field_name in list_fields and isinstance(value, str):
-            cleaned_value = value.strip()
-            if not cleaned_value:
-                return []
-            if cleaned_value.startswith("["):
-                return super().prepare_field_value(field_name, field, value, value_is_complex)
-            return [host.strip() for host in cleaned_value.split(",") if host.strip()]
-        return super().prepare_field_value(field_name, field, value, value_is_complex)
+        return self._prepare_list_field_value(field_name, field, value, value_is_complex)
+
+
+class ListCompatDotEnvSettingsSource(_ListCompatMixin, DotEnvSettingsSource):
+    def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
+        return self._prepare_list_field_value(field_name, field, value, value_is_complex)
 
 
 class Settings(BaseSettings):
@@ -101,8 +108,8 @@ class Settings(BaseSettings):
     ):
         return (
             init_settings,
-            CsvEnvSettingsSource(settings_cls),
-            CsvDotEnvSettingsSource(settings_cls),
+            ListCompatEnvSettingsSource(settings_cls),
+            ListCompatDotEnvSettingsSource(settings_cls),
             file_secret_settings,
         )
     

@@ -58,3 +58,8 @@ Mientras no exista GitHub Pro/Team en este repo privado, aplica el protocolo tem
 - Sin artefactos generados
 - Notas de validación incluidas
 - Si toca captura/normalización: incluir pruebas o evidencia de verificación
+
+## Seguridad
+
+- No commitear archivos `.env` reales.
+- Solo se aceptan `.env.example` y `.env.dev.example`.

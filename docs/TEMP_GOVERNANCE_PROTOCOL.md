@@ -35,8 +35,8 @@ Un PR se puede mergear solo si cumple:
 - Trigger: push a `develop`.
 - Workflow esperado: `Native Pre-release (develop)`.
 - Assets a validar:
-  - `pss-logger-native`
-  - `pss-logger-native-windows.exe`
+  - `pss-logger-native-linux-portable.zip`
+  - `pss-logger-native-windows-portable.zip`
   - `SHA256SUMS.txt`
   - `SHA256SUMS.txt.asc` (solo si hay firma)
 
@@ -88,6 +88,17 @@ Un PR se puede mergear solo si cumple:
 - [ ] CI en verde en PR a `main`
 - [ ] tag `v*` creado sobre `main`
 - [ ] release con binarios + `SHA256SUMS.txt` validado
+
+## Protocolo post-history-rewrite
+
+Si se reescribe historial por saneamiento de secretos:
+
+- Recomendado: re-clone completo del repositorio.
+- Alternativa:
+  - `git fetch --all --prune`
+  - `git checkout develop && git reset --hard origin/develop`
+  - `git checkout main && git reset --hard origin/main`
+- No hacer push desde clones antiguos hasta resincronizar.
 
 ## Criterio de salida
 

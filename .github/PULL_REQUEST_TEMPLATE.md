@@ -22,6 +22,7 @@
 - [ ] App runs locally (`python -m app.main`)
 - [ ] Build script validated (`native_app/scripts/build.sh`) if applicable
 - [ ] No temporary artifacts committed (`__pycache__`, build outputs)
+- [ ] No secrets or real `.env` files included in this PR
 - [ ] Docs updated when behavior changed
 - [ ] Protocol validated: this PR is the only merge path to target branch
 

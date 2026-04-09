@@ -4,7 +4,6 @@
 
 - Desarrollo nativo: `develop`
 - Release: `main`
-- Web legado: `web/main`, `web/develop`
 
 ## Flujo diario (native)
 

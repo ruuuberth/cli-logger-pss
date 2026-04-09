@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import pkgutil
 import logging
+import os
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from dataclasses import dataclass
@@ -18,6 +22,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _EVENT_PREFIX = "API_FLOW_EVENT "
+EXPECTED_MITM_ADDON_SHA256 = "5b91509219cd4cfde2170a4c34c9c1d4756157fb92401407980d4378e04359f9"
 
 
 @dataclass
@@ -55,10 +60,11 @@ class ApiFlowCaptureManager:
                 raise RuntimeError("API Flow está deshabilitado por configuración (.env).")
 
             addon_path = self._resolve_addon_path()
+            mitmproxy_binary = self._resolve_mitmproxy_binary_path()
 
             session_id = uuid4().hex
             cmd = [
-                settings.MITMPROXY_BINARY,
+                str(mitmproxy_binary),
                 "-s",
                 str(addon_path),
                 "--listen-host",
@@ -90,10 +96,13 @@ class ApiFlowCaptureManager:
                     bufsize=1,
                 )
             except FileNotFoundError as exc:
+                self._cleanup_temp_addon_path()
                 raise RuntimeError(
-                    f"No se encontró el binario '{settings.MITMPROXY_BINARY}'. Instala mitmproxy o ajusta MITMPROXY_BINARY."
+                    "[capture_proxy_missing] No se encontró mitmproxy. "
+                    "Instala mitmproxy o usa el paquete portable que lo incluye."
                 ) from exc
             except Exception as exc:
+                self._cleanup_temp_addon_path()
                 raise RuntimeError(f"No se pudo iniciar mitmproxy: {exc}") from exc
 
             self._current_session = CaptureSession(
@@ -218,22 +227,104 @@ class ApiFlowCaptureManager:
 
     def _resolve_addon_path(self) -> Path:
         source_path = Path(__file__).resolve().parent / "mitm_api_flow_addon.py"
-        if source_path.exists():
+        if source_path.exists() and not getattr(sys, "frozen", False):
+            logger.info("event=addon_source_resolved path=%s", source_path)
             return source_path
 
-        addon_bytes = pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
+        addon_bytes = self._load_addon_bytes(source_path)
         if not addon_bytes:
-            raise RuntimeError("No se pudo resolver el addon mitmproxy (source/frozen).")
+            raise RuntimeError("[capture_addon_unresolvable] No se pudo resolver el addon mitmproxy (source/frozen).")
 
+        self._validate_addon_integrity(addon_bytes)
         try:
-            tmp_dir = Path(tempfile.gettempdir()) / "pss_logger_addons"
-            tmp_dir.mkdir(parents=True, exist_ok=True)
-            temp_path = tmp_dir / f"mitm_api_flow_addon_{uuid4().hex}.py"
-            temp_path.write_bytes(addon_bytes)
+            return self._write_temp_addon(addon_bytes)
         except Exception as exc:
             raise RuntimeError(f"Fallo al extraer addon mitmproxy a temporal: {exc}") from exc
 
+    def _load_addon_bytes(self, source_path: Path) -> bytes | None:
+        if source_path.exists():
+            try:
+                return source_path.read_bytes()
+            except Exception as exc:
+                raise RuntimeError(f"No se pudo leer el addon mitmproxy desde source: {exc}") from exc
+        return pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
+
+    def _validate_addon_integrity(self, addon_bytes: bytes) -> None:
+        normalized_bytes = self._normalize_addon_bytes(addon_bytes)
+        digest = hashlib.sha256(normalized_bytes).hexdigest()
+        if digest != EXPECTED_MITM_ADDON_SHA256:
+            logger.error(
+                "event=addon_integrity_mismatch expected=%s got=%s",
+                EXPECTED_MITM_ADDON_SHA256,
+                digest,
+            )
+            raise RuntimeError("[capture_addon_integrity_mismatch] Integridad de addon inválida (SHA256 mismatch)")
+        logger.info("event=addon_integrity_ok sha256=%s", digest)
+
+    def _normalize_addon_bytes(self, addon_bytes: bytes) -> bytes:
+        # Normalize line endings to avoid false mismatches across LF/CRLF checkouts.
+        return addon_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+    def _resolve_mitmproxy_binary_path(self) -> Path | str:
+        configured = str(settings.MITMPROXY_BINARY or "").strip()
+        env_has_override = "MITMPROXY_BINARY" in os.environ
+
+        if env_has_override:
+            if self._is_executable_available(configured):
+                return configured
+            raise RuntimeError(
+                f"[capture_proxy_missing] MITMPROXY_BINARY configurado no es ejecutable: {configured}"
+            )
+
+        packaged = self._resolve_packaged_mitmproxy_path()
+        if packaged is not None:
+            logger.info("event=packaged_mitmproxy_resolved path=%s", packaged)
+            return packaged
+
+        if self._is_executable_available(configured):
+            return configured
+
+        raise RuntimeError(
+            "[capture_proxy_missing] No se encontró mitmproxy empaquetado ni en PATH."
+        )
+
+    def _resolve_packaged_mitmproxy_path(self) -> Path | None:
+        binary_name = "mitmdump.exe" if os.name == "nt" else "mitmdump"
+        candidate_roots: list[Path] = []
+
+        if getattr(sys, "frozen", False):
+            candidate_roots.append(Path(sys.executable).resolve().parent)
+            meipass = getattr(sys, "_MEIPASS", None)
+            if meipass:
+                candidate_roots.append(Path(meipass))
+
+        candidate_roots.append(Path(__file__).resolve().parents[2])
+        candidate_roots.append(Path.cwd())
+
+        for root in candidate_roots:
+            candidate = root / "third_party" / "mitmproxy" / binary_name
+            if self._is_executable_available(candidate):
+                return candidate
+        return None
+
+    def _is_executable_available(self, path_or_cmd: Path | str) -> bool:
+        if isinstance(path_or_cmd, Path):
+            return path_or_cmd.exists() and os.access(path_or_cmd, os.X_OK)
+        raw = str(path_or_cmd or "").strip()
+        if not raw:
+            return False
+        possible_path = Path(raw)
+        if possible_path.is_absolute() or any(sep in raw for sep in ("/", "\\")):
+            return possible_path.exists() and os.access(possible_path, os.X_OK)
+        return shutil.which(raw) is not None
+
+    def _write_temp_addon(self, addon_bytes: bytes) -> Path:
+        tmp_dir = Path(tempfile.gettempdir()) / "pss_logger_addons"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        temp_path = tmp_dir / f"mitm_api_flow_addon_{uuid4().hex}.py"
+        temp_path.write_bytes(addon_bytes)
         self._temp_addon_path = temp_path
+        logger.info("event=addon_frozen_extracted path=%s", temp_path)
         return temp_path
 
     def _cleanup_temp_addon_path(self) -> None:

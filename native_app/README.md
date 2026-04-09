@@ -94,10 +94,19 @@ completas cuando no hace falta.
 - `API_FLOW_CAPTURE_HOST_ALLOWLIST`
 - `API_FLOW_CAPTURE_PATH_ALLOWLIST`
 
+`.env` es opcional. Si no existe, la app usa defaults internos.
+
 Defaults recomendados para rendimiento:
-- `API_FLOW_CAPTURE_HOST_ALLOWLIST=api.pixelstarships.com`
-- `API_FLOW_CAPTURE_PATH_ALLOWLIST=/BattleService/GetBattle3`
+- `API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"]`
+- `API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"]`
 - `API_FLOW_IGNORE_HOSTS` debe incluir hosts Unity de auth/config/perf para evitar ruido TLS.
+
+Formato recomendado de listas en `.env`: JSON array, por ejemplo:
+- `API_FLOW_IGNORE_HOSTS=["player-auth.services.api.unity.com","perf-events.cloud.unity3d.com"]`
+
+Compatibilidad temporal:
+- CSV (`host1,host2`) sigue funcionando en esta release con warning deprecado.
+- En la siguiente release se retirará el soporte CSV.
 
 ## DB local
 
@@ -135,6 +144,16 @@ Backfill:
 ./scripts/build.sh
 ```
 
+Artifacts portables:
+- `dist/pss-logger-native-linux-portable.zip`
+- `dist/pss-logger-native-windows-portable.zip` (en build Windows)
+
+Cada ZIP incluye:
+- ejecutable
+- `third_party/mitmproxy`
+- `README_RUNTIME.txt`
+- `THIRD_PARTY_NOTICES.txt`
+
 ## CI/CD de binarios
 
 Workflows:
@@ -142,16 +161,17 @@ Workflows:
   - corre en `PR` a `develop` y `main` (y manual)
   - compila Linux + Windows
   - publica artifacts de run:
-    - `pss-logger-native-linux`
-    - `pss-logger-native-windows.exe`
+    - `pss-logger-native-linux-portable.zip`
+    - `pss-logger-native-windows-portable.zip`
 - `Native Pre-release (develop)` (`.github/workflows/prerelease-develop.yml`):
   - corre en `push` a `develop`
   - publica canal `develop-latest` como pre-release
-  - adjunta binarios + `SHA256SUMS.txt` (+ firma opcional)
+  - adjunta ZIP portable + `SHA256SUMS.txt` (+ firma opcional)
 - `Native Release` (`.github/workflows/release.yml`):
   - corre en tags `v*`
-  - publica release estable con binarios Linux/Windows
+  - publica release estable con ZIP portable Linux/Windows
   - adjunta `SHA256SUMS.txt` (+ firma opcional)
+  - elimina assets legacy sueltos si existen en el release/tag
 
 Firma opcional:
 - si existe `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`) se firma `SHA256SUMS.txt` como `SHA256SUMS.txt.asc`

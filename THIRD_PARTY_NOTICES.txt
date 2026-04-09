@@ -1,0 +1,11 @@
+THIRD-PARTY NOTICES
+===================
+
+This distribution may include mitmproxy runtime components for packet capture.
+
+Project: mitmproxy
+Website: https://mitmproxy.org/
+License: MIT License
+
+The mitmproxy name and related components belong to their respective owners.
+Refer to upstream project documentation for full license text and attributions.

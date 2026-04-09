@@ -198,3 +198,27 @@ def test_captures_all_when_allowlists_are_empty(monkeypatch: pytest.MonkeyPatch)
     addon.ApiFlowAddon().response(flow)
 
     assert len(out) == 1
+
+
+def test_tls_clienthello_ignores_configured_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        addon,
+        "ctx",
+        SimpleNamespace(
+            options=SimpleNamespace(
+                api_flow_ignore_hosts="perf-events.cloud.unity3d.com",
+                api_flow_session_id="session-1",
+                api_flow_body_max_chars=100,
+                api_flow_capture_hosts="",
+                api_flow_capture_paths="",
+            )
+        ),
+    )
+
+    data = SimpleNamespace(
+        client_hello=SimpleNamespace(sni="perf-events.cloud.unity3d.com"),
+        ignore_connection=False,
+    )
+
+    addon.ApiFlowAddon().tls_clienthello(data)
+    assert data.ignore_connection is True
