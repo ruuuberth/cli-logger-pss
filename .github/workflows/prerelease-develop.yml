@@ -152,7 +152,10 @@ jobs:
           import subprocess
 
           release = json.loads(os.environ["RELEASE_JSON"])
-          release_id = release["id"]
+          release_id = release.get("id")
+          if not release_id:
+              print("No release id found for develop-latest payload. Skipping cleanup.")
+              raise SystemExit(0)
           assets = subprocess.check_output(
               ["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/releases/{release_id}/assets"],
               text=True,
