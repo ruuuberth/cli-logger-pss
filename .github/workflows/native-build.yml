@@ -69,13 +69,19 @@ jobs:
         run: |
           mkdir -p dist/upload
           cp dist/pss-logger-native-linux-portable.zip dist/upload/pss-logger-native-linux-portable.zip
+          project_version="$(python3 - <<'PY'
+          import tomllib
+          with open("pyproject.toml", "rb") as fh:
+              print(tomllib.load(fh)["project"]["version"])
+          PY
+          )"
           {
             echo "commit=${GITHUB_SHA}"
             echo "branch=${GITHUB_REF_NAME}"
             echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "platform=linux"
             echo "python=3.11"
-            echo "project_version=$(python -c \"import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])\")"
+            echo "project_version=${project_version}"
           } > dist/upload/build-metadata.txt
 
       - name: Upload artifact
