@@ -46,6 +46,11 @@ Formato recomendado para listas en `.env`: JSON array.
 Ejemplo: `API_FLOW_IGNORE_HOSTS=["host1","host2"]`
 Compatibilidad temporal: el formato CSV (`host1,host2`) sigue funcionando en esta release pero queda deprecado.
 
+## Seguridad
+
+- No se deben commitear archivos `.env` reales.
+- Solo se permiten `.env.example` y `.env.dev.example`.
+
 ## Datos que guarda
 
 Base SQLite local (`native_app/pss_logger_dev.db` o `native_app/pss_logger.db`):
