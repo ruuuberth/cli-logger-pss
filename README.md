@@ -50,6 +50,17 @@ Compatibilidad temporal: el formato CSV (`host1,host2`) sigue funcionando en est
 
 - No se deben commitear archivos `.env` reales.
 - Solo se permiten `.env.example` y `.env.dev.example`.
+- Secret scan (`gitleaks`) corre en `develop` y `main`.
+
+## Si hubo saneamiento de historial
+
+Si se ejecuta purge de secretos con reescritura de historial:
+
+- Recomendado: hacer re-clone del repo.
+- Alternativa rapida:
+  - `git fetch --all --prune`
+  - `git checkout develop && git reset --hard origin/develop`
+  - `git checkout main && git reset --hard origin/main`
 
 ## Datos que guarda
 
