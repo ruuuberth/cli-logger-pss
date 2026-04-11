@@ -51,6 +51,9 @@ def configure_environment() -> Path:
 
 def main() -> int:
     db_path = configure_environment()
+    from app.core.logging_setup import configure_logging
+
+    configure_logging(db_path.parent)
 
     from app.models.database import (
         Base,

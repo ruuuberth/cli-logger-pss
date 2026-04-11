@@ -97,12 +97,22 @@ class ApiFlowCaptureManager:
                 )
             except FileNotFoundError as exc:
                 self._cleanup_temp_addon_path()
+                logger.exception(
+                    "event=capture_proxy_missing mitm_binary=%s addon_path=%s",
+                    mitmproxy_binary,
+                    addon_path,
+                )
                 raise RuntimeError(
                     "[capture_proxy_missing] No se encontró mitmproxy. "
                     "Instala mitmproxy o usa el paquete portable que lo incluye."
                 ) from exc
             except Exception as exc:
                 self._cleanup_temp_addon_path()
+                logger.exception(
+                    "event=capture_proxy_start_failed mitm_binary=%s addon_path=%s",
+                    mitmproxy_binary,
+                    addon_path,
+                )
                 raise RuntimeError(f"No se pudo iniciar mitmproxy: {exc}") from exc
 
             self._current_session = CaptureSession(
