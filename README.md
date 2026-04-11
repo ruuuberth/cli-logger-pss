@@ -52,6 +52,16 @@ Compatibilidad temporal: el formato CSV (`host1,host2`) sigue funcionando en est
 - Solo se permiten `.env.example` y `.env.dev.example`.
 - Secret scan (`gitleaks`) corre en `develop` y `main`.
 
+## Logs en produccion
+
+La app escribe logs en el mismo directorio de la base de datos local:
+
+- Linux: `~/.pss_logger/pss_logger.log`
+
+Puedes personalizar:
+- `APP_LOG_PATH` para ruta completa del log.
+- `APP_LOG_LEVEL` (`INFO`, `DEBUG`, `WARNING`, etc.).
+
 ## Si hubo saneamiento de historial
 
 Si se ejecuta purge de secretos con reescritura de historial:
