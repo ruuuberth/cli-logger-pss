@@ -62,6 +62,12 @@ class ApiFlowCaptureManager:
             addon_path = self._resolve_addon_path()
             mitmproxy_binary = self._resolve_mitmproxy_binary_path()
 
+            logger.info(
+                "event=capture_addon_resolved frozen=%s addon_path=%s",
+                bool(getattr(sys, "frozen", False)),
+                addon_path,
+            )
+
             session_id = uuid4().hex
             cmd = [
                 str(mitmproxy_binary),
@@ -236,14 +242,22 @@ class ApiFlowCaptureManager:
         return "|".join(patterns)
 
     def _resolve_addon_path(self) -> Path:
+        frozen = bool(getattr(sys, "frozen", False))
         source_path = Path(__file__).resolve().parent / "mitm_api_flow_addon.py"
-        if source_path.exists() and not getattr(sys, "frozen", False):
-            logger.info("event=addon_source_resolved path=%s", source_path)
+        if source_path.exists() and not frozen:
+            logger.info("event=addon_source_resolved path=%s frozen=%s", source_path, frozen)
             return source_path
 
-        addon_bytes = self._load_addon_bytes(source_path)
+        addon_bytes = self._load_addon_bytes(source_path, frozen)
         if not addon_bytes:
-            raise RuntimeError("[capture_addon_unresolvable] No se pudo resolver el addon mitmproxy (source/frozen).")
+            logger.error(
+                "event=addon_unresolvable frozen=%s source_exists=%s",
+                frozen,
+                source_path.exists(),
+            )
+            raise RuntimeError(
+                "[capture_addon_unresolvable] addon no embebido en build (source/frozen)."
+            )
 
         self._validate_addon_integrity(addon_bytes)
         try:
@@ -251,8 +265,8 @@ class ApiFlowCaptureManager:
         except Exception as exc:
             raise RuntimeError(f"Fallo al extraer addon mitmproxy a temporal: {exc}") from exc
 
-    def _load_addon_bytes(self, source_path: Path) -> bytes | None:
-        if source_path.exists():
+    def _load_addon_bytes(self, source_path: Path, frozen: bool) -> bytes | None:
+        if source_path.exists() and not frozen:
             try:
                 return source_path.read_bytes()
             except Exception as exc:
