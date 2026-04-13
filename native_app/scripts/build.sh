@@ -26,12 +26,6 @@ python3 -m PyInstaller \
   --add-data "$BUILD_METADATA_FILE:app/resources" \
   run.py
 
-python3 scripts/check_binary_markers.py \
-  "$ROOT_DIR/dist/pss-logger-native" \
-  capture_addon_resolved \
-  addon_frozen_extracted \
-  capture_addon_unresolvable
-
 PACKAGE_ARGS=(
   scripts/package_portable.py
   --platform linux

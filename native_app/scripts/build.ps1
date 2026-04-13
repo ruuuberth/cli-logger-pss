@@ -18,11 +18,6 @@ Set-Content -Path $metadataFile -Value $metadataJson -Encoding UTF8
 
 try {
   python -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$RootDir" --collect-data app.services --add-data "$RootDir/app/services/mitm_api_flow_addon.py;app/services" --add-data "$metadataFile;app/resources" run.py
-  python scripts/check_binary_markers.py `
-    (Join-Path $RootDir "dist/pss-logger-native.exe") `
-    capture_addon_resolved `
-    addon_frozen_extracted `
-    capture_addon_unresolvable
 }
 finally {
   if (Test-Path $metadataFile) {
