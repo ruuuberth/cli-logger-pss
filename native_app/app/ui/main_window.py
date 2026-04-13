@@ -21,6 +21,7 @@ from app.services.api_flow_list_service import ApiFlowListService, ApiFlowRowVie
 from app.services.perf_metrics import measure_perf
 from app.services.api_flow_runtime import ApiFlowRuntime, ApiFlowRuntimeState
 from app.services.process_resource_monitor import ProcessResourceMonitor
+from app.core.build_info import get_build_info
 from app.ui.battle_inspector_window import BattleInspectorWindow
 from app.ui.delegates.row_action_delegate import RowActionDelegate
 from app.ui.models.api_flow_table_model import ApiFlowTableModel
@@ -69,8 +70,9 @@ class MainWindow(QMainWindow):
         self.search_debounce_timer.setInterval(250)
         self.search_debounce_timer.setSingleShot(True)
         self.search_debounce_timer.timeout.connect(self._apply_api_flow_filters_now)
+        self.build_info = get_build_info()
 
-        self.setWindowTitle("PixelStarships Battle Logger Native")
+        self.setWindowTitle(f"PixelStarships Battle Logger Native {self.build_info.display_label}")
         self.resize(1200, 760)
         self.setStyleSheet(window_font_qss())
         self.setCentralWidget(self._build_api_flow_tab())
@@ -86,6 +88,7 @@ class MainWindow(QMainWindow):
         self.api_flow_sync_label = QLabel("Historial: listo")
         self.api_flow_counter_label = QLabel("Eventos: 0")
         self.api_flow_session_label = QLabel("Sesion: -")
+        self.build_info_label = QLabel(f"Build: {self.build_info.display_label}")
 
         self.api_flow_capture_button = QPushButton("Iniciar captura")
         self.api_flow_capture_button.clicked.connect(self.toggle_api_flow_capture)
@@ -158,6 +161,7 @@ class MainWindow(QMainWindow):
         content.addWidget(self.api_flow_sync_label)
         content.addWidget(self.api_flow_counter_label)
         content.addWidget(self.api_flow_session_label)
+        content.addWidget(self.build_info_label)
         content.addWidget(self.api_flow_count_label)
         content.addWidget(self.app_resource_label)
         content.addWidget(self.proxy_resource_label)

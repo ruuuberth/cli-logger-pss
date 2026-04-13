@@ -61,11 +61,20 @@ class ApiFlowCaptureManager:
 
             addon_path = self._resolve_addon_path()
             mitmproxy_binary = self._resolve_mitmproxy_binary_path()
+            frozen = bool(getattr(sys, "frozen", False))
+
+            if frozen and "_MEI" in str(addon_path):
+                logger.error("event=addon_invalid_runtime_path frozen=%s addon_path=%s", frozen, addon_path)
+                self._cleanup_temp_addon_path()
+                raise RuntimeError(
+                    "[capture_addon_unresolvable] resolved addon path points to _MEI internal bundle."
+                )
 
             logger.info(
-                "event=capture_addon_resolved frozen=%s addon_path=%s",
-                bool(getattr(sys, "frozen", False)),
+                "event=capture_addon_resolved frozen=%s addon_path=%s mitmproxy_binary=%s",
+                frozen,
                 addon_path,
+                mitmproxy_binary,
             )
 
             session_id = uuid4().hex
@@ -271,7 +280,10 @@ class ApiFlowCaptureManager:
                 return source_path.read_bytes()
             except Exception as exc:
                 raise RuntimeError(f"No se pudo leer el addon mitmproxy desde source: {exc}") from exc
-        return pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
+        addon_bytes = pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
+        if addon_bytes:
+            logger.info("event=addon_embedded_loaded frozen=%s bytes=%s", frozen, len(addon_bytes))
+        return addon_bytes
 
     def _validate_addon_integrity(self, addon_bytes: bytes) -> None:
         normalized_bytes = self._normalize_addon_bytes(addon_bytes)

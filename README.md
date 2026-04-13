@@ -58,6 +58,8 @@ La app escribe logs en el mismo directorio de la base de datos local:
 
 - Linux: `~/.pss_logger/pss_logger.log`
 
+Cada arranque registra el build activo (`version`, `git_sha`, `build_time`) y la UI muestra una linea `Build: ...` para que soporte pueda confirmar exactamente que ZIP se esta ejecutando.
+
 Puedes personalizar:
 - `APP_LOG_PATH` para ruta completa del log.
 - `APP_LOG_LEVEL` (`INFO`, `DEBUG`, `WARNING`, etc.).
@@ -110,6 +112,7 @@ Salida principal:
 - Push a `develop`: actualiza pre-release `develop-latest` con ZIPs + `SHA256SUMS.txt`.
 - Push de tag `v*`: crea release estable con ZIPs Linux/Windows + `SHA256SUMS.txt`.
 - Política de assets: no se publican binarios sueltos (`pss-logger-native` / `.exe`), solo ZIP portable.
+- El build falla si el ejecutable no contiene los marcadores de diagnostico del fix del addon mitmproxy.
 
 Si configuras `SIGNING_PRIVATE_KEY` (y opcionalmente `SIGNING_PASSPHRASE`), también se publica `SHA256SUMS.txt.asc`.
 

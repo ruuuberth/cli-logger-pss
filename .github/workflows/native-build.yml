@@ -57,6 +57,10 @@ jobs:
           echo "MITMPROXY_BUNDLE_DIR=$(find /tmp/mitmproxy -maxdepth 1 -type d -name 'mitmproxy-*' | head -n1)" >> "$GITHUB_ENV"
 
       - name: Build executable
+        env:
+          PSS_BUILD_VERSION: ci-${{ github.ref_name }}
+          PSS_BUILD_GIT_SHA: ${{ github.sha }}
+          PSS_BUILD_SOURCE: native-build
         run: ./scripts/build.sh
 
       - name: Install test dependencies
@@ -126,6 +130,10 @@ jobs:
           "MITMPROXY_BUNDLE_DIR=$($bundle.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build executable
+        env:
+          PSS_BUILD_VERSION: ci-${{ github.ref_name }}
+          PSS_BUILD_GIT_SHA: ${{ github.sha }}
+          PSS_BUILD_SOURCE: native-build
         run: ./scripts/build.ps1
 
       - name: Prepare artifact payload

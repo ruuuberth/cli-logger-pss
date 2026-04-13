@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -144,6 +145,36 @@ def test_start_capture_in_frozen_mode_uses_temp_addon(monkeypatch, tmp_path: Pat
     assert manager._temp_addon_path == addon_path
 
 
+def test_start_capture_logs_resolved_addon_and_binary(monkeypatch, caplog) -> None:
+    manager = ApiFlowCaptureManager()
+    _mock_mitmproxy_binary_resolution(monkeypatch)
+    monkeypatch.setattr("app.services.api_flow_capture.threading.Thread", _DummyThread)
+
+    captured_cmd = {}
+
+    def _fake_popen(cmd, stdout=None, stderr=None, text=None, bufsize=None):
+        captured_cmd["cmd"] = list(cmd)
+        return _DummyProcess()
+
+    monkeypatch.setattr("app.services.api_flow_capture.subprocess.Popen", _fake_popen)
+    monkeypatch.setattr("app.services.api_flow_capture.settings", SimpleNamespace(
+        API_FLOW_ENABLED=True,
+        MITMPROXY_BINARY="mitmdump",
+        MITMPROXY_LISTEN_HOST="127.0.0.1",
+        MITMPROXY_LISTEN_PORT=8081,
+        API_FLOW_BODY_MAX_CHARS=4000,
+        API_FLOW_IGNORE_HOSTS=[],
+        API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
+        API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"],
+    ))
+
+    with caplog.at_level(logging.INFO):
+        manager.start_capture()
+
+    assert "event=capture_addon_resolved" in caplog.text
+    assert "mitmproxy_binary=mitmdump" in caplog.text
+
+
 def test_start_capture_fallbacks_to_temp_addon_when_source_missing(monkeypatch, tmp_path: Path) -> None:
     manager = ApiFlowCaptureManager()
     _mock_mitmproxy_binary_resolution(monkeypatch)
@@ -184,6 +215,30 @@ def test_start_capture_fallbacks_to_temp_addon_when_source_missing(monkeypatch, 
     addon_path = Path(cmd[addon_idx])
     assert addon_path.exists()
     assert manager._temp_addon_path == addon_path
+
+
+def test_start_capture_rejects_mei_addon_path(monkeypatch) -> None:
+    manager = ApiFlowCaptureManager()
+    monkeypatch.setattr(manager, "_resolve_addon_path", lambda: Path("/tmp/_MEI123/app/services/mitm_api_flow_addon.py"))
+    monkeypatch.setattr(manager, "_resolve_mitmproxy_binary_path", lambda: "mitmdump")
+    monkeypatch.setattr("app.services.api_flow_capture.sys.frozen", True, raising=False)
+    monkeypatch.setattr("app.services.api_flow_capture.settings", SimpleNamespace(
+        API_FLOW_ENABLED=True,
+        MITMPROXY_BINARY="mitmdump",
+        MITMPROXY_LISTEN_HOST="127.0.0.1",
+        MITMPROXY_LISTEN_PORT=8081,
+        API_FLOW_BODY_MAX_CHARS=4000,
+        API_FLOW_IGNORE_HOSTS=[],
+        API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
+        API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"],
+    ))
+
+    try:
+        manager.start_capture()
+    except RuntimeError as exc:
+        assert "_MEI internal bundle" in str(exc)
+    else:
+        raise AssertionError("Expected RuntimeError for _MEI addon path")
 
 
 def test_start_capture_fails_on_sha_mismatch(monkeypatch) -> None:

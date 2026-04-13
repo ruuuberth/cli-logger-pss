@@ -51,9 +51,20 @@ def configure_environment() -> Path:
 
 def main() -> int:
     db_path = configure_environment()
+    from app.core.build_info import get_build_info
     from app.core.logging_setup import configure_logging
 
     configure_logging(db_path.parent)
+    build_info = get_build_info()
+    import logging
+
+    logging.getLogger(__name__).info(
+        "event=build_info version=%s git_sha=%s build_time=%s source=%s",
+        build_info.version,
+        build_info.git_sha,
+        build_info.build_time,
+        build_info.source,
+    )
 
     from app.models.database import (
         Base,

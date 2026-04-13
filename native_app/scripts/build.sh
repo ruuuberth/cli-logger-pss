@@ -6,7 +6,31 @@ cd "$ROOT_DIR"
 
 python3 -m pip install -U pip setuptools wheel
 python3 -m pip install -e . pyinstaller
-python3 -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$ROOT_DIR" --collect-data app.services run.py
+BUILD_VERSION="${PSS_BUILD_VERSION:-$(git describe --tags --always 2>/dev/null || echo 0.1.0)}"
+BUILD_SHA="${PSS_BUILD_GIT_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
+BUILD_TIME="${PSS_BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+BUILD_SOURCE="${PSS_BUILD_SOURCE:-build-script}"
+BUILD_METADATA_FILE="$(mktemp)"
+trap 'rm -f "$BUILD_METADATA_FILE"' EXIT
+cat > "$BUILD_METADATA_FILE" <<EOF
+{"version":"$BUILD_VERSION","git_sha":"$BUILD_SHA","build_time":"$BUILD_TIME","source":"$BUILD_SOURCE"}
+EOF
+
+python3 -m PyInstaller \
+  --name pss-logger-native \
+  --windowed \
+  --onefile \
+  --paths "$ROOT_DIR" \
+  --collect-data app.services \
+  --add-data "$ROOT_DIR/app/services/mitm_api_flow_addon.py:app/services" \
+  --add-data "$BUILD_METADATA_FILE:app/resources" \
+  run.py
+
+python3 scripts/check_binary_markers.py \
+  "$ROOT_DIR/dist/pss-logger-native" \
+  capture_addon_resolved \
+  addon_frozen_extracted \
+  capture_addon_unresolvable
 
 PACKAGE_ARGS=(
   scripts/package_portable.py
