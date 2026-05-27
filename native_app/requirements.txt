@@ -1,6 +1,8 @@
-PySide6==6.8.0.2
 mitmproxy==11.0.2
 sqlalchemy==2.0.38
 pydantic==2.10.6
 pydantic-settings==2.7.1
 python-dotenv==1.0.0
+psutil>=5.9.0
+rich>=13.0.0
+openpyxl>=3.0.0

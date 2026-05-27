@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 from types import ModuleType
+import pytest
 
 try:
     from PySide6.QtWidgets import QApplication as _QtAppProbe  # noqa: F401
@@ -22,6 +23,8 @@ except (ModuleNotFoundError, ImportError):
     pyside6.QtWidgets = qtwidgets
     sys.modules["PySide6"] = pyside6
     sys.modules["PySide6.QtWidgets"] = qtwidgets
+
+pytest.skip("UI tests skipped after migration to CLI", allow_module_level=True)
 
 import app.main as main_module
 

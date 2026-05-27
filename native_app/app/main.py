@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 from dotenv import dotenv_values
-from PySide6.QtWidgets import QApplication
 from sqlalchemy.engine import make_url
 
 
@@ -29,7 +28,7 @@ def sqlite_db_path_from_url(database_url: str) -> Path | None:
     db_path = Path(url.database)
     if not db_path.is_absolute():
         db_path = (project_root() / db_path).resolve()
-    return db_path
+    return db_path.resolve()
 
 
 def configure_environment() -> Path:
@@ -43,18 +42,16 @@ def configure_environment() -> Path:
     db_path = sqlite_db_path_from_url(database_url) if database_url else None
     if db_path is None:
         db_path = default_db_path().resolve()
-        os.environ.setdefault("DATABASE_URL", f"sqlite:///{db_path}")
+        # Construir URL SQLite con forward slashes para compatibilidad multiplataforma
+        db_path_str = str(db_path).replace("\\", "/")
+        os.environ.setdefault("DATABASE_URL", f"sqlite:///{db_path_str}")
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return db_path
 
 
-def main() -> int:
-    db_path = configure_environment()
-    from app.core.logging_setup import configure_logging
-
-    configure_logging(db_path.parent)
-
+def initialize_database(db_path: Path) -> None:
+    """Inicializa la base de datos y esquema."""
     from app.models.database import (
         Base,
         engine,
@@ -62,18 +59,32 @@ def main() -> int:
         ensure_sqlite_indexes,
         log_schema_health,
     )
-    from app.ui.main_window import MainWindow
 
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_schema()
     ensure_sqlite_indexes()
     log_schema_health()
 
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    return app.exec()
+
+def main_cli() -> int:
+    """Modo CLI interactivo."""
+    from app.cli.cli_manager import CliManager
+
+    cli = CliManager()
+    return cli.run()
+
+
+def main() -> int:
+    """Main entry point - CLI only."""
+    db_path = configure_environment()
+    from app.core.logging_setup import configure_logging
+
+    configure_logging(db_path.parent)
+    initialize_database(db_path)
+
+    return main_cli()
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

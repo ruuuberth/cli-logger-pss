@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import sys
+import pytest
 from types import ModuleType, SimpleNamespace
+
+pytest.skip("UI tests skipped after migration to CLI", allow_module_level=True)
 
 try:
     from PySide6.QtCore import QObject as _QtObjectProbe  # noqa: F401

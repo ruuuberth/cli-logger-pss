@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import pytest
 from types import ModuleType, SimpleNamespace
 
 try:
@@ -70,6 +71,8 @@ except (ModuleNotFoundError, ImportError):
     sys.modules["PySide6.QtCore"] = qtcore
     sys.modules["PySide6.QtGui"] = qtgui
     sys.modules["PySide6.QtWidgets"] = qtwidgets
+
+pytest.skip("UI tests skipped after migration to CLI", allow_module_level=True)
 
 from PySide6.QtGui import QMouseEvent
 
