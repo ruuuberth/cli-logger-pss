@@ -94,19 +94,31 @@ class GenerateBattleReportCommand(CliCommand):
         """Execute report generation"""
         try:
             print_info("📋 Generando reporte de batallas...")
-            
-            # Get parameters
-            search = prompt_input("Filtro (atacante/defensor/battle_id) [Enter = todos]", default="")
-            
+
+            # Parse args for non-interactive use
+            opts: dict[str, str] = {}
+            if args:
+                for a in args:
+                    if a.startswith("--"):
+                        if "=" in a:
+                            k, v = a[2:].split("=", 1)
+                            opts[k] = v
+                        else:
+                            opts[a[2:]] = "true"
+
+            # Parameters: allow override via args or prompt
+            search = opts.get("search") or (prompt_input("Filtro (atacante/defensor/battle_id) [Enter = todos]", default="") if opts.get("non-interactive") is None else "")
+
             # Format choice
-            format_choice = prompt_input("Formato (excel/csv/json) [excel]", default="excel")
+            format_choice = opts.get("format") or prompt_input("Formato (excel/csv/json) [excel]", default="excel")
             if format_choice not in ["excel", "csv", "json"]:
                 print_error("Formato no válido")
                 return 1
-            
+
             # Query data
             print_info("Obteniendo datos...")
-            page = self.service.query_events(search=search, page=0, page_size=1000)
+            limit = int(opts.get("limit", "1000"))
+            page = self.service.query_events(search=search, page=0, page_size=limit)
             
             if not page.rows:
                 print_warning("No hay datos para reportar")
@@ -126,12 +138,23 @@ class GenerateBattleReportCommand(CliCommand):
                 for row in page.rows
             ]
             
-            # Generate report
-            output_path = Path.home() / "Desktop" / "Logger-PSS Reports"
+            # Output options (args override prompts)
+            default_output = Path(opts.get("output-dir") or Path.home() / "Desktop" / "Logger-PSS Reports")
+            if opts.get("non-interactive"):
+                output_path = Path(default_output).expanduser()
+                filename_input = opts.get("filename") or "Reporte Batallas"
+                include_ts = not (opts.get("no-timestamp") in ("true", "1", "yes"))
+            else:
+                out_input = prompt_input(f"Carpeta de salida [{default_output}]", default=str(default_output))
+                output_path = Path(out_input).expanduser()
+                filename_input = prompt_input("Nombre base del archivo [Reporte Batallas]", default="Reporte Batallas")
+                include_ts_input = prompt_input("Incluir timestamp en nombre? (y/n) [y]", default="y")
+                include_ts = include_ts_input.strip().lower() in ("y", "yes", "")
+
             config = ReportConfig(
-                title="Reporte Batallas",
+                title=filename_input,
                 output_path=output_path,
-                include_timestamp=True,
+                include_timestamp=include_ts,
                 format=format_choice,
             )
             
