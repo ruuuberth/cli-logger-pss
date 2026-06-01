@@ -97,7 +97,22 @@ class Settings(BaseSettings):
     API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = ["api.pixelstarships.com"]
     API_FLOW_CAPTURE_PATH_ALLOWLIST: List[str] = ["/BattleService/GetBattle3"]
 
+    # Reporting
+    REPORT_ENABLE: bool = True
+    REPORT_OUTPUT_DIR: str = "./native_app/reports"
+    REPORT_DEFAULT_FORMAT: str = "excel"
+    REPORT_INCLUDE_TIMESTAMP: bool = True
+    REPORT_FILENAME_BASE: str = "Reporte_Batallas"
+
+    # CLI behavior
+    CLI_NONINTERACTIVE: bool = False
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = "./native_app/logs/native_app.log"
+
     @classmethod
+
     def settings_customise_sources(
         cls,
         settings_cls,
