@@ -50,7 +50,7 @@ class ApiFlowListService:
     def list_page(self, search: str, page: int, page_size: int) -> ApiFlowPage:
         with measure_perf("api_flow_list_page", self.logger):
             total, raw_rows = self.repository.list_battle_replay_rows(
-                search=search.strip(),
+                search=(search or "").strip(),
                 page=page,
                 page_size=page_size,
             )

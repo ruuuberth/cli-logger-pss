@@ -74,7 +74,8 @@ class Menu:
                 return item.key
         
         self.console.print("[red]❌ Opción no válida[/red]")
-        input("Presiona Enter para continuar...")
+        self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")
+        self.console.input()
         return self.show()
 
     def run(self) -> None:
@@ -98,8 +99,9 @@ class Menu:
                         self.console.print(f"[red]❌ Error: {e}[/red]")
                     finally:
                         if not item.submenu:
-                            input("\\nPresiona Enter para continuar...")
-                    break
+                            self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")
+                            self.console.input()
+                     break
 
 
 class Table:
