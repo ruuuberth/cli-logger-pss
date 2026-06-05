@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 from dotenv import dotenv_values
-from PySide6.QtWidgets import QApplication
 from sqlalchemy.engine import make_url
 
 
@@ -73,17 +72,25 @@ def main() -> int:
         ensure_sqlite_indexes,
         log_schema_health,
     )
-    from app.ui.main_window import MainWindow
+    from app.services.api_flow_runtime import ApiFlowRuntime
+    from app.cli.cli_manager import CliManager
 
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_schema()
     ensure_sqlite_indexes()
     log_schema_health()
 
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    return app.exec()
+    # Iniciar captura de tráfico automáticamente
+    runtime = ApiFlowRuntime()
+    try:
+        runtime.start_capture()
+        logging.getLogger(__name__).info("event=capture_started status=auto_start")
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"event=capture_start_failed error={e}")
+
+    cli_manager = CliManager(capture_runtime=runtime)
+    cli_manager.run()
+    return 0
 
 
 if __name__ == "__main__":

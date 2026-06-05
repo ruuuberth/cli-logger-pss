@@ -104,6 +104,32 @@ Defaults recomendados para rendimiento:
 Formato recomendado de listas en `.env`: JSON array, por ejemplo:
 - `API_FLOW_IGNORE_HOSTS=["player-auth.services.api.unity.com","perf-events.cloud.unity3d.com"]`
 
+## Reporting (CLI)
+
+La aplicación puede generar reportes de batallas en `excel`, `csv` o `json` desde la línea de comandos.
+Los reportes se escriben por defecto en `native_app/reports` (puedes cambiar esto con `--output-dir`).
+
+Ejemplo no interactivo (genera `Reporte_Batallas_Test.xlsx` sin timestamp):
+
+```bash
+python -c "from app.cli.concrete_commands import GenerateBattleReportCommand; \ 
+GenerateBattleReportCommand().execute(['--non-interactive','--format=excel','--output-dir=./native_app/reports','--filename=Reporte_Batallas_Test','--no-timestamp'])"
+```
+
+Ejemplo interactivo (menu):
+
+```bash
+python -m app.main
+# luego seleccionar: 2 -> Generar Reportes
+```
+
+Variables de entorno útiles para reportes (ejemplos en `.env.dev.example`):
+
+- `REPORT_OUTPUT_DIR` : ruta por defecto para reportes
+- `REPORT_DEFAULT_FORMAT` : `excel|csv|json`
+- `REPORT_INCLUDE_TIMESTAMP` : `true|false`
+
+
 Compatibilidad temporal:
 - CSV (`host1,host2`) sigue funcionando en esta release con warning deprecado.
 - En la siguiente release se retirará el soporte CSV.

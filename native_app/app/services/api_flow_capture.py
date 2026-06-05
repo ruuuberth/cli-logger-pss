@@ -227,7 +227,6 @@ class ApiFlowCaptureManager:
                 logger.exception("event=api_flow_callback_error")
 
     def _emit_status(self, message: str) -> None:
-        print(f"[api-flow] {message}", flush=True)
         logger.info("event=api_flow_status message=%s", message)
         for callback in self._status_callbacks:
             try:
@@ -236,8 +235,7 @@ class ApiFlowCaptureManager:
                 logger.exception("event=api_flow_status_callback_error")
 
     def _log_console_line(self, message: str) -> None:
-        print(f"[mitmproxy] {message}", flush=True)
-        logger.info("event=mitmproxy_line message=%s", message[:400])
+        logger.debug("event=mitmproxy_line message=%s", message[:400])
 
     def _build_ignore_hosts_regex(self, hosts: list[str]) -> str | None:
         cleaned = [host.strip().lower() for host in hosts if host and host.strip()]
