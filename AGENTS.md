@@ -15,6 +15,7 @@ App CLI nativa (español) para capturar e inspeccionar replays de batalla de **P
 - **Test (todo):** `python -m pytest`
 - **Test (archivo):** `python -m pytest tests/test_<name>.py`
 - **Test (caso):** `python -m pytest tests/test_<name>.py::test_<specific>`
+- **Reporte no interactivo:** `python -c "from app.cli.concrete_commands import GenerateBattleReportCommand; GenerateBattleReportCommand().execute(['--non-interactive','--format=excel','--output-dir=./native_app/reports','--filename=Reporte_Batallas_Test','--no-timestamp'])"`
 - **Migración DB:** `python scripts/migrate_battle_replays_normalized.py`
 - **Build Linux:** `./scripts/build.sh`
 - **Instalar editable:** `pip install -e .`
@@ -31,7 +32,7 @@ App CLI nativa (español) para capturar e inspeccionar replays de batalla de **P
 **Ver** [docs/CODEBASE_ONBOARDING.md](docs/CODEBASE_ONBOARDING.md) para detalles completos.
 
 ### Layers
-- **CLI:** `app/cli/cli_manager.py` + `cli_services.py` + `concrete_commands.py` (entrypoint principal)
+- **CLI:** `app/cli/cli_manager.py` + `cli_services.py` + `concrete_commands.py` + `utils.py` (entrypoint principal y utilidades de UI)
 - **Services:** Captura (`api_flow_capture.py`), Runtime (`api_flow_runtime.py`), Storage (`api_flow_storage.py`), Caché (`battle_detail_cache.py`)
 - **Models/DB:** SQLAlchemy ORM en `app/models/` — mapeado a SQLite con WAL mode
 - **Config:** `app/core/config.py` (Pydantic Settings, lee `.env` y defaults)
@@ -99,6 +100,8 @@ python run.py
 - `APP_LOG_LEVEL`: DEBUG/INFO/WARNING (default: INFO)
 - `API_FLOW_ENABLED`: true/false (default: true)
 - `MITMPROXY_LISTEN_PORT`: 8081+ (default: 8081)
+- `API_FLOW_CAPTURE_HOST_ALLOWLIST`: `["api.pixelstarships.com"]` (recomendado para rendimiento)
+- `API_FLOW_CAPTURE_PATH_ALLOWLIST`: `["/BattleService/GetBattle3"]` (recomendado para rendimiento)
 
 Ver `app/core/config.py` para lista completa de settings (Pydantic).
 

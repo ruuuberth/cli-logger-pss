@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import logging
 from rich.console import Console
-from app.cli.menu import Menu, print_info, print_success, print_error
+from app.cli.menu import Menu
+from app.cli.utils import print_info, print_success, print_error
 from app.cli.concrete_commands import (
     QueryEventsCommand,
     GenerateBattleReportCommand,

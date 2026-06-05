@@ -7,14 +7,15 @@ from rich.table import Table
 from rich.console import Console
 
 from app.cli.commands import CliCommand
-from app.cli.menu import (
-    Menu,
+from app.cli.menu import Menu
+from app.cli.utils import (
     print_info,
     print_success,
     print_error,
     print_warning,
     confirm_action,
     prompt_input,
+    clear_console,
 )
 from app.cli.cli_services import ApiFlowCliService, CharacterCliService, RoomCliService
 from app.reporting.report_generator import (
@@ -40,7 +41,7 @@ class QueryEventsCommand(CliCommand):
     def execute(self, args: list[str] = None) -> int:
         """Execute query command"""
         try:
-            self.console.clear()
+            clear_console()
             print_info("🔍 Consultando eventos...")
             
             # Get search filter
@@ -94,7 +95,7 @@ class GenerateBattleReportCommand(CliCommand):
     def execute(self, args: list[str] = None) -> int:
         """Execute report generation"""
         try:
-            self.console.clear()
+            clear_console()
             print_info("📋 Generando reporte de batallas...")
 
             # Parse args for non-interactive use
@@ -188,7 +189,7 @@ class InspectCharacterCommand(CliCommand):
     def execute(self, args: list[str] = None) -> int:
         """Execute character inspection"""
         try:
-            self.console.clear()
+            clear_console()
             print_info("👤 Inspector de Tripulantes")
             print_info("Estado: En desarrollo")
             print_warning("La funcionalidad de inspección está siendo migrada...")
@@ -212,7 +213,7 @@ class InspectRoomCommand(CliCommand):
     def execute(self, args: list[str] = None) -> int:
         """Execute room inspection"""
         try:
-            self.console.clear()
+            clear_console()
             print_info("🏠 Inspector de Salas")
             print_info("Estado: En desarrollo")
             print_warning("La funcionalidad de inspección está siendo migrada...")
@@ -235,7 +236,7 @@ class InspectBattleCommand(CliCommand):
 
     def execute(self, args: list[str] | None = None) -> int:
         try:
-            self.console.clear()
+            clear_console()
             print_info("🎖️ Inspector de Batalla")
             battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
             if not battle_id:
@@ -271,7 +272,7 @@ class CaptureTrafficCommand(CliCommand):
 
     def execute(self, args: list[str] | None = None) -> int:
         try:
-            self.console.clear()
+            clear_console()
             print_info("📡 Control de Captura de Tráfico")
             choice = prompt_input("Acción (start/stop/toggle/status) [status]", default="status")
             choice = choice.strip().lower()
@@ -318,7 +319,7 @@ class SystemMonitorCommand(CliCommand):
 
     def execute(self, args: list[str] | None = None) -> int:
         try:
-            self.console.clear()
+            clear_console()
             print_info("📊 Monitor de Sistema")
             pid_input = prompt_input("PID a monitorear (\"self\" para proceso actual) [self]", default="self")
             if pid_input.strip().lower() in ("", "self"):
