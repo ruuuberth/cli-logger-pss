@@ -103,11 +103,12 @@ class ApiFlowRuntime:
             self._live_event_count += 1
         self._emit_state(force=False)
 
-    def flush_pending(self) -> None:
+    def flush_pending(self) -> dict[str, Any] | None:
         payload = self._flush_pending_impl()
         if payload is not None:
             self._emit_flush(payload)
         self._emit_state(force=False)
+        return payload
 
     def start_startup_sync(self) -> None:
         with self._lock:

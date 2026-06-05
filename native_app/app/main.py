@@ -85,11 +85,16 @@ def main() -> int:
     try:
         runtime.start_capture()
         logging.getLogger(__name__).info("event=capture_started status=auto_start")
-    except Exception as e:
-        logging.getLogger(__name__).warning(f"event=capture_start_failed error={e}")
 
-    cli_manager = CliManager(capture_runtime=runtime)
-    cli_manager.run()
+        cli_manager = CliManager(capture_runtime=runtime)
+        cli_manager.run()
+    except KeyboardInterrupt:
+        logging.getLogger(__name__).info("event=app_exit status=keyboard_interrupt")
+    except Exception as e:
+        logging.getLogger(__name__).error(f"event=app_error error={e}")
+    finally:
+        logging.getLogger(__name__).info("event=app_shutdown status=cleaning_up")
+        runtime.close()
     return 0
 
 
