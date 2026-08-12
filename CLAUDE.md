@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Logger PSS** is a desktop application for analyzing Pixel Starships battles from network traffic. It captures battle responses (`GetBattle3`) using mitmproxy, normalizes data into relational tables, and displays results in a UI with search, pagination, and detailed inspectors.
+**Logger PSS** is a command-line interface (CLI) application for analyzing Pixel Starships battles from network traffic. It captures battle responses (`GetBattle3`) using mitmproxy, normalizes data into relational tables, and provides CLI commands for battle reporting and data export.
+
+**Note:** This project is being migrated from a GUI version. You may find legacy references to UI components (Qt, PyQt6, MainWindow, etc.) in the codebase. These are being phased out in favor of CLI-only functionality. The GUI version exists as a separate repository.
 
 ## Development Setup
 
@@ -56,26 +58,21 @@ python -c "from app.cli.concrete_commands import GenerateBattleReportCommand; Ge
 
 ### Core Components
 
-**UI Layer:**
-- `app/ui/main_window.py` - Main window (UI only, no business logic)
-- `app/ui/api_flow_runtime_bridge.py` - Qt bridge between runtime and UI
-- `app/ui/models/api_flow_table_model.py` - Qt table model for main flow
-- `app/ui/delegates/row_action_delegate.py` - Row actions without real QPushButtons
+**CLI Layer:**
+- `app/cli/cli_manager.py` - Main CLI menu and command dispatcher
+- `app/cli/concrete_commands.py` - Command implementations (reports, queries, etc.)
 
 **Services Layer:**
 - `app/services/api_flow_runtime.py` - Capture coordinator (backlog, flush, startup sync)
 - `app/services/api_flow_capture.py` - Capture runtime manager
-- `app/services/api_flow_list_service.py` - List/pagination/formatting for main table
 - `app/services/api_flow_storage.py` - Persistence and normalization
-- `app/services/battle_detail_cache.py` - In-memory cache for recent battle details
-- `app/services/process_resource_monitor.py` - CPU/RAM monitoring from `/proc`
-- `app/services/perf_metrics.py` - Lightweight performance metrics for dev
 - `app/services/mitm_api_flow_addon.py` - mitmproxy addon
 
 **Core:**
 - `app/core/config.py` - Configuration (env vars with defaults)
 - `app/core/build_info.py` - Build metadata (version, git SHA, build time)
 - `app/models/pss_models.py` - SQLAlchemy models
+- `app/main.py` - Application entry point
 
 ### Data Flow
 
@@ -86,7 +83,7 @@ python -c "from app.cli.concrete_commands import GenerateBattleReportCommand; Ge
 5. Payload cleaned in `response_body_cleaned`
 6. Replay normalized to relational tables
 7. Design catalogs synced (`ship_designs`, `room_designs`, `crew_designs`) from `/DesignService/ListAllStaticDesigns2`
-8. UI uses local catalogs (`Data/Prod`) as primary translation source
+8. CLI commands query normalized data for reports and analysis
 9. H2H cycle applied per player pair: minimal logger + stats + obsolete replay pruning
 
 ### Database Schema
@@ -104,24 +101,22 @@ python -c "from app.cli.concrete_commands import GenerateBattleReportCommand; Ge
 - Canonical pair key: `(min(attacker_user_id, defender_user_id), max(...))`
 - Only 1 replay kept per pair (most recent by `captured_at/id`)
 - Mini H2H logger stores winner by `battle_id` without duplicates per pair
-- H2H summary recalculated from logger and shown in Battle Inspector
+- H2H summary recalculated from logger and exported in CLI reports
 - TTL/size purge removes old replay but preserves logger/summary
 
 ### Performance Considerations
 
-- Main flow table uses `QTableView + model + delegate` (NOT `QTableWidget` with widgets per row)
-- Large tables in `BattleInspectorWindow` follow same pattern
-- Avoid `resizeRowsToContents()` globally
-- Battle detail cache avoids recomputing full serialization on reopen
+- Batch processing of network captures reduces I/O overhead
 - Lighter queries avoid materializing full ORM rows when unnecessary
+- Battle detail cache avoids recomputing full serialization for repeated queries
+- Normalized schema enables efficient SQL queries for reporting
 
 ## Key Responsibilities
 
-- `MainWindow` must NOT contain parsing, persistence, or capture logic
+- `CliManager` orchestrates the interactive CLI menu and command execution
 - `ApiFlowRuntime` is the only layer that knows both `ApiFlowCaptureManager` and `ApiFlowRepository`
-- `ApiFlowListService` prepares visible rows for main table
-- `BattleDetailCache` prevents recomputation when reopening recent battles
-- `ProcessResourceMonitor` encapsulates `/proc` reading and CPU/RAM calculation
+- `ApiFlowStorage` handles persistence and normalization of battle data
+- Commands in `concrete_commands.py` handle report generation and data export
 
 ## Environment Variables
 
@@ -154,23 +149,6 @@ Configuration via `.env` (optional, defaults exist):
 
 **List format:** JSON arrays recommended (e.g., `["host1","host2"]`). CSV format (`host1,host2`) is deprecated.
 
-## UI Inspection
-
-**Battle Inspector** acts as manager and opens dedicated sub-inspectors per table (Ships, Rooms, Crew, Commands).
-
-**Room AI actions:** `SetItem` actions resolved with manual mapping per room in `app/resources/room_item_slot_mappings.json`, using canonical item catalog names and ignoring level.
-
-**Crew Inspector:**
-- Uses `CharacterActionsNormalized` and `CharacterItemsNormalized` from `battle_replay_characters.character_attributes_json`
-- Translates AI with `ActionTypes.txt` and `ConditionTypes.txt`
-- Translates equipment with `ItemDesigns.txt`
-- Main crew table shows clean stats and `Equipment` + `AI Inspector` buttons (no raw JSON)
-
-**Catalog Fallbacks:**
-1. Local files (`Data/Prod`)
-2. DB design tables if exist
-3. `Sin traduccion` (no translation)
-
 ## Git Workflow
 
 **Branch Strategy:**
@@ -192,24 +170,27 @@ Configuration via `.env` (optional, defaults exist):
 
 ## CI/CD
 
-**PR to `develop` or `main`:**
+**Workflow Strategy:**
+Binary builds and releases are triggered only when merging `develop` → `main`, ensuring stable releases go through proper testing on the develop branch first.
+
+**PR to `develop`:**
 - Runs `Native Build` (Linux + Windows) as quality control
-- Artifacts published to workflow run
+- Artifacts published to workflow run for validation
 
-**Push to `develop`:**
-- Runs `Native Pre-release (develop)`
-- Updates `develop-latest` pre-release
-- Attaches portable ZIPs + `SHA256SUMS.txt` (+ optional signature)
-
-**Push tag `v*`:**
-- Runs `Native Release`
+**Merge `develop` → `main`:**
+- Triggers binary build and release workflows
 - Creates stable release with portable ZIPs
 - Attaches `SHA256SUMS.txt` (+ optional signature)
-- Removes legacy loose binary assets if they exist
+
+**Push tag `v*`:**
+- Alternative trigger for stable releases
+- Same behavior as merge to `main`
+- Use for versioned releases
 
 **Binary Policy:**
 - Only portable ZIPs are published (NOT loose binaries)
 - Build fails if executable doesn't contain mitmproxy addon diagnostic markers
+- Each ZIP includes: executable, mitmproxy runtime, README_RUNTIME.txt, THIRD_PARTY_NOTICES.txt
 
 **Optional Signing:**
 - If `SIGNING_PRIVATE_KEY` (+ optional `SIGNING_PASSPHRASE`) exist, signs `SHA256SUMS.txt` as `SHA256SUMS.txt.asc`
@@ -218,10 +199,10 @@ Configuration via `.env` (optional, defaults exist):
 ## Important Conventions
 
 - Parser must prioritize not losing replay data
-- Capture filter applies in addon (not in UI)
+- Capture filter applies in mitmproxy addon
 - TTL/size retention must maintain coherence between tables
-- Main flow table stays in `QTableView + model + delegate` pattern
-- Large inspector tables follow same pattern and avoid `resizeRowsToContents()` globally
+- CLI commands must handle errors gracefully and provide clear user feedback
+- Report generation should support multiple formats (excel, csv, json)
 
 ## Database Locations
 
@@ -233,7 +214,7 @@ Configuration via `.env` (optional, defaults exist):
 - Linux: `~/.pss_logger/pss_logger.db`
 - Logs: `~/.pss_logger/pss_logger.log`
 
-Each startup logs active build (`version`, `git_sha`, `build_time`) and UI shows `Build: ...` line for support verification.
+Each startup logs active build (`version`, `git_sha`, `build_time`) for support verification.
 
 ## Security
 
