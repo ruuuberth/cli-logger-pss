@@ -174,18 +174,23 @@ Configuration via `.env` (optional, defaults exist):
 Binary builds and releases are triggered only when merging `develop` → `main`, ensuring stable releases go through proper testing on the develop branch first.
 
 **PR to `develop`:**
-- Runs `Native Build` (Linux + Windows) as quality control
-- Artifacts published to workflow run for validation
+- No binary build runs (only secret-scan runs on develop)
+- PRs target `main` for build verification via `Native Build`
 
 **Merge `develop` → `main`:**
-- Triggers binary build and release workflows
-- Creates stable release with portable ZIPs
-- Attaches `SHA256SUMS.txt` (+ optional signature)
+- Triggers `Native Release` workflow
+- Auto-generates versioned tag `vYYYY.MM.DD-<short_sha>` (or `vYYYY.MM.DD-HHMMSS-<short_sha>` on same-day collision)
+- Builds Linux + Windows binaries and publishes as stable release
+- Attaches portable ZIPs + `SHA256SUMS.txt` (+ optional signature)
 
 **Push tag `v*`:**
 - Alternative trigger for stable releases
-- Same behavior as merge to `main`
-- Use for versioned releases
+- Uses the tag name directly as release version
+- Use for manually versioned releases
+
+**Secret Scan (gitleaks):**
+- Runs on both `develop` and `main` (PRs and pushes)
+- Only CI/CD that triggers on `develop` changes
 
 **Binary Policy:**
 - Only portable ZIPs are published (NOT loose binaries)

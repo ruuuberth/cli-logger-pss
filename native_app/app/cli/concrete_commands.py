@@ -50,7 +50,10 @@ class QueryEventsCommand(CliCommand):
                 result = self.runtime.flush_pending()
                 if result and result.get("ok"):
                     saved_count = result.get("saved_count", 0)
-                print_success(f"✅ {saved_count} eventos sincronizados")
+                    print_success(f"✅ {saved_count} eventos sincronizados")
+                elif result and not result.get("ok"):
+                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
+                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
 
             print_info("🔍 Consultando eventos...")
             
@@ -114,7 +117,10 @@ class GenerateBattleReportCommand(CliCommand):
                 result = self.runtime.flush_pending()
                 if result and result.get("ok"):
                     saved_count = result.get("saved_count", 0)
-                print_success(f"✅ {saved_count} eventos sincronizados")
+                    print_success(f"✅ {saved_count} eventos sincronizados")
+                elif result and not result.get("ok"):
+                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
+                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
 
             print_info("📋 Generando reporte de batallas...")
 
@@ -265,7 +271,10 @@ class InspectBattleCommand(CliCommand):
                 result = self.runtime.flush_pending()
                 if result and result.get("ok"):
                     saved_count = result.get("saved_count", 0)
-                print_success(f"✅ {saved_count} eventos sincronizados")
+                    print_success(f"✅ {saved_count} eventos sincronizados")
+                elif result and not result.get("ok"):
+                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
+                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
 
             print_info("🎖️ Inspector de Batalla")
             battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
