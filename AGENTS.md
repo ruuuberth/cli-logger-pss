@@ -15,9 +15,9 @@ App CLI nativa (español) para capturar e inspeccionar replays de batalla de **P
 - **Test (todo):** `python -m pytest`
 - **Test (archivo):** `python -m pytest tests/test_<name>.py`
 - **Test (caso):** `python -m pytest tests/test_<name>.py::test_<specific>`
-- **Reporte no interactivo:** `python -c "from app.cli.concrete_commands import GenerateBattleReportCommand; GenerateBattleReportCommand().execute(['--non-interactive','--format=excel','--output-dir=./native_app/reports','--filename=Reporte_Batallas_Test','--no-timestamp'])"`
+- **Reporte no interactivo:** `python -c "from app.cli.concrete_commands import GenerateBattleReportCommand; GenerateBattleReportCommand().execute(['--non-interactive','--format=excel','--output-dir=./reports','--filename=Reporte_Batallas_Test','--no-timestamp'])"`
 - **Migración DB:** `python scripts/migrate_battle_replays_normalized.py`
-- **Build Linux:** `./scripts/build.sh`
+- **Build:** `./scripts/build.sh` (Linux) o `./scripts/build.ps1` (Windows)
 - **Instalar editable:** `pip install -e .`
 
 ## CI (GitHub Actions)
@@ -76,6 +76,8 @@ App CLI nativa (español) para capturar e inspeccionar replays de batalla de **P
 - Code owner: @ruuuberth
 
 ## Build (PyInstaller)
+Los scripts `native_app/scripts/build.sh` (Linux) y `native_app/scripts/build.ps1` (Windows) automatizan el proceso completo de build y empaquetado.
+
 ```bash
 pip install -U pip setuptools wheel && pip install -e . pyinstaller
 pyinstaller --name pss-logger-native --windowed --onefile --paths . --collect-data app.services run.py
@@ -127,8 +129,8 @@ session.close()
 3. Usar en servicios vía `SessionLocal()` factories
 
 ## Gotchas & Troubleshooting
-
-### Database locks
+- **Persistencia On-Demand:** Los eventos capturados se mantienen en RAM y solo se escriben en la DB al cerrar la app o al ejecutar comandos de consulta/reporte vía `runtime.flush_pending()`. No asumir que la DB está actualizada en tiempo real.
+- **Database locks:**
 - SQLite con WAL mode: `PRAGMA journal_mode=WAL` ya activo
 - Si `database is locked`: aumentar `busy_timeout` en `app/models/database.py`
 - Tests: limpiar `.env` antes de correr si `DATABASE_URL` está seteada globalmente

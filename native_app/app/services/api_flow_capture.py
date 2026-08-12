@@ -165,13 +165,22 @@ class ApiFlowCaptureManager:
                 return
 
             try:
-                process.terminate()
-                process.wait(timeout=3)
+                if os.name == "nt" and process.pid:
+                    # Use taskkill to ensure the process tree is terminated on Windows
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                else:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
             except Exception:
-                try:
-                    process.kill()
-                except Exception:
-                    pass
+                pass
             finally:
                 self._process = None
                 self._current_session = None

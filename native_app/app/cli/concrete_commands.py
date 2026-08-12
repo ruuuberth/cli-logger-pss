@@ -33,8 +33,9 @@ import os
 class QueryEventsCommand(CliCommand):
     """Query and filter API events"""
 
-    def __init__(self):
+    def __init__(self, runtime=None):
         super().__init__("query_events", "Consultar Eventos API")
+        self.runtime = runtime
         self.service = ApiFlowCliService()
         self.console = Console()
 
@@ -42,6 +43,18 @@ class QueryEventsCommand(CliCommand):
         """Execute query command"""
         try:
             clear_console()
+            
+            saved_count = 0
+            if self.runtime:
+                print_info("💾 Sincronizando eventos pendientes...")
+                result = self.runtime.flush_pending()
+                if result and result.get("ok"):
+                    saved_count = result.get("saved_count", 0)
+                    print_success(f"✅ {saved_count} eventos sincronizados")
+                elif result and not result.get("ok"):
+                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
+                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+
             print_info("🔍 Consultando eventos...")
             
             # Get search filter
@@ -87,8 +100,9 @@ class QueryEventsCommand(CliCommand):
 class GenerateBattleReportCommand(CliCommand):
     """Generate battle report"""
 
-    def __init__(self):
+    def __init__(self, runtime=None):
         super().__init__("generate_report", "Generar Reporte de Batallas")
+        self.runtime = runtime
         self.service = ApiFlowCliService()
         self.console = Console()
 
@@ -96,6 +110,18 @@ class GenerateBattleReportCommand(CliCommand):
         """Execute report generation"""
         try:
             clear_console()
+            
+            saved_count = 0
+            if self.runtime:
+                print_info("💾 Sincronizando eventos pendientes...")
+                result = self.runtime.flush_pending()
+                if result and result.get("ok"):
+                    saved_count = result.get("saved_count", 0)
+                    print_success(f"✅ {saved_count} eventos sincronizados")
+                elif result and not result.get("ok"):
+                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
+                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+
             print_info("📋 Generando reporte de batallas...")
 
             # Parse args for non-interactive use
@@ -229,14 +255,27 @@ class InspectRoomCommand(CliCommand):
 class InspectBattleCommand(CliCommand):
     """Inspect battle details by replay id"""
 
-    def __init__(self):
+    def __init__(self, runtime=None):
         super().__init__("inspect_battle", "Inspeccionar Batalla")
+        self.runtime = runtime
         self.service = ApiFlowCliService()
         self.console = Console()
 
     def execute(self, args: list[str] | None = None) -> int:
         try:
             clear_console()
+            
+            saved_count = 0
+            if self.runtime:
+                print_info("💾 Sincronizando eventos pendientes...")
+                result = self.runtime.flush_pending()
+                if result and result.get("ok"):
+                    saved_count = result.get("saved_count", 0)
+                    print_success(f"✅ {saved_count} eventos sincronizados")
+                elif result and not result.get("ok"):
+                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
+                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+
             print_info("🎖️ Inspector de Batalla")
             battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
             if not battle_id:

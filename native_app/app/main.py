@@ -80,16 +80,28 @@ def main() -> int:
     ensure_sqlite_indexes()
     log_schema_health()
 
-    # Iniciar captura de tráfico automáticamente
+    # Iniciar captura de tráfico automáticamente (failure-tolerant)
     runtime = ApiFlowRuntime()
     try:
         runtime.start_capture()
         logging.getLogger(__name__).info("event=capture_started status=auto_start")
     except Exception as e:
-        logging.getLogger(__name__).warning(f"event=capture_start_failed error={e}")
+        logging.getLogger(__name__).warning(
+            "event=capture_auto_start_failed error=%s message=CLI_will_continue_without_capture",
+            e
+        )
 
-    cli_manager = CliManager(capture_runtime=runtime)
-    cli_manager.run()
+    # CLI runs regardless of capture initialization outcome
+    try:
+        cli_manager = CliManager(capture_runtime=runtime)
+        cli_manager.run()
+    except KeyboardInterrupt:
+        logging.getLogger(__name__).info("event=app_exit status=keyboard_interrupt")
+    except Exception as e:
+        logging.getLogger(__name__).error(f"event=app_error error={e}")
+    finally:
+        logging.getLogger(__name__).info("event=app_shutdown status=cleaning_up")
+        runtime.close()
     return 0
 
 

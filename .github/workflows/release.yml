@@ -2,6 +2,8 @@ name: Native Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -14,10 +16,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare:
+    name: Prepare release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release_tag: ${{ steps.determine_tag.outputs.release_tag }}
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: determine_tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            # Tag trigger (v*) - use as-is
+            echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            # Branch push (main) - generate versioned tag and create it
+            SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+            TAG="v$(date -u +%Y.%m.%d)-${SHORT_SHA}"
+            # Guard against same-day re-merge collisions by ensuring unique
+            if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+              TAG="v$(date -u +%Y.%m.%d-%H%M%S)-${SHORT_SHA}"
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "${TAG}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${TAG}"
+            echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
   build-linux:
     name: Build Linux Binary
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs:
+      - prepare
     defaults:
       run:
         working-directory: native_app
@@ -57,7 +98,7 @@ jobs:
 
       - name: Build executable
         env:
-          PSS_BUILD_VERSION: ${{ github.ref_name }}
+          PSS_BUILD_VERSION: ${{ needs.prepare.outputs.release_tag }}
           PSS_BUILD_GIT_SHA: ${{ github.sha }}
           PSS_BUILD_SOURCE: release
         run: ./scripts/build.sh
@@ -73,6 +114,8 @@ jobs:
     name: Build Windows Binary
     runs-on: windows-latest
     timeout-minutes: 30
+    needs:
+      - prepare
     defaults:
       run:
         shell: pwsh
@@ -105,7 +148,7 @@ jobs:
 
       - name: Build executable
         env:
-          PSS_BUILD_VERSION: ${{ github.ref_name }}
+          PSS_BUILD_VERSION: ${{ needs.prepare.outputs.release_tag }}
           PSS_BUILD_GIT_SHA: ${{ github.sha }}
           PSS_BUILD_SOURCE: release
         run: ./scripts/build.ps1
@@ -122,6 +165,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs:
+      - prepare
       - build-linux
       - build-windows
 
@@ -131,23 +175,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate tag commit is in main
+      - name: Validate release commit is in main
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"; then
-            echo "::error::Tag ${GITHUB_REF_NAME} must point to a commit contained in main."
+            echo "::error::Release ${RELEASE_TAG} must point to a commit contained in main."
             exit 1
           fi
 
       - name: Remove legacy assets from existing tag release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
         run: |
           set -euo pipefail
-          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" 2>/dev/null || true)"
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" 2>/dev/null || true)"
           if [ -z "${release_json}" ]; then
-            echo "No existing release for tag ${GITHUB_REF_NAME}. Skipping cleanup."
+            echo "No existing release for tag ${RELEASE_TAG}. Skipping cleanup."
             exit 0
           fi
           export RELEASE_JSON="${release_json}"
@@ -232,13 +279,13 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
           prerelease: false
-          name: Release ${{ github.ref_name }}
+          name: Release ${{ needs.prepare.outputs.release_tag }}
           body: |
             Release estable automática.
 
-            Tag: `${{ github.ref_name }}`
+            Tag: `${{ needs.prepare.outputs.release_tag }}`
             Commit: `${{ github.sha }}`
             Workflow run: `${{ github.run_id }}`
           files: ${{ steps.release_files.outputs.paths }}

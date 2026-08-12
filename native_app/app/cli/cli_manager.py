@@ -25,11 +25,11 @@ class CliManager:
         self.capture_runtime = capture_runtime
         
         # Initialize commands
-        self.query_cmd = QueryEventsCommand()
-        self.report_cmd = GenerateBattleReportCommand()
+        self.query_cmd = QueryEventsCommand(runtime=capture_runtime)
+        self.report_cmd = GenerateBattleReportCommand(runtime=capture_runtime)
         self.char_cmd = InspectCharacterCommand()
         self.room_cmd = InspectRoomCommand()
-        self.battle_cmd = InspectBattleCommand()
+        self.battle_cmd = InspectBattleCommand(runtime=capture_runtime)
         self.capture_cmd = CaptureTrafficCommand(runtime=capture_runtime)
         self.monitor_cmd = SystemMonitorCommand()
         
