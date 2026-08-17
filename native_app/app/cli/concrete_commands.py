@@ -283,13 +283,84 @@ class InspectBattleCommand(CliCommand):
                 print_warning("No se encontró detalle para ese ID")
                 return 0
 
-            # Pretty print keys
-            for k, v in detail.items():
-                self.console.print(f"[bold]{k}[/bold]: {v}")
+            # Build the simplified inspector payload (parity with GUI BattleInspectorExportService)
+            from app.services.battle_inspector_exporter import BattleInspectorExportService
+
+            exporter = BattleInspectorExportService()
+            payload = exporter.build_payload(detail)
+            self._render_battle_payload(payload)
             return 0
         except Exception as e:
             print_error(f"Error inspeccionando batalla: {e}")
             return 1
+
+    def _render_battle_payload(self, payload: dict) -> None:
+        """Render the inspector payload as Rich tables (CLI analog of the GUI inspector window)."""
+        battle = payload.get("battle") or {}
+        print_info(f"🎖️ Batalla {battle.get('battle_id', '-')} — {battle.get('fecha', '-')}")
+
+        players = battle.get("players") or []
+        botin = battle.get("botin") or {}
+        score = battle.get("score") or {}
+
+        # Players / loot / score table
+        summary = Table(title="Resumen", show_header=True, header_style="bold cyan")
+        summary.add_column("Bando", style="bold")
+        summary.add_column("Jugador")
+        summary.add_column("Score")
+        for p in players:
+            side = p.get("side", "-")
+            name = p.get("name", "-")
+            sc = score.get("atacante" if side == "attacker" else "defensor", "-")
+            summary.add_row(side, name, str(sc))
+        summary.add_row("Trofeos (gana/pierde)", str(botin.get("trophy", "-")), "")
+        summary.add_row("Minerales (gana/pierde)", str(botin.get("minerals", "-")), "")
+        summary.add_row("Gas (gana/pierde)", str(botin.get("gas", "-")), "")
+        self.console.print(summary)
+
+        # H2H
+        h2h = battle.get("h2h") or {}
+        if h2h:
+            h2h_table = Table(title="Head-to-Head", show_header=True, header_style="bold cyan")
+            h2h_table.add_column("Campo", style="bold")
+            h2h_table.add_column("Valor")
+            for key, value in h2h.items():
+                h2h_table.add_row(str(key), str(value))
+            self.console.print(h2h_table)
+
+        # Rooms with AI chains
+        rooms = payload.get("rooms") or []
+        if rooms:
+            rooms_table = Table(title="Salas con IA", show_header=True, header_style="bold cyan")
+            for col in ("Diseño", "Fila", "Columna", "Cadena IA (humana)", "Cadena IA (raw)"):
+                rooms_table.add_column(col)
+            for r in rooms:
+                rooms_table.add_row(
+                    str(r.get("2_nombre_diseno", r.get("design_name", "-"))),
+                    str(r.get("4_fila", "-")),
+                    str(r.get("5_columna", "-")),
+                    str(r.get("7_cadena_ia_humana", "-")),
+                    str(r.get("7_cadena_ia_raw", "-")),
+                )
+            self.console.print(rooms_table)
+        else:
+            print_info("Sin salas con IA registrada.")
+
+        # Characters
+        characters = payload.get("characters") or []
+        if characters:
+            chars_table = Table(title="Tripulantes", show_header=True, header_style="bold cyan")
+            for col in ("Diseño", "Nombre", "Nivel", "Sala", "Cadena IA (raw)"):
+                chars_table.add_column(col)
+            for c in characters:
+                chars_table.add_row(
+                    str(c.get("2_nombre_diseno", "-")),
+                    str(c.get("3_nombre", "-")),
+                    str(c.get("4_nivel", "-")),
+                    str(c.get("6_nombre_sala", c.get("6_sala", "-"))),
+                    str(c.get("9_cadena_ia_raw", "-")),
+                )
+            self.console.print(chars_table)
 
 
 class CaptureTrafficCommand(CliCommand):

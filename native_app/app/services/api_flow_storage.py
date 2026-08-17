@@ -1283,7 +1283,8 @@ class ApiFlowRepository:
             return text_value
         return text_value[:512] + "..."
 
-    def _clean_response_body(self, response_body_preview: str | None) -> str | None:
+    @staticmethod
+    def _clean_response_body(response_body_preview: str | None) -> str | None:
         if not response_body_preview:
             return None
 
