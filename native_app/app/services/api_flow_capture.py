@@ -305,8 +305,8 @@ class ApiFlowCaptureManager:
         logger.info("event=addon_integrity_ok sha256=%s", digest)
 
     def _normalize_addon_bytes(self, addon_bytes: bytes) -> bytes:
-        # Normalize line endings to avoid false mismatches across LF/CRLF checkouts.
-        return addon_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        # Normalize line endings to LF by removing all CR characters
+        return addon_bytes.replace(b'\r', b'')
 
     def _resolve_mitmproxy_binary_path(self) -> Path | str:
         configured = str(settings.MITMPROXY_BINARY or "").strip()
