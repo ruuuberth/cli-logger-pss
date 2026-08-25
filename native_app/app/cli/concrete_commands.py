@@ -211,15 +211,118 @@ class InspectCharacterCommand(CliCommand):
         try:
             clear_console()
             print_info("👤 Inspector de Tripulantes")
-            print_info("Estado: En desarrollo")
-            print_warning("La funcionalidad de inspección está siendo migrada...")
-            
-            # TODO: Implement character inspection
-            
+            battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
+            if not battle_id:
+                print_info("Cancelado")
+                return 0
+            try:
+                rid = int(battle_id)
+            except ValueError:
+                print_error("ID inválido")
+                return 1
+
+            characters = self.service.list_characters(rid)
+            if not characters:
+                print_warning("No se encontraron tripulantes")
+                return 0
+
+            print_info("Tripulantes encontrados:")
+            for i, c in enumerate(characters):
+                side = c.get("side", "?")
+                print(f"  [{i}] {side} — {c.get('name', '-')} (Design: {c.get('design_name', '-')}, Lv {c.get('level', '-')}, Ship: {c.get('ship_id', '-')})")
+
+            selection = prompt_input("Seleccione índice (o Enter para cancelar)", default="")
+            if not selection:
+                print_info("Cancelado")
+                return 0
+            try:
+                idx = int(selection)
+                if idx < 0 or idx >= len(characters):
+                    raise ValueError
+            except ValueError:
+                print_error("Selección inválida")
+                return 1
+
+            selected = characters[idx]
+            char_id = selected.get("id")
+            side = selected.get("side")
+            detail = self.service.inspect_character(char_id, rid, side)
+            if "error" in detail:
+                print_error(detail["error"])
+                return 1
+
+            self._render_character_detail(detail)
             return 0
         except Exception as e:
             print_error(f"Error inspeccionando tripulante: {e}")
             return 1
+
+    def _render_character_detail(self, detail: dict) -> None:
+        """Render character details as Rich tables"""
+        # Basic info
+        info = Table(title=f"Tripulante {detail.get('name', '-')} ({detail.get('design_name', '-')})", show_header=True, header_style="bold cyan")
+        info.add_column("Campo", style="bold")
+        info.add_column("Valor")
+        info.add_row("ID", str(detail.get("character_id", "-")))
+        info.add_row("Bando", detail.get("side", "-"))
+        info.add_row("Nivel", str(detail.get("level", "-")))
+        info.add_row("XP", str(detail.get("xp", "-")))
+        info.add_row("Ship ID", str(detail.get("ship_id", "-")))
+        self.console.print(info)
+
+        # Stats
+        stats = detail.get("stats", {})
+        if stats:
+            stats_table = Table(title="Estadísticas", show_header=True, header_style="bold cyan")
+            stats_table.add_column("Stat", style="bold")
+            stats_table.add_column("Valor")
+            for k, v in stats.items():
+                stats_table.add_row(k, str(v))
+            self.console.print(stats_table)
+
+        # Actions
+        actions = detail.get("actions", [])
+        if actions:
+            act_table = Table(title="Acciones", show_header=True, header_style="bold cyan")
+            act_table.add_column("#", style="bold")
+            act_table.add_column("Action ID")
+            act_table.add_column("Acción")
+            act_table.add_column("Condition ID")
+            act_table.add_column("Condición")
+            act_table.add_column("Character Action ID")
+            for a in actions:
+                act_table.add_row(
+                    a.get("index", "-"),
+                    a.get("action_id", "-"),
+                    a.get("action_label", "-"),
+                    a.get("condition_id", "-"),
+                    a.get("condition_label", "-"),
+                    a.get("character_action_id", "-"),
+                )
+            self.console.print(act_table)
+
+        # Items
+        items = detail.get("items", [])
+        if items:
+            item_table = Table(title="Items", show_header=True, header_style="bold cyan")
+            item_table.add_column("#", style="bold")
+            item_table.add_column("Item ID")
+            item_table.add_column("Design ID")
+            item_table.add_column("Nombre")
+            item_table.add_column("Cantidad")
+            item_table.add_column("Bonus Tipo")
+            item_table.add_column("Bonus Valor")
+            for it in items:
+                item_table.add_row(
+                    it.get("index", "-"),
+                    it.get("item_id", "-"),
+                    it.get("item_design_id", "-"),
+                    it.get("item_name", "-"),
+                    it.get("quantity", "-"),
+                    it.get("bonus_type", "-"),
+                    it.get("bonus_value", "-"),
+                )
+            self.console.print(item_table)
 
 
 class InspectRoomCommand(CliCommand):
@@ -235,15 +338,88 @@ class InspectRoomCommand(CliCommand):
         try:
             clear_console()
             print_info("🏠 Inspector de Salas")
-            print_info("Estado: En desarrollo")
-            print_warning("La funcionalidad de inspección está siendo migrada...")
-            
-            # TODO: Implement room inspection
-            
+            battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
+            if not battle_id:
+                print_info("Cancelado")
+                return 0
+            try:
+                rid = int(battle_id)
+            except ValueError:
+                print_error("ID inválido")
+                return 1
+
+            rooms = self.service.list_rooms(rid)
+            if not rooms:
+                print_warning("No se encontraron salas")
+                return 0
+
+            print_info("Salas encontradas:")
+            for i, r in enumerate(rooms):
+                side = r.get("side", "?")
+                print(f"  [{i}] {side} — {r.get('design_name', '-')} (Room ID: {r.get('room_id', '-')}, Ship: {r.get('ship_id', '-')}, Row: {r.get('row', '-')}, Col: {r.get('column', '-')})")
+
+            selection = prompt_input("Seleccione índice (o Enter para cancelar)", default="")
+            if not selection:
+                print_info("Cancelado")
+                return 0
+            try:
+                idx = int(selection)
+                if idx < 0 or idx >= len(rooms):
+                    raise ValueError
+            except ValueError:
+                print_error("Selección inválida")
+                return 1
+
+            selected = rooms[idx]
+            room_id = selected.get("id")
+            side = selected.get("side")
+            detail = self.service.inspect_room(room_id, rid, side)
+            if "error" in detail:
+                print_error(detail["error"])
+                return 1
+
+            self._render_room_detail(detail)
             return 0
         except Exception as e:
             print_error(f"Error inspeccionando sala: {e}")
             return 1
+
+    def _render_room_detail(self, detail: dict) -> None:
+        """Render room details as Rich tables"""
+        # Basic info
+        info = Table(title=f"Sala {detail.get('design_name', '-')} (Room ID: {detail.get('room_id_num', '-')})", show_header=True, header_style="bold cyan")
+        info.add_column("Campo", style="bold")
+        info.add_column("Valor")
+        info.add_row("ID", str(detail.get("room_id", "-")))
+        info.add_row("Bando", detail.get("side", "-"))
+        info.add_row("Ship ID", str(detail.get("ship_id", "-")))
+        info.add_row("Fila", str(detail.get("row", "-")))
+        info.add_row("Columna", str(detail.get("column", "-")))
+        info.add_row("Estado", detail.get("room_status", "-"))
+        self.console.print(info)
+
+        # Actions
+        actions = detail.get("actions", [])
+        if actions:
+            act_table = Table(title="Acciones de la Sala", show_header=True, header_style="bold cyan")
+            act_table.add_column("#", style="bold")
+            act_table.add_column("Action Type ID")
+            act_table.add_column("Acción")
+            act_table.add_column("Condition Type ID")
+            act_table.add_column("Condición")
+            act_table.add_column("Room Action ID")
+            for a in actions:
+                act_table.add_row(
+                    a.get("index", "-"),
+                    a.get("action_type_id", "-"),
+                    a.get("action_label", "-"),
+                    a.get("condition_type_id", "-"),
+                    a.get("condition_label", "-"),
+                    a.get("room_action_id", "-"),
+                )
+            self.console.print(act_table)
+        else:
+            print_info("Sin acciones registradas.")
 
 
 class InspectBattleCommand(CliCommand):
