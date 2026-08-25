@@ -148,6 +148,8 @@ ITEM_DESIGNS_RAW_MAP: dict[str, str] = {
 }
 
 API_FLOW_EVENTS_SQLITE_COLUMNS: dict[str, str] = {
+    "request_body_preview": "TEXT",
+    "response_body_preview": "TEXT",
     "response_body_cleaned": "TEXT",
 }
 
