@@ -319,6 +319,14 @@ class ApiFlowCaptureManager:
                 f"[capture_proxy_missing] MITMPROXY_BINARY configurado no es ejecutable: {configured}"
             )
 
+        # Check active virtual environment for mitmdump
+        if sys.prefix != sys.base_prefix:
+            venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
+            candidate = venv_bin / ("mitmdump.exe" if os.name == "nt" else "mitmdump")
+            if self._is_executable_available(candidate):
+                logger.info("event=venv_mitmproxy_resolved path=%s", candidate)
+                return candidate
+
         packaged = self._resolve_packaged_mitmproxy_path()
         if packaged is not None:
             logger.info("event=packaged_mitmproxy_resolved path=%s", packaged)
