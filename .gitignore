@@ -60,3 +60,7 @@ dist/
 .DS_Store
 Thumbs.db
 .github/pr-body.md
+
+# Local configs (not committed)
+.claude/
+opencode.json
