@@ -53,6 +53,12 @@ def main() -> int:
     from app.core.build_info import get_build_info
     from app.core.logging_setup import configure_logging
 
+    # Force UTF-8 encoding for stdout/stderr to support Unicode output on Windows
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
     configure_logging(db_path.parent)
     build_info = get_build_info()
     import logging

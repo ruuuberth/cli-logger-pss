@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -34,7 +35,7 @@ def configure_logging(base_dir: Path) -> Path:
     file_handler.setFormatter(formatter)
     file_handler.setLevel(level)
 
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(stream=sys.stderr)
     console_handler.setFormatter(formatter)
     console_handler.setLevel(level)
 
