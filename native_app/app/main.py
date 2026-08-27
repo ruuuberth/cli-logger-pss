@@ -48,17 +48,24 @@ def configure_environment() -> Path:
     return db_path
 
 
-def main() -> int:
-    db_path = configure_environment()
-    from app.core.build_info import get_build_info
-    from app.core.logging_setup import configure_logging
-
-    # Force UTF-8 encoding for stdout/stderr to support Unicode output on Windows
+def _configure_streams() -> None:
+    """Force UTF-8 encoding for stdout/stderr on Windows for Unicode support.
+    
+    Called early in main() before any output to ensure consistent encoding.
+    Safe to call at this point because no other code has written to stdout/stderr yet.
+    """
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
+
+def main() -> int:
+    db_path = configure_environment()
+    from app.core.build_info import get_build_info
+    from app.core.logging_setup import configure_logging
+
+    _configure_streams()
     configure_logging(db_path.parent)
     build_info = get_build_info()
     import logging
