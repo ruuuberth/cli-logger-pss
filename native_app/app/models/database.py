@@ -148,6 +148,13 @@ ITEM_DESIGNS_RAW_MAP: dict[str, str] = {
 }
 
 API_FLOW_EVENTS_SQLITE_COLUMNS: dict[str, str] = {
+    # SECURITY: These columns may contain sensitive data (API keys, tokens, PII, session IDs)
+    # from HTTP request/response bodies. Data is filtered by ApiFlowRepository._clean_response_body()
+    # before storage, but residual sensitive data may remain.
+    # TODO: Consider column-level encryption for sensitive data at rest.
+    # Data retention: Configure retention policy via API_FLOW_RETENTION_DAYS setting.
+    "request_body_preview": "TEXT",
+    "response_body_preview": "TEXT",
     "response_body_cleaned": "TEXT",
 }
 

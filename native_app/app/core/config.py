@@ -106,6 +106,7 @@ class Settings(BaseSettings):
 
     # CLI behavior
     CLI_NONINTERACTIVE: bool = False
+    CLI_FORCE_ASCII: bool = False
 
     # Logging
     LOG_LEVEL: str = "INFO"

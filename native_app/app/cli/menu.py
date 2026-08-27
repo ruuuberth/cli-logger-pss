@@ -7,7 +7,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-from app.cli.utils import clear_console
+from app.cli.utils import clear_console, _safe_print
 
 
 class MenuItem:
@@ -75,7 +75,7 @@ class Menu:
             if item.key.lower() == choice:
                 return item.key
         
-        self.console.print("[red]❌ Opción no válida[/red]")
+        _safe_print(self.console, "[red]❌ Opción no válida[/red]")
         self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")
         self.console.input()
         return self.show()
@@ -96,9 +96,9 @@ class Menu:
                         elif item.handler:
                             item.handler()
                     except KeyboardInterrupt:
-                        self.console.print("[yellow]\\n⏸️  Cancelado[/yellow]")
+                        _safe_print(self.console, "[yellow]\\n⏸️  Cancelado[/yellow]")
                     except Exception as e:
-                        self.console.print(f"[red]❌ Error: {e}[/red]")
+                        _safe_print(self.console, f"[red]❌ Error: {e}[/red]")
                     finally:
                         if not item.submenu:
                             self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")

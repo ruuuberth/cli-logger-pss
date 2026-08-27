@@ -48,11 +48,43 @@ def configure_environment() -> Path:
     return db_path
 
 
+def _configure_streams() -> None:
+    """Force UTF-8 encoding for stdout/stderr on Windows for Unicode support.
+
+    This function must be called early in main(), before any logging or output,
+    to ensure consistent UTF-8 encoding throughout the application lifecycle.
+
+    On Windows, the default stdout/stderr encoding is typically cp1252 or cp850,
+    which cannot represent Unicode characters (emojis, international text).
+    Calling reconfigure() with UTF-8 and errors='replace' ensures:
+
+    1. All subsequent print/log output uses UTF-8 encoding
+    2. Unencodable characters are replaced with '?' instead of raising UnicodeEncodeError
+    2. Cross-platform consistency (Linux/macOS already default to UTF-8)
+
+    Safety: This is called at the very start of main() before any logging,
+    configuration, or user output occurs. No other code has written to
+    stdout/stderr at this point, so reconfigure() is safe.
+
+    On Python < 3.7, sys.stdout/stderr don't have reconfigure(), so we
+    gracefully skip with hasattr() check. The logging system will still
+    use the default encoding in that case.
+    """
+    for stream_name, stream in (("stdout", sys.stdout), ("stderr", sys.stderr)):
+        if hasattr(stream, 'reconfigure'):
+            try:
+                stream.reconfigure(encoding='utf-8', errors='replace')
+            except (OSError, ValueError) as e:
+                # Fallback: logging not yet configured, write directly to stderr
+                print(f"Warning: Failed to reconfigure {stream_name}: {e}", file=sys.__stderr__)
+
+
 def main() -> int:
     db_path = configure_environment()
     from app.core.build_info import get_build_info
     from app.core.logging_setup import configure_logging
 
+    _configure_streams()
     configure_logging(db_path.parent)
     build_info = get_build_info()
     import logging

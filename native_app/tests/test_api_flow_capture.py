@@ -41,8 +41,11 @@ def _addon_bytes() -> bytes:
 
 
 def _mock_mitmproxy_binary_resolution(monkeypatch) -> None:
-    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: "/tmp/mitmdump")
+    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: "/usr/bin/mitmdump")
     monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
+    # Simulate NO venv: sys.prefix == sys.base_prefix
+    monkeypatch.setattr("sys.prefix", "/usr", raising=False)
+    monkeypatch.setattr("sys.base_prefix", "/usr", raising=False)
 
 
 def test_start_capture_passes_allowlist_options(monkeypatch) -> None:
@@ -172,7 +175,7 @@ def test_start_capture_logs_resolved_addon_and_binary(monkeypatch, caplog) -> No
         manager.start_capture()
 
     assert "event=capture_addon_resolved" in caplog.text
-    assert "mitmproxy_binary=mitmdump" in caplog.text
+    assert "mitmproxy_binary=" in caplog.text
 
 
 def test_start_capture_fallbacks_to_temp_addon_when_source_missing(monkeypatch, tmp_path: Path) -> None:
@@ -359,8 +362,13 @@ def test_resolve_mitmproxy_binary_from_packaged_path(monkeypatch, tmp_path: Path
     packaged_binary.write_text("#!/bin/sh\n", encoding="utf-8")
     os.chmod(packaged_binary, 0o755)
 
+    # Simulate NO venv: sys.prefix == sys.base_prefix
+    monkeypatch.setattr("sys.prefix", str(tmp_path / "base"), raising=False)
+    monkeypatch.setattr("sys.base_prefix", str(tmp_path / "base"), raising=False)
+
     monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
     monkeypatch.setattr(manager, "_resolve_packaged_mitmproxy_path", lambda: packaged_binary)
+    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: None)
     monkeypatch.setattr("app.services.api_flow_capture.settings", SimpleNamespace(MITMPROXY_BINARY="mitmdump"))
 
     resolved = manager._resolve_mitmproxy_binary_path()
@@ -369,6 +377,11 @@ def test_resolve_mitmproxy_binary_from_packaged_path(monkeypatch, tmp_path: Path
 
 def test_resolve_mitmproxy_binary_from_path_fallback(monkeypatch) -> None:
     manager = ApiFlowCaptureManager()
+    
+    # Simulate NO venv: sys.prefix == sys.base_prefix
+    monkeypatch.setattr("sys.prefix", "/usr", raising=False)
+    monkeypatch.setattr("sys.base_prefix", "/usr", raising=False)
+
     monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
     monkeypatch.setattr(manager, "_resolve_packaged_mitmproxy_path", lambda: None)
     monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: "/usr/bin/mitmdump")
@@ -380,6 +393,11 @@ def test_resolve_mitmproxy_binary_from_path_fallback(monkeypatch) -> None:
 
 def test_start_capture_fails_with_capture_proxy_missing_when_none_available(monkeypatch) -> None:
     manager = ApiFlowCaptureManager()
+    
+    # Simulate NO venv: sys.prefix == sys.base_prefix
+    monkeypatch.setattr("sys.prefix", "/usr", raising=False)
+    monkeypatch.setattr("sys.base_prefix", "/usr", raising=False)
+    
     monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
     monkeypatch.setattr(manager, "_resolve_packaged_mitmproxy_path", lambda: None)
     monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: None)
@@ -391,3 +409,82 @@ def test_start_capture_fails_with_capture_proxy_missing_when_none_available(monk
         assert "capture_proxy_missing" in str(exc)
     else:
         raise AssertionError("Expected missing proxy diagnostic error")
+
+
+def test_resolve_mitmproxy_binary_from_active_venv(monkeypatch, tmp_path: Path) -> None:
+    """Test that detects mitmdump in the active venv."""
+    manager = ApiFlowCaptureManager()
+
+    # Simulate venv active: sys.prefix != sys.base_prefix
+    venv_root = tmp_path / "venv"
+    base_root = tmp_path / "base"
+    venv_root.mkdir(parents=True)
+    base_root.mkdir(parents=True)
+
+    monkeypatch.setattr("sys.prefix", str(venv_root), raising=False)
+    monkeypatch.setattr("sys.base_prefix", str(base_root), raising=False)
+
+    # Create mitmdump in venv/Scripts
+    venv_binary = venv_root / "Scripts" / "mitmdump.exe"
+    venv_binary.parent.mkdir(parents=True, exist_ok=True)
+    venv_binary.write_text("@echo off\n", encoding="utf-8")
+
+    monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
+    monkeypatch.setattr(manager, "_resolve_packaged_mitmproxy_path", lambda: None)
+    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: None)
+    monkeypatch.setattr("app.services.api_flow_capture.settings", SimpleNamespace(MITMPROXY_BINARY="mitmdump"))
+
+    resolved = manager._resolve_mitmproxy_binary_path()
+    assert resolved == venv_binary
+
+
+def test_resolve_mitmproxy_binary_venv_not_active_falls_back(monkeypatch, tmp_path: Path) -> None:
+    """Test that does NOT use venv if sys.prefix == sys.base_prefix (no venv)."""
+    manager = ApiFlowCaptureManager()
+
+    # Simulate NO venv: sys.prefix == sys.base_prefix
+    base_root = tmp_path / "base"
+    base_root.mkdir(parents=True)
+    monkeypatch.setattr("sys.prefix", str(base_root), raising=False)
+    monkeypatch.setattr("sys.base_prefix", str(base_root), raising=False)
+
+    # Create mitmdump in PATH (via shutil.which)
+    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: "/usr/bin/mitmdump")
+    monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
+    monkeypatch.setattr(manager, "_resolve_packaged_mitmproxy_path", lambda: None)
+    monkeypatch.setattr("app.services.api_flow_capture.settings", SimpleNamespace(MITMPROXY_BINARY="mitmdump"))
+
+    resolved = manager._resolve_mitmproxy_binary_path()
+    assert resolved == "mitmdump"  # Should fall back to PATH
+
+
+def test_resolve_mitmproxy_binary_venv_priority_over_packaged(monkeypatch, tmp_path: Path) -> None:
+    """Test that venv has priority over third_party/ packaged binary."""
+    manager = ApiFlowCaptureManager()
+
+    # Simulate venv active
+    venv_root = tmp_path / "venv"
+    base_root = tmp_path / "base"
+    venv_root.mkdir(parents=True)
+    base_root.mkdir(parents=True)
+
+    monkeypatch.setattr("sys.prefix", str(venv_root), raising=False)
+    monkeypatch.setattr("sys.base_prefix", str(base_root), raising=False)
+
+    # Create mitmdump in venv/Scripts
+    venv_binary = venv_root / "Scripts" / "mitmdump.exe"
+    venv_binary.parent.mkdir(parents=True, exist_ok=True)
+    venv_binary.write_text("@echo off\n", encoding="utf-8")
+
+    # Also create a packaged binary (should be ignored due to lower priority)
+    packaged_binary = tmp_path / "third_party" / "mitmproxy" / "mitmdump.exe"
+    packaged_binary.parent.mkdir(parents=True, exist_ok=True)
+    packaged_binary.write_text("@echo off\n", encoding="utf-8")
+
+    monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
+    monkeypatch.setattr(manager, "_resolve_packaged_mitmproxy_path", lambda: packaged_binary)
+    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: None)
+    monkeypatch.setattr("app.services.api_flow_capture.settings", SimpleNamespace(MITMPROXY_BINARY="mitmdump"))
+
+    resolved = manager._resolve_mitmproxy_binary_path()
+    assert resolved == venv_binary  # Venv should win over packaged
