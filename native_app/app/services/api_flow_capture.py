@@ -326,6 +326,8 @@ class ApiFlowCaptureManager:
             if self._is_executable_available(candidate):
                 logger.info("event=venv_mitmproxy_resolved path=%s", candidate)
                 return candidate
+            logger.debug("event=venv_detected_no_binary venv_path=%s candidate=%s",
+                         sys.prefix, candidate)
 
         packaged = self._resolve_packaged_mitmproxy_path()
         if packaged is not None:
