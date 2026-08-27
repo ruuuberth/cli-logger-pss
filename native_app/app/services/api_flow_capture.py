@@ -24,6 +24,67 @@ logger = logging.getLogger(__name__)
 _EVENT_PREFIX = "API_FLOW_EVENT "
 EXPECTED_MITM_ADDON_SHA256 = "5b91509219cd4cfde2170a4c34c9c1d4756157fb92401407980d4378e04359f9"
 
+# Allowlist of trusted mitmdump binary paths for security hardening
+_ALLOWED_MITMPROXY_PATHS = frozenset({
+    "/usr/bin/mitmdump",
+    "/usr/local/bin/mitmdump",
+    "/opt/homebrew/bin/mitmdump",  # macOS ARM
+    "C:\\Program Files\\mitmproxy\\mitmdump.exe",
+    "C:\\Program Files (x86)\\mitmproxy\\mitmdump.exe",
+    # Bare command names that resolve via shutil.which to trusted paths
+    "mitmdump",
+    "mitmdump.exe",
+})
+
+
+def _is_trusted_mitmproxy_path(path: Path | str) -> bool:
+    """Validate that a mitmdump binary path is in the trusted allowlist.
+    
+    This prevents execution of arbitrary binaries if MITMPROXY_BINARY
+    is compromised via environment variable or config manipulation.
+    
+    Virtual environment paths are trusted when running inside a venv,
+    as they are considered part of the application's trusted environment.
+    
+    Bare command names (e.g., "mitmdump") are resolved via shutil.which
+    and the resolved path is checked against the allowlist.
+    """
+    path_str = str(Path(path).resolve())
+    
+    # Check against static allowlist (includes bare command names)
+    if str(path) in _ALLOWED_MITMPROXY_PATHS:
+        return True
+    
+    # For bare command names without path separators, resolve via shutil.which
+    if os.path.basename(str(path)) == str(path):
+        resolved = shutil.which(str(path))
+        if resolved and _is_trusted_mitmproxy_path(Path(resolved)):
+            return True
+    
+    # Check against static allowlist (full paths)
+    if path_str in _ALLOWED_MITMPROXY_PATHS:
+        return True
+    
+    # Trust venv binaries when running inside a virtual environment
+    if sys.prefix != sys.base_prefix:
+        venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
+        try:
+            resolved_venv = venv_bin.resolve()
+            if str(path).startswith(str(resolved_venv)):
+                return True
+        except (OSError, RuntimeError):
+            pass
+    
+    return False
+
+
+def _hash_path(path: str) -> str:
+    """Generate a short hash of a filesystem path for safe logging.
+    
+    Prevents exposure of internal filesystem structure in logs.
+    """
+    return hashlib.sha256(path.encode()).hexdigest()[:12]
+
 
 @dataclass
 class CaptureSession:
@@ -313,6 +374,7 @@ class ApiFlowCaptureManager:
         env_has_override = "MITMPROXY_BINARY" in os.environ
 
         if env_has_override:
+            # User explicitly set MITMPROXY_BINARY via env var - trust their choice
             if self._is_executable_available(configured):
                 return configured
             raise RuntimeError(
@@ -324,21 +386,21 @@ class ApiFlowCaptureManager:
             venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
             candidate = venv_bin / ("mitmdump.exe" if os.name == "nt" else "mitmdump")
             if self._is_executable_available(candidate):
-                logger.info("event=venv_mitmproxy_resolved path=%s", candidate)
+                logger.info("event=venv_mitmproxy_resolved path_hash=%s", _hash_path(str(candidate)))
                 return candidate
-            logger.debug("event=venv_detected_no_binary venv_path=%s candidate=%s",
-                         sys.prefix, candidate)
+            logger.debug("event=venv_detected_no_binary venv_path_hash=%s candidate_hash=%s",
+                         _hash_path(sys.prefix), _hash_path(str(candidate)))
 
         packaged = self._resolve_packaged_mitmproxy_path()
         if packaged is not None:
-            logger.info("event=packaged_mitmproxy_resolved path=%s", packaged)
+            logger.info("event=packaged_mitmproxy_resolved path_hash=%s", _hash_path(str(packaged)))
             return packaged
 
-        if self._is_executable_available(configured):
+        if self._is_executable_available(configured) and _is_trusted_mitmproxy_path(configured):
             return configured
 
         raise RuntimeError(
-            "[capture_proxy_missing] No se encontró mitmproxy empaquetado ni en PATH."
+            "[capture_proxy_missing] No se encontró mitmproxy de confianza empaquetado ni en PATH."
         )
 
     def _resolve_packaged_mitmproxy_path(self) -> Path | None:

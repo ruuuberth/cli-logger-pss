@@ -41,7 +41,7 @@ def _addon_bytes() -> bytes:
 
 
 def _mock_mitmproxy_binary_resolution(monkeypatch) -> None:
-    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: "/tmp/mitmdump")
+    monkeypatch.setattr("app.services.api_flow_capture.shutil.which", lambda _cmd: "/usr/bin/mitmdump")
     monkeypatch.delenv("MITMPROXY_BINARY", raising=False)
     # Simulate NO venv: sys.prefix == sys.base_prefix
     monkeypatch.setattr("sys.prefix", "/usr", raising=False)

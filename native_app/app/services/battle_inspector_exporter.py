@@ -11,6 +11,17 @@ from app.services.room_item_mapping import RoomItemMappingResolver
 
 
 class BattleInspectorExportService:
+    """Service for exporting battle inspector data as structured JSON.
+
+    SECURITY CONSIDERATIONS:
+    - Exported data may contain sensitive information from battle replays
+      (player names, ship configurations, item details).
+    - Export size should be limited to prevent DoS via large exports.
+    - Access control should be enforced at the API layer before calling this service.
+    - Exported data should not be logged at DEBUG level if it contains sensitive data.
+    - Consider implementing rate limiting on export endpoints.
+    """
+
     def __init__(
         self,
         catalogo: CatalogoResolver | None = None,

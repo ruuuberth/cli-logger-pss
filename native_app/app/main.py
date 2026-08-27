@@ -70,10 +70,13 @@ def _configure_streams() -> None:
     gracefully skip with hasattr() check. The logging system will still
     use the default encoding in that case.
     """
-    if hasattr(sys.stdout, 'reconfigure'):
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    if hasattr(sys.stderr, 'reconfigure'):
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    for stream_name, stream in (("stdout", sys.stdout), ("stderr", sys.stderr)):
+        if hasattr(stream, 'reconfigure'):
+            try:
+                stream.reconfigure(encoding='utf-8', errors='replace')
+            except (OSError, ValueError) as e:
+                # Fallback: logging not yet configured, write directly to stderr
+                print(f"Warning: Failed to reconfigure {stream_name}: {e}", file=sys.__stderr__)
 
 
 def main() -> int:
