@@ -20,12 +20,9 @@ from app.cli.concrete_commands import (
 
 def _create_console(force_ascii: bool = False) -> Console:
     """Create a Console adapted to the terminal's encoding capabilities."""
-    # Disable legacy Windows rendering to allow UTF-8 output through the stream wrapper.
-    # legacy_windows=True forces cp1252 encoding via legacy renderer.
-    # We use legacy_windows=False to let the stream handle encoding (UTF-8 via wrapper).
-    # If force_ascii is True, we could use a different approach, but for now we rely on
-    # the stream's UTF-8 configuration and the _safe_print fallback.
-    return Console(force_terminal=True, legacy_windows=False)
+    # force_ascii=True -> legacy_windows=True (ASCII-safe legacy renderer)
+    # force_ascii=False -> legacy_windows=False (UTF-8 via stream)
+    return Console(force_terminal=True, legacy_windows=force_ascii)
 
 
 class CliManager:
