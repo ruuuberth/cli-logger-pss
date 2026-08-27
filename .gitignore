@@ -64,3 +64,5 @@ Thumbs.db
 # Local configs (not committed)
 .claude/
 opencode.json
+opencode.json.bak
+pyrightconfig.json
