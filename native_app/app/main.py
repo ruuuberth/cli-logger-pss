@@ -50,9 +50,25 @@ def configure_environment() -> Path:
 
 def _configure_streams() -> None:
     """Force UTF-8 encoding for stdout/stderr on Windows for Unicode support.
-    
-    Called early in main() before any output to ensure consistent encoding.
-    Safe to call at this point because no other code has written to stdout/stderr yet.
+
+    This function must be called early in main(), before any logging or output,
+    to ensure consistent UTF-8 encoding throughout the application lifecycle.
+
+    On Windows, the default stdout/stderr encoding is typically cp1252 or cp850,
+    which cannot represent Unicode characters (emojis, international text).
+    Calling reconfigure() with UTF-8 and errors='replace' ensures:
+
+    1. All subsequent print/log output uses UTF-8 encoding
+    2. Unencodable characters are replaced with '?' instead of raising UnicodeEncodeError
+    2. Cross-platform consistency (Linux/macOS already default to UTF-8)
+
+    Safety: This is called at the very start of main() before any logging,
+    configuration, or user output occurs. No other code has written to
+    stdout/stderr at this point, so reconfigure() is safe.
+
+    On Python < 3.7, sys.stdout/stderr don't have reconfigure(), so we
+    gracefully skip with hasattr() check. The logging system will still
+    use the default encoding in that case.
     """
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
