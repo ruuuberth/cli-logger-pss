@@ -277,7 +277,7 @@ class ApiFlowCaptureManager:
             self._emit_status("Error al leer eventos de mitmproxy")
         finally:
             if not self._stop_event.is_set():
-                self._emit_status("mitmproxy finalizó")
+                self._emit_status("mitmproxy finalizo")
             with self._lock:
                 self._process = None
                 self._current_session = None
