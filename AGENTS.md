@@ -82,7 +82,7 @@ Data pipeline: mitmproxy runs `app/services/mitm_api_flow_addon.py` → addon pr
 
 ### CLI structure
 - `app/cli/concrete_commands.py` — 7 commands; `app/cli/cli_services.py` — Qt-free service wrappers
-- **Known bug**: `InspectCharacterCommand` calls `CharacterCliService.list_characters(rid)` / `inspect_character(char_id, rid, side)` but those methods are TODO stubs with different signatures (take `search` / `character_id` only). Same for `InspectRoomCommand` → `RoomCliService`. These inspectors are broken; `InspectBattleCommand` works but prints a raw dict dump.
+- `CharacterCliService` / `RoomCliService` resolve characters/rooms from `get_battle_detail()` via `CharacterInspectorResolver` and `BattleInspectorResolver`+`RoomItemMappingResolver`. `InspectBattleCommand` prints a raw dict dump (no table rendering).
 
 ### Gotchas
 - **`EXPECTED_MITM_ADDON_SHA256`** in `api_flow_capture.py` must be updated whenever `mitm_api_flow_addon.py` changes — the build fails on SHA mismatch (normalized to LF).
