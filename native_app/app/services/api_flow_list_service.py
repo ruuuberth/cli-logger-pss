@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import logging
 
 from app.services.battle_detail_cache import BattleDetailCache
@@ -47,12 +48,27 @@ class ApiFlowListService:
         self.detail_cache = detail_cache or BattleDetailCache()
         self.logger = logging.getLogger(__name__)
 
-    def list_page(self, search: str, page: int, page_size: int) -> ApiFlowPage:
+    def list_page(
+        self,
+        search: str = "",
+        page: int = 0,
+        page_size: int = 20,
+        time_from: datetime | None = None,
+        time_to: datetime | None = None,
+        outcome: str | None = None,
+        trophy_min: int | None = None,
+        trophy_max: int | None = None,
+    ) -> ApiFlowPage:
         with measure_perf("api_flow_list_page", self.logger):
             total, raw_rows = self.repository.list_battle_replay_rows(
                 search=(search or "").strip(),
                 page=page,
                 page_size=page_size,
+                time_from=time_from,
+                time_to=time_to,
+                outcome=outcome,
+                trophy_min=trophy_min,
+                trophy_max=trophy_max,
             )
         pairs = {
             self._pair_key(row.attacker_user_id, row.defender_user_id)

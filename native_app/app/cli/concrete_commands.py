@@ -1,10 +1,15 @@
 """Concrete CLI Commands for Logger-PSS"""
 from __future__ import annotations
 
+import json
 import logging
+import os
+from datetime import datetime
 from pathlib import Path
 from rich.table import Table
 from rich.console import Console
+from rich.prompt import Prompt, Confirm
+from typing import Any
 
 from app.cli.commands import CliCommand
 from app.cli.menu import Menu
@@ -27,7 +32,7 @@ from app.reporting.report_generator import (
 from app.reporting.report_templates import BattleReplayTemplate
 from app.services.process_resource_monitor import ProcessResourceMonitor
 from app.services.api_flow_runtime import ApiFlowRuntime
-import os
+from app.core.config import settings
 
 
 class QueryEventsCommand(CliCommand):
@@ -55,13 +60,55 @@ class QueryEventsCommand(CliCommand):
                     print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
                     print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
 
-            print_info("🔍 Consultando eventos...")
+            print_info("🔍 Consultar Eventos API")
             
             # Get search filter
             search = prompt_input("Filtro (atacante/defensor/battle_id) [Enter = sin filtro]", default="")
             
+            # Date range filters
+            print_info("Filtros opcionales (Enter para omitir):")
+            date_from_str = prompt_input("Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default="")
+            date_to_str = prompt_input("Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default="")
+            
+            # Outcome filter
+            outcome = prompt_input("Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default="")
+            outcome = outcome.upper() if outcome else None
+            if outcome and outcome not in ("VICTORY", "DEFEAT", "DRAW"):
+                outcome = None
+            
+            # Trophy range filters
+            trophy_min_str = prompt_input("Trofeos mínimos [Enter = sin filtro]", default="")
+            trophy_max_str = prompt_input("Trofeos máximos [Enter = sin filtro]", default="")
+            
+            time_from = None
+            time_to = None
+            trophy_min = None
+            trophy_max = None
+            
+            try:
+                if date_from_str:
+                    time_from = datetime.strptime(date_from_str, "%Y-%m-%d")
+                if date_to_str:
+                    time_to = datetime.strptime(date_to_str, "%Y-%m-%d")
+                if trophy_min_str:
+                    trophy_min = int(trophy_min_str)
+                if trophy_max_str:
+                    trophy_max = int(trophy_max_str)
+            except ValueError:
+                print_error("Formato de fecha o número inválido")
+                return 1
+
             # Query first page
-            page = self.service.query_events(search=search, page=0, page_size=20)
+            page = self.service.query_events(
+                search=search,
+                page=0,
+                page_size=20,
+                time_from=time_from,
+                time_to=time_to,
+                outcome=outcome,
+                trophy_min=trophy_min,
+                trophy_max=trophy_max,
+            )
             
             if not page.rows:
                 print_warning("No se encontraron eventos")
@@ -138,6 +185,39 @@ class GenerateBattleReportCommand(CliCommand):
             # Parameters: allow override via args or prompt
             search = opts.get("search") or (prompt_input("Filtro (atacante/defensor/battle_id) [Enter = todos]", default="") if opts.get("non-interactive") is None else "")
 
+            # Date range filters
+            print_info("Filtros opcionales (Enter para omitir):")
+            date_from_str = opts.get("date-from") or (prompt_input("Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
+            date_to_str = opts.get("date-to") or (prompt_input("Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
+            
+            # Outcome filter
+            outcome = opts.get("outcome") or (prompt_input("Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default="") if opts.get("non-interactive") is None else "")
+            outcome = outcome.upper() if outcome else None
+            if outcome and outcome not in ("VICTORY", "DEFEAT", "DRAW"):
+                outcome = None
+            
+            # Trophy range filters
+            trophy_min_str = opts.get("trophy-min") or (prompt_input("Trofeos mínimos [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
+            trophy_max_str = opts.get("trophy-max") or (prompt_input("Trofeos máximos [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
+            
+            time_from = None
+            time_to = None
+            trophy_min = None
+            trophy_max = None
+            
+            try:
+                if date_from_str:
+                    time_from = datetime.strptime(date_from_str, "%Y-%m-%d")
+                if date_to_str:
+                    time_to = datetime.strptime(date_to_str, "%Y-%m-%d")
+                if trophy_min_str:
+                    trophy_min = int(trophy_min_str)
+                if trophy_max_str:
+                    trophy_max = int(trophy_max_str)
+            except ValueError:
+                print_error("Formato de fecha o número inválido")
+                return 1
+
             # Format choice
             format_choice = opts.get("format") or prompt_input("Formato (excel/csv/json) [excel]", default="excel")
             if format_choice not in ["excel", "csv", "json"]:
@@ -147,7 +227,16 @@ class GenerateBattleReportCommand(CliCommand):
             # Query data
             print_info("Obteniendo datos...")
             limit = int(opts.get("limit", "1000"))
-            page = self.service.query_events(search=search, page=0, page_size=limit)
+            page = self.service.query_events(
+                search=search,
+                page=0,
+                page_size=limit,
+                time_from=time_from,
+                time_to=time_to,
+                outcome=outcome,
+                trophy_min=trophy_min,
+                trophy_max=trophy_max,
+            )
             
             if not page.rows:
                 print_warning("No hay datos para reportar")
@@ -477,6 +566,255 @@ class InspectBattleCommand(CliCommand):
         except Exception as e:
             print_error(f"Error inspeccionando batalla: {e}")
             return 1
+
+
+class SettingsCommand(CliCommand):
+    """Manage application settings"""
+
+    SETTINGS_CATEGORIES = {
+        "Database": [
+            "DATABASE_URL",
+        ],
+        "API PixelStarships": [
+            "PSS_API_BASE_URL",
+            "PSS_API_REQUEST_TIMEOUT_SECONDS",
+            "PSS_CHECKSUM_KEY",
+            "DESIGNS_CACHE_TTL_SECONDS",
+            "ITEMS_API_CACHE_TTL_SECONDS",
+            "BATTLE_REPORT_CACHE_TTL_SECONDS",
+        ],
+        "Captura (mitmproxy)": [
+            "API_FLOW_ENABLED",
+            "MITMPROXY_BINARY",
+            "MITMPROXY_LISTEN_HOST",
+            "MITMPROXY_LISTEN_PORT",
+            "API_FLOW_BODY_MAX_CHARS",
+            "API_FLOW_RETENTION_DAYS",
+            "API_FLOW_MAX_DB_MB",
+            "API_FLOW_CAPTURE_HTTPS",
+            "API_FLOW_IGNORE_HOSTS",
+            "API_FLOW_CAPTURE_HOST_ALLOWLIST",
+            "API_FLOW_CAPTURE_PATH_ALLOWLIST",
+        ],
+        "Reportes": [
+            "REPORT_ENABLE",
+            "REPORT_OUTPUT_DIR",
+            "REPORT_DEFAULT_FORMAT",
+            "REPORT_INCLUDE_TIMESTAMP",
+            "REPORT_FILENAME_BASE",
+        ],
+        "CLI": [
+            "CLI_NONINTERACTIVE",
+            "CLI_FORCE_ASCII",
+        ],
+        "Logging": [
+            "LOG_LEVEL",
+            "LOG_FILE",
+        ],
+    }
+
+    def __init__(self):
+        super().__init__("settings", "Configuración")
+        self.console = Console()
+        self.env_path = Path(__file__).resolve().parents[2] / ".env"
+
+    def execute(self, args: list[str] = None) -> int:
+        try:
+            clear_console()
+            print_info("⚙️ Configuración de Logger-PSS")
+            print_info(f"Archivo .env: {self.env_path}")
+            print_info(f"Existe: {'Sí' if self.env_path.exists() else 'No (usando defaults)'}")
+
+            while True:
+                self._show_main_menu()
+                choice = prompt_input("Opción (1-5, q=salir)", default="")
+                choice = choice.strip().lower()
+
+                if choice in ("q", "quit", "exit", "5"):
+                    print_info("Volviendo al menú principal...")
+                    break
+                elif choice == "1":
+                    self._show_all_settings()
+                elif choice == "2":
+                    self._edit_setting()
+                elif choice == "3":
+                    self._show_env_file()
+                elif choice == "4":
+                    self._create_env_example()
+                else:
+                    print_warning("Opción inválida")
+
+            return 0
+        except Exception as e:
+            print_error(f"Error en configuración: {e}")
+            return 1
+
+    def _show_main_menu(self) -> None:
+        print("\n[bold]Menú de Configuración:[/bold]")
+        print("  1. Ver todas las configuraciones")
+        print("  2. Editar una configuración")
+        print("  3. Ver archivo .env completo")
+        print("  4. Crear .env desde ejemplo")
+        print("  5. Volver (o 'q')")
+
+    def _show_all_settings(self) -> None:
+        print("\n[bold cyan]Configuración actual:[/bold cyan]")
+        for category, keys in self.SETTINGS_CATEGORIES.items():
+            table = Table(title=f"📂 {category}", show_header=True, header_style="bold cyan")
+            table.add_column("Clave", style="bold")
+            table.add_column("Valor")
+            table.add_column("Tipo")
+            
+            for key in keys:
+                value = getattr(settings, key, "N/A")
+                if isinstance(value, list):
+                    display_value = json.dumps(value, ensure_ascii=False)
+                else:
+                    display_value = str(value)
+                
+                # Mask sensitive values
+                if "KEY" in key.upper() or "PASSWORD" in key.upper() or "SECRET" in key.upper():
+                    display_value = "***MASKED***" if display_value != "" else "(vacío)"
+                
+                value_type = type(value).__name__
+                table.add_row(key, display_value, value_type)
+            
+            self.console.print(table)
+
+    def _edit_setting(self) -> None:
+        print("\n[bold]Configuraciones editables:[/bold]")
+        all_keys = []
+        for keys in self.SETTINGS_CATEGORIES.values():
+            all_keys.extend(keys)
+        
+        for i, key in enumerate(all_keys):
+            value = getattr(settings, key, "N/A")
+            if isinstance(value, list):
+                display = json.dumps(value, ensure_ascii=False)
+            else:
+                display = str(value)
+            if "KEY" in key.upper() or "PASSWORD" in key.upper() or "SECRET" in key.upper():
+                display = "***MASKED***" if display != "" else "(vacío)"
+            print(f"  [{i}] {key} = {display}")
+        
+        selection = prompt_input("Seleccione índice (Enter para cancelar)", default="")
+        if not selection:
+            return
+        
+        try:
+            idx = int(selection)
+            if idx < 0 or idx >= len(all_keys):
+                print_error("Índice inválido")
+                return
+        except ValueError:
+            print_error("Entrada inválida")
+            return
+        
+        key = all_keys[idx]
+        current = getattr(settings, key, None)
+        
+        if isinstance(current, list):
+            current_display = json.dumps(current, ensure_ascii=False)
+            print_info(f"Valor actual (JSON array): {current_display}")
+            print_info("Ingrese nuevo valor como JSON array, ej: [\"host1\",\"host2\"]")
+            new_value = prompt_input("Nuevo valor", default=current_display)
+            try:
+                parsed = json.loads(new_value)
+                if not isinstance(parsed, list):
+                    print_error("Debe ser un array JSON")
+                    return
+            except json.JSONDecodeError:
+                print_error("JSON inválido")
+                return
+        elif isinstance(current, bool):
+            print_info(f"Valor actual: {current}")
+            new_value = prompt_input("Nuevo valor (true/false)", default=str(current).lower())
+            if new_value.lower() not in ("true", "false"):
+                print_error("Debe ser true o false")
+                return
+            parsed = new_value.lower() == "true"
+        elif isinstance(current, int):
+            print_info(f"Valor actual: {current}")
+            new_value = prompt_input("Nuevo valor (entero)", default=str(current))
+            try:
+                parsed = int(new_value)
+            except ValueError:
+                print_error("Debe ser un número entero")
+                return
+        else:
+            print_info(f"Valor actual: {current}")
+            new_value = prompt_input("Nuevo valor", default=str(current) if current is not None else "")
+            parsed = new_value
+
+        if confirm_action(f"¿Guardar {key} = {parsed} en .env?"):
+            self._write_env(key, parsed)
+            print_success(f"✅ {key} actualizado. Reinicie la app para aplicar cambios.")
+
+    def _write_env(self, key: str, value: Any) -> None:
+        """Write a key-value pair to .env file"""
+        env_lines = []
+        if self.env_path.exists():
+            with open(self.env_path, "r", encoding="utf-8") as f:
+                env_lines = f.readlines()
+        
+        # Format value for .env
+        if isinstance(value, list):
+            env_value = json.dumps(value, ensure_ascii=False)
+        elif isinstance(value, bool):
+            env_value = str(value).lower()
+        else:
+            env_value = str(value)
+        
+        # Check if key exists
+        key_found = False
+        new_lines = []
+        for line in env_lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                existing_key = stripped.split("=")[0].strip()
+                if existing_key == key:
+                    new_lines.append(f"{key}={env_value}\n")
+                    key_found = True
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+        
+        if not key_found:
+            new_lines.append(f"\n{key}={env_value}\n")
+        
+        self.env_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+
+    def _show_env_file(self) -> None:
+        if not self.env_path.exists():
+            print_warning("No existe archivo .env")
+            return
+        
+        print(f"\n[bold]Contenido de {self.env_path}:[/bold]")
+        with open(self.env_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        print(content)
+
+    def _create_env_example(self) -> None:
+        example_path = Path(__file__).resolve().parents[2] / ".env.dev.example"
+        if not example_path.exists():
+            print_error("No se encuentra .env.dev.example")
+            return
+        
+        if self.env_path.exists():
+            if not confirm_action(f"El archivo {self.env_path} ya existe. ¿Sobrescribir?"):
+                return
+        
+        with open(example_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        self.env_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.env_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        
+        print_success(f"✅ .env creado desde ejemplo en {self.env_path}")
 
 
 class CaptureTrafficCommand(CliCommand):

@@ -1,6 +1,7 @@
 """CLI Services - Intermediary layer to expose backend services without Qt dependencies"""
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from typing import Any, Optional
 from pathlib import Path
@@ -23,6 +24,11 @@ class ApiFlowCliService:
         search: str = "",
         page: int = 0,
         page_size: int = 20,
+        time_from: datetime | None = None,
+        time_to: datetime | None = None,
+        outcome: str | None = None,
+        trophy_min: int | None = None,
+        trophy_max: int | None = None,
     ) -> ApiFlowPageDTO:
         """Query API events from database"""
         try:
@@ -31,6 +37,11 @@ class ApiFlowCliService:
                 search=search,
                 page=page,
                 page_size=page_size,
+                time_from=time_from,
+                time_to=time_to,
+                outcome=outcome,
+                trophy_min=trophy_min,
+                trophy_max=trophy_max,
             )
             
             # Convert to pure DTO

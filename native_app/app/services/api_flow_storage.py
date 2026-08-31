@@ -391,6 +391,11 @@ class ApiFlowRepository:
         search: str,
         page: int,
         page_size: int,
+        time_from: datetime | None = None,
+        time_to: datetime | None = None,
+        outcome: str | None = None,
+        trophy_min: int | None = None,
+        trophy_max: int | None = None,
     ) -> tuple[int, list[BattleReplayListRow]]:
         db = SessionLocal()
         try:
@@ -421,6 +426,26 @@ class ApiFlowRepository:
                         BattleReplayNormalized.defender_name.ilike(token),
                         BattleReplayNormalized.outcome_type.ilike(token),
                         cast(BattleReplayNormalized.battle_id, String).ilike(token),
+                    )
+                )
+            if time_from is not None:
+                query = query.filter(BattleReplayNormalized.captured_at >= time_from)
+            if time_to is not None:
+                query = query.filter(BattleReplayNormalized.captured_at <= time_to)
+            if outcome:
+                query = query.filter(BattleReplayNormalized.outcome_type == outcome)
+            if trophy_min is not None:
+                query = query.filter(
+                    or_(
+                        BattleReplayNormalized.attacker_trophy >= trophy_min,
+                        BattleReplayNormalized.defender_trophy >= trophy_min,
+                    )
+                )
+            if trophy_max is not None:
+                query = query.filter(
+                    or_(
+                        BattleReplayNormalized.attacker_trophy <= trophy_max,
+                        BattleReplayNormalized.defender_trophy <= trophy_max,
                     )
                 )
             total = int(query.order_by(None).count())

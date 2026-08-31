@@ -15,6 +15,7 @@ from app.cli.concrete_commands import (
     InspectBattleCommand,
     CaptureTrafficCommand,
     SystemMonitorCommand,
+    SettingsCommand,
 )
 
 
@@ -41,6 +42,7 @@ class CliManager:
         self.battle_cmd = InspectBattleCommand(runtime=capture_runtime)
         self.capture_cmd = CaptureTrafficCommand(runtime=capture_runtime)
         self.monitor_cmd = SystemMonitorCommand()
+        self.settings_cmd = SettingsCommand()
         
         self._setup_menus()
 
@@ -103,5 +105,4 @@ class CliManager:
 
     def cmd_settings(self) -> None:
         """Application settings"""
-        print_info("Funcionalidad: Configuración")
-        print_info("Estado: En desarrollo")
+        self.settings_cmd.execute()
