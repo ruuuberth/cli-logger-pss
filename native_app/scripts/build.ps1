@@ -6,7 +6,24 @@ Set-Location $RootDir
 
 python -m pip install -U pip setuptools wheel
 python -m pip install -e . pyinstaller
-python -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$RootDir" --collect-data app.services run.py
+$buildVersion = if ($env:PSS_BUILD_VERSION) { $env:PSS_BUILD_VERSION } else { (git describe --tags --always 2>$null) }
+if (-not $buildVersion) { $buildVersion = "0.1.0" }
+$buildSha = if ($env:PSS_BUILD_GIT_SHA) { $env:PSS_BUILD_GIT_SHA } else { (git rev-parse --short HEAD 2>$null) }
+if (-not $buildSha) { $buildSha = "unknown" }
+$buildTime = if ($env:PSS_BUILD_TIME) { $env:PSS_BUILD_TIME } else { (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ") }
+$buildSource = if ($env:PSS_BUILD_SOURCE) { $env:PSS_BUILD_SOURCE } else { "build-script" }
+$metadataFile = Join-Path $env:TEMP ("pss_build_metadata_" + [guid]::NewGuid().ToString("N") + ".json")
+$metadataJson = "{`"version`":`"$buildVersion`",`"git_sha`":`"$buildSha`",`"build_time`":`"$buildTime`",`"source`":`"$buildSource`"}"
+Set-Content -Path $metadataFile -Value $metadataJson -Encoding UTF8
+
+try {
+  python -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$RootDir" --collect-data app.services --add-data "$RootDir/app/services/mitm_api_flow_addon.py;app/services" --add-data "$metadataFile;app/resources" run.py
+}
+finally {
+  if (Test-Path $metadataFile) {
+    Remove-Item $metadataFile -Force
+  }
+}
 
 $packageArgs = @(
   "scripts/package_portable.py",

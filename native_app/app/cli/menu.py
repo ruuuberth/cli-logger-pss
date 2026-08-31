@@ -5,8 +5,9 @@ from typing import Callable, Optional, Any
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
 from rich import box
+
+from app.cli.utils import clear_console, _safe_print
 
 
 class MenuItem:
@@ -51,7 +52,7 @@ class Menu:
 
     def show(self) -> Optional[str]:
         """Display menu and return selected key, or None if exit"""
-        self.console.clear()
+        clear_console()
         
         # Render title
         self.console.print(Panel(self.title, style="bold cyan", expand=True))
@@ -64,6 +65,7 @@ class Menu:
         self.console.print()
         
         # Get user input
+        from rich.prompt import Prompt
         choice = Prompt.ask("Selecciona una opción", console=self.console).strip().lower()
         
         if choice == "q":
@@ -73,7 +75,7 @@ class Menu:
             if item.key.lower() == choice:
                 return item.key
         
-        self.console.print("[red]❌ Opción no válida[/red]")
+        _safe_print(self.console, "[red]❌ Opción no válida[/red]")
         self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")
         self.console.input()
         return self.show()
@@ -94,14 +96,14 @@ class Menu:
                         elif item.handler:
                             item.handler()
                     except KeyboardInterrupt:
-                        self.console.print("[yellow]\\n⏸️  Cancelado[/yellow]")
+                        _safe_print(self.console, "[yellow]\\n⏸️  Cancelado[/yellow]")
                     except Exception as e:
-                        self.console.print(f"[red]❌ Error: {e}[/red]")
+                        _safe_print(self.console, f"[red]❌ Error: {e}[/red]")
                     finally:
                         if not item.submenu:
                             self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")
                             self.console.input()
-                     break
+                    break
 
 
 class Table:
@@ -114,39 +116,3 @@ class Table:
         for col in columns:
             table.add_column(col)
         return table
-
-
-def print_info(message: str, console: Optional[Console] = None) -> None:
-    """Print info message"""
-    c = console or Console()
-    c.print(f"[cyan]ℹ️ {message}[/cyan]")
-
-
-def print_success(message: str, console: Optional[Console] = None) -> None:
-    """Print success message"""
-    c = console or Console()
-    c.print(f"[green]✅ {message}[/green]")
-
-
-def print_error(message: str, console: Optional[Console] = None) -> None:
-    """Print error message"""
-    c = console or Console()
-    c.print(f"[red]❌ {message}[/red]")
-
-
-def print_warning(message: str, console: Optional[Console] = None) -> None:
-    """Print warning message"""
-    c = console or Console()
-    c.print(f"[yellow]⚠️ {message}[/yellow]")
-
-
-def confirm_action(message: str, console: Optional[Console] = None) -> bool:
-    """Ask for confirmation"""
-    c = console or Console()
-    return Confirm.ask(message, console=c)
-
-
-def prompt_input(message: str, console: Optional[Console] = None, default: str = "") -> str:
-    """Prompt for user input"""
-    c = console or Console()
-    return Prompt.ask(message, console=c, default=default if default else None)

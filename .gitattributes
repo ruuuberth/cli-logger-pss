@@ -1,0 +1,3 @@
+# Normalize line endings and force LF for Python source
+* text=auto
+*.py text eol=lf

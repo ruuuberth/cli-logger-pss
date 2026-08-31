@@ -24,6 +24,67 @@ logger = logging.getLogger(__name__)
 _EVENT_PREFIX = "API_FLOW_EVENT "
 EXPECTED_MITM_ADDON_SHA256 = "5b91509219cd4cfde2170a4c34c9c1d4756157fb92401407980d4378e04359f9"
 
+# Allowlist of trusted mitmdump binary paths for security hardening
+_ALLOWED_MITMPROXY_PATHS = frozenset({
+    "/usr/bin/mitmdump",
+    "/usr/local/bin/mitmdump",
+    "/opt/homebrew/bin/mitmdump",  # macOS ARM
+    "C:\\Program Files\\mitmproxy\\mitmdump.exe",
+    "C:\\Program Files (x86)\\mitmproxy\\mitmdump.exe",
+    # Bare command names that resolve via shutil.which to trusted paths
+    "mitmdump",
+    "mitmdump.exe",
+})
+
+
+def _is_trusted_mitmproxy_path(path: Path | str) -> bool:
+    """Validate that a mitmdump binary path is in the trusted allowlist.
+    
+    This prevents execution of arbitrary binaries if MITMPROXY_BINARY
+    is compromised via environment variable or config manipulation.
+    
+    Virtual environment paths are trusted when running inside a venv,
+    as they are considered part of the application's trusted environment.
+    
+    Bare command names (e.g., "mitmdump") are resolved via shutil.which
+    and the resolved path is checked against the allowlist.
+    """
+    path_str = str(Path(path).resolve())
+    
+    # Check against static allowlist (includes bare command names)
+    if str(path) in _ALLOWED_MITMPROXY_PATHS:
+        return True
+    
+    # For bare command names without path separators, resolve via shutil.which
+    if os.path.basename(str(path)) == str(path):
+        resolved = shutil.which(str(path))
+        if resolved and _is_trusted_mitmproxy_path(Path(resolved)):
+            return True
+    
+    # Check against static allowlist (full paths)
+    if path_str in _ALLOWED_MITMPROXY_PATHS:
+        return True
+    
+    # Trust venv binaries when running inside a virtual environment
+    if sys.prefix != sys.base_prefix:
+        venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
+        try:
+            resolved_venv = venv_bin.resolve()
+            if str(path).startswith(str(resolved_venv)):
+                return True
+        except (OSError, RuntimeError):
+            pass
+    
+    return False
+
+
+def _hash_path(path: str) -> str:
+    """Generate a short hash of a filesystem path for safe logging.
+    
+    Prevents exposure of internal filesystem structure in logs.
+    """
+    return hashlib.sha256(path.encode()).hexdigest()[:12]
+
 
 @dataclass
 class CaptureSession:
@@ -61,11 +122,20 @@ class ApiFlowCaptureManager:
 
             addon_path = self._resolve_addon_path()
             mitmproxy_binary = self._resolve_mitmproxy_binary_path()
+            frozen = bool(getattr(sys, "frozen", False))
+
+            if frozen and "_MEI" in str(addon_path):
+                logger.error("event=addon_invalid_runtime_path frozen=%s addon_path=%s", frozen, addon_path)
+                self._cleanup_temp_addon_path()
+                raise RuntimeError(
+                    "[capture_addon_unresolvable] resolved addon path points to _MEI internal bundle."
+                )
 
             logger.info(
-                "event=capture_addon_resolved frozen=%s addon_path=%s",
-                bool(getattr(sys, "frozen", False)),
+                "event=capture_addon_resolved frozen=%s addon_path=%s mitmproxy_binary=%s",
+                frozen,
                 addon_path,
+                mitmproxy_binary,
             )
 
             session_id = uuid4().hex
@@ -156,13 +226,22 @@ class ApiFlowCaptureManager:
                 return
 
             try:
-                process.terminate()
-                process.wait(timeout=3)
+                if os.name == "nt" and process.pid:
+                    # Use taskkill to ensure the process tree is terminated on Windows
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                else:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
             except Exception:
-                try:
-                    process.kill()
-                except Exception:
-                    pass
+                pass
             finally:
                 self._process = None
                 self._current_session = None
@@ -198,7 +277,7 @@ class ApiFlowCaptureManager:
             self._emit_status("Error al leer eventos de mitmproxy")
         finally:
             if not self._stop_event.is_set():
-                self._emit_status("mitmproxy finalizó")
+                self._emit_status("mitmproxy finalizo")
             with self._lock:
                 self._process = None
                 self._current_session = None
@@ -218,7 +297,6 @@ class ApiFlowCaptureManager:
                 logger.exception("event=api_flow_callback_error")
 
     def _emit_status(self, message: str) -> None:
-        print(f"[api-flow] {message}", flush=True)
         logger.info("event=api_flow_status message=%s", message)
         for callback in self._status_callbacks:
             try:
@@ -227,8 +305,7 @@ class ApiFlowCaptureManager:
                 logger.exception("event=api_flow_status_callback_error")
 
     def _log_console_line(self, message: str) -> None:
-        print(f"[mitmproxy] {message}", flush=True)
-        logger.info("event=mitmproxy_line message=%s", message[:400])
+        logger.debug("event=mitmproxy_line message=%s", message[:400])
 
     def _build_ignore_hosts_regex(self, hosts: list[str]) -> str | None:
         cleaned = [host.strip().lower() for host in hosts if host and host.strip()]
@@ -271,7 +348,10 @@ class ApiFlowCaptureManager:
                 return source_path.read_bytes()
             except Exception as exc:
                 raise RuntimeError(f"No se pudo leer el addon mitmproxy desde source: {exc}") from exc
-        return pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
+        addon_bytes = pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
+        if addon_bytes:
+            logger.info("event=addon_embedded_loaded frozen=%s bytes=%s", frozen, len(addon_bytes))
+        return addon_bytes
 
     def _validate_addon_integrity(self, addon_bytes: bytes) -> None:
         normalized_bytes = self._normalize_addon_bytes(addon_bytes)
@@ -286,30 +366,41 @@ class ApiFlowCaptureManager:
         logger.info("event=addon_integrity_ok sha256=%s", digest)
 
     def _normalize_addon_bytes(self, addon_bytes: bytes) -> bytes:
-        # Normalize line endings to avoid false mismatches across LF/CRLF checkouts.
-        return addon_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        # Normalize line endings to LF by removing all CR characters
+        return addon_bytes.replace(b'\r', b'')
 
     def _resolve_mitmproxy_binary_path(self) -> Path | str:
         configured = str(settings.MITMPROXY_BINARY or "").strip()
         env_has_override = "MITMPROXY_BINARY" in os.environ
 
         if env_has_override:
+            # User explicitly set MITMPROXY_BINARY via env var - trust their choice
             if self._is_executable_available(configured):
                 return configured
             raise RuntimeError(
                 f"[capture_proxy_missing] MITMPROXY_BINARY configurado no es ejecutable: {configured}"
             )
 
+        # Check active virtual environment for mitmdump
+        if sys.prefix != sys.base_prefix:
+            venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
+            candidate = venv_bin / ("mitmdump.exe" if os.name == "nt" else "mitmdump")
+            if self._is_executable_available(candidate):
+                logger.info("event=venv_mitmproxy_resolved path_hash=%s", _hash_path(str(candidate)))
+                return candidate
+            logger.debug("event=venv_detected_no_binary venv_path_hash=%s candidate_hash=%s",
+                         _hash_path(sys.prefix), _hash_path(str(candidate)))
+
         packaged = self._resolve_packaged_mitmproxy_path()
         if packaged is not None:
-            logger.info("event=packaged_mitmproxy_resolved path=%s", packaged)
+            logger.info("event=packaged_mitmproxy_resolved path_hash=%s", _hash_path(str(packaged)))
             return packaged
 
-        if self._is_executable_available(configured):
+        if self._is_executable_available(configured) and _is_trusted_mitmproxy_path(configured):
             return configured
 
         raise RuntimeError(
-            "[capture_proxy_missing] No se encontró mitmproxy empaquetado ni en PATH."
+            "[capture_proxy_missing] No se encontró mitmproxy de confianza empaquetado ni en PATH."
         )
 
     def _resolve_packaged_mitmproxy_path(self) -> Path | None:

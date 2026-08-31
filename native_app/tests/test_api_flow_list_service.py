@@ -10,7 +10,7 @@ class _Repo:
     def __init__(self) -> None:
         self.last_args = None
 
-    def list_battle_replay_rows(self, search: str, page: int, page_size: int):
+    def list_battle_replay_rows(self, search: str, page: int, page_size: int, **kwargs):
         self.last_args = (search, page, page_size)
         return 1, [
             BattleReplayListRow(
@@ -92,7 +92,7 @@ def test_list_page_formats_labels() -> None:
 
 def test_h2h_fallback_when_ids_missing() -> None:
     class _RepoMissingIds(_Repo):
-        def list_battle_replay_rows(self, search: str, page: int, page_size: int):
+        def list_battle_replay_rows(self, search: str, page: int, page_size: int, **kwargs):
             self.last_args = (search, page, page_size)
             return 1, [
                 BattleReplayListRow(
@@ -129,7 +129,7 @@ def test_h2h_fallback_when_ids_missing() -> None:
 
 def test_h2h_reorients_when_attacker_is_high_player() -> None:
     class _RepoSwapped(_Repo):
-        def list_battle_replay_rows(self, search: str, page: int, page_size: int):
+        def list_battle_replay_rows(self, search: str, page: int, page_size: int, **kwargs):
             self.last_args = (search, page, page_size)
             return 1, [
                 BattleReplayListRow(
