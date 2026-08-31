@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import os
 import logging
+import sys
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -411,6 +413,7 @@ def test_start_capture_fails_with_capture_proxy_missing_when_none_available(monk
         raise AssertionError("Expected missing proxy diagnostic error")
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific venv path test")
 def test_resolve_mitmproxy_binary_from_active_venv(monkeypatch, tmp_path: Path) -> None:
     """Test that detects mitmdump in the active venv."""
     manager = ApiFlowCaptureManager()
@@ -458,6 +461,7 @@ def test_resolve_mitmproxy_binary_venv_not_active_falls_back(monkeypatch, tmp_pa
     assert resolved == "mitmdump"  # Should fall back to PATH
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific venv path test")
 def test_resolve_mitmproxy_binary_venv_priority_over_packaged(monkeypatch, tmp_path: Path) -> None:
     """Test that venv has priority over third_party/ packaged binary."""
     manager = ApiFlowCaptureManager()
