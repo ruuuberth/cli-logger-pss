@@ -858,7 +858,7 @@ class SettingsCommand(CliCommand):
                 choice = prompt_input("Opción (1-5, q=salir)", default="")
                 choice = choice.strip().lower()
 
-                if choice in ("q", "quit", "exit", "5"):
+                if choice in ("q", "quit", "exit", "7"):
                     print_info("Volviendo al menú principal...")
                     break
                 elif choice == "1":
@@ -869,6 +869,10 @@ class SettingsCommand(CliCommand):
                     self._show_env_file()
                 elif choice == "4":
                     self._create_env_example()
+                elif choice == "5":
+                    self._export_config()
+                elif choice == "6":
+                    self._import_config()
                 else:
                     print_warning("Opción inválida")
 
@@ -883,7 +887,9 @@ class SettingsCommand(CliCommand):
         print("  2. Editar una configuración")
         print("  3. Ver archivo .env completo")
         print("  4. Crear .env desde ejemplo")
-        print("  5. Volver (o 'q')")
+        print("  5. Exportar configuración (YAML/JSON)")
+        print("  6. Importar configuración (YAML/JSON)")
+        print("  7. Volver (o 'q')")
 
     def _show_all_settings(self) -> None:
         print("\n[bold cyan]Configuración actual:[/bold cyan]")
@@ -1043,6 +1049,230 @@ class SettingsCommand(CliCommand):
             f.write(content)
         
         print_success(f"✅ .env creado desde ejemplo en {self.env_path}")
+
+    def _export_config(self) -> None:
+        """Export configuration to YAML or JSON"""
+        try:
+            print("\n[bold]Exportar Configuración[/bold]")
+            print("  1. YAML (legible, con comentarios)")
+            print("  2. JSON (programático)")
+            format_choice = prompt_input("Formato [1/2] [1]", default="1")
+            if format_choice not in ("1", "2"):
+                format_choice = "1"
+
+            default_path = self.env_path.parent / f"config_export.{ 'yaml' if format_choice == '1' else 'json' }"
+            output_path = Path(prompt_input(f"Ruta de salida [{default_path}]", default=str(default_path))).expanduser()
+
+            # Collect all settings from Pydantic Settings
+            export_data = {}
+            sensitive_keys = {"PSS_CHECKSUM_KEY", "DATABASE_URL"}
+            
+            all_keys = []
+            for keys in self.SETTINGS_CATEGORIES.values():
+                all_keys.extend(keys)
+
+            for key in all_keys:
+                value = getattr(settings, key, None)
+                if key in sensitive_keys:
+                    export_data[key] = "***MASKED***"
+                elif isinstance(value, list):
+                    export_data[key] = value
+                elif isinstance(value, bool):
+                    export_data[key] = value
+                elif isinstance(value, int):
+                    export_data[key] = value
+                else:
+                    export_data[key] = str(value) if value is not None else ""
+
+            # Add descriptions for YAML
+            descriptions = self._get_settings_descriptions()
+
+            if format_choice == "1":
+                # YAML with comments
+                import yaml
+                yaml_data = {}
+                for key, value in export_data.items():
+                    yaml_data[key] = value
+                output = "# Logger-PSS Configuration Export\n"
+                output += f"# Generated: {datetime.now().isoformat()}\n\n"
+                for key, value in export_data.items():
+                    desc = descriptions.get(key, "")
+                    if desc:
+                        output += f"# {desc}\n"
+                    output += f"{key}: "
+                    if isinstance(value, list):
+                        output += yaml.dump(value, default_flow_style=True).strip()
+                    elif isinstance(value, bool):
+                        output += "true\n" if value else "false\n"
+                    else:
+                        output += f"{value}\n"
+                    output += "\n"
+            else:
+                import json
+                output = json.dumps(export_data, ensure_ascii=False, indent=2)
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(output)
+
+            print_success(f"✅ Configuración exportada a {output_path}")
+        except Exception as e:
+            print_error(f"Error exportando configuración: {e}")
+
+    def _import_config(self) -> None:
+        """Import configuration from YAML or JSON with auto-apply and backup"""
+        try:
+            print("\n[bold]Importar Configuración[/bold]")
+            input_path = Path(prompt_input("Ruta del archivo (YAML/JSON): ", default="")).expanduser()
+            
+            if not input_path.exists():
+                print_error("Archivo no encontrado")
+                return
+
+            # Read and parse file
+            if input_path.suffix.lower() in (".yaml", ".yml"):
+                import yaml
+                with open(input_path, "r", encoding="utf-8") as f:
+                    import_data = yaml.safe_load(f)
+            elif input_path.suffix.lower() == ".json":
+                import json
+                with open(input_path, "r", encoding="utf-8") as f:
+                    import_data = json.load(f)
+            else:
+                print_error("Formato no soportado. Use .yaml, .yml o .json")
+                return
+
+            if not isinstance(import_data, dict):
+                print_error("El archivo debe contener un objeto/diccionario")
+                return
+
+            # Validate keys
+            all_known_keys = set()
+            for keys in self.SETTINGS_CATEGORIES.values():
+                all_known_keys.update(keys)
+
+            errors = []
+            for key, value in import_data.items():
+                if key not in all_known_keys:
+                    errors.append(f"Clave desconocida: {key}")
+                    continue
+                
+                expected_type = type(getattr(settings, key, None))
+                if expected_type == list and not isinstance(value, list):
+                    errors.append(f"{key}: se esperaba lista, recibió {type(value).__name__}")
+                elif expected_type == bool and not isinstance(value, bool):
+                    errors.append(f"{key}: se esperaba booleano, recibió {type(value).__name__}")
+                elif expected_type == int and not isinstance(value, int):
+                    errors.append(f"{key}: se esperaba entero, recibió {type(value).__name__}")
+
+            if errors:
+                print_error("Errores de validación:")
+                for err in errors:
+                    print(f"  - {err}")
+                print_warning("No se modificó el archivo .env")
+                return
+
+            # Create backup
+            backup_path = self._create_env_backup()
+            print_info(f"Backup creado: {backup_path}")
+
+            # Apply to .env
+            self._apply_config_to_env(import_data)
+            print_success(f"✅ Configuración importada. Backup: {backup_path}")
+            print_warning("Reinicie la aplicación para aplicar cambios.")
+        except Exception as e:
+            print_error(f"Error importando configuración: {e}")
+
+    def _create_env_backup(self) -> Path:
+        """Create timestamped backup of .env"""
+        import time
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = self.env_path.parent / f".env.backup.{timestamp}"
+        if self.env_path.exists():
+            import shutil
+            shutil.copy2(self.env_path, backup_path)
+        else:
+            backup_path.write_text("", encoding="utf-8")
+        return backup_path
+
+    def _apply_config_to_env(self, config: dict) -> None:
+        """Apply configuration dict to .env file"""
+        env_lines = []
+        if self.env_path.exists():
+            with open(self.env_path, "r", encoding="utf-8") as f:
+                env_lines = f.readlines()
+
+        # Track which keys we've updated
+        updated_keys = set()
+        new_lines = []
+        
+        for line in env_lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                existing_key = stripped.split("=")[0].strip()
+                if existing_key in config:
+                    value = config[existing_key]
+                    if isinstance(value, list):
+                        import json
+                        env_value = json.dumps(value, ensure_ascii=False)
+                    elif isinstance(value, bool):
+                        env_value = str(value).lower()
+                    else:
+                        env_value = str(value)
+                    new_lines.append(f"{existing_key}={env_value}\n")
+                    updated_keys.add(existing_key)
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+
+        # Add any new keys not in existing .env
+        for key, value in config.items():
+            if key not in updated_keys:
+                if isinstance(value, list):
+                    import json
+                    env_value = json.dumps(value, ensure_ascii=False)
+                elif isinstance(value, bool):
+                    env_value = str(value).lower()
+                else:
+                    env_value = str(value)
+                new_lines.append(f"{key}={env_value}\n")
+
+        self.env_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+
+    def _get_settings_descriptions(self) -> dict:
+        """Return descriptions for each setting for YAML export"""
+        return {
+            "DATABASE_URL": "Ruta de la base de datos SQLite",
+            "PSS_API_BASE_URL": "URL base de la API de Pixel Starships",
+            "PSS_API_REQUEST_TIMEOUT_SECONDS": "Timeout de requests a la API (segundos)",
+            "PSS_CHECKSUM_KEY": "Clave de checksum para validación (secreto)",
+            "DESIGNS_CACHE_TTL_SECONDS": "TTL caché de diseños (segundos)",
+            "ITEMS_API_CACHE_TTL_SECONDS": "TTL caché de items API (segundos)",
+            "BATTLE_REPORT_CACHE_TTL_SECONDS": "TTL caché de reportes de batalla (segundos)",
+            "API_FLOW_ENABLED": "Habilitar captura de tráfico",
+            "MITMPROXY_BINARY": "Binario mitmproxy (mitmdump o ruta completa)",
+            "MITMPROXY_LISTEN_HOST": "Host donde escuchar el proxy",
+            "MITMPROXY_LISTEN_PORT": "Puerto donde escuchar el proxy",
+            "API_FLOW_BODY_MAX_CHARS": "Máximo caracteres del body de respuesta",
+            "API_FLOW_RETENTION_DAYS": "Días de retención de eventos",
+            "API_FLOW_MAX_DB_MB": "Tamaño máximo de BD en MB",
+            "API_FLOW_CAPTURE_HTTPS": "Capturar tráfico HTTPS",
+            "API_FLOW_IGNORE_HOSTS": "Hosts a ignorar (array JSON)",
+            "API_FLOW_CAPTURE_HOST_ALLOWLIST": "Hosts permitidos para captura (array JSON)",
+            "API_FLOW_CAPTURE_PATH_ALLOWLIST": "Paths permitidos para captura (array JSON)",
+            "REPORT_ENABLE": "Habilitar generación de reportes",
+            "REPORT_OUTPUT_DIR": "Directorio de salida de reportes",
+            "REPORT_DEFAULT_FORMAT": "Formato por defecto (excel/csv/json)",
+            "REPORT_INCLUDE_TIMESTAMP": "Incluir timestamp en nombre de archivo",
+            "REPORT_FILENAME_BASE": "Nombre base para reportes",
+            "CLI_NONINTERACTIVE": "Modo no interactivo para CLI",
+            "CLI_FORCE_ASCII": "Forzar salida ASCII (Windows legacy)",
+            "LOG_LEVEL": "Nivel de logging (DEBUG/INFO/WARNING/ERROR)",
+            "LOG_FILE": "Archivo de log",
+        }
 
 
 class CaptureTrafficCommand(CliCommand):

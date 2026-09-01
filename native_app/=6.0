@@ -1,0 +1,6 @@
+Collecting pyyaml
+  Downloading pyyaml-6.0.3-cp311-cp311-win_amd64.whl.metadata (2.4 kB)
+Downloading pyyaml-6.0.3-cp311-cp311-win_amd64.whl (158 kB)
+   -------------------------------------- 158.8/158.8 kB 316.7 kB/s eta 0:00:00
+Installing collected packages: pyyaml
+Successfully installed pyyaml-6.0.3
