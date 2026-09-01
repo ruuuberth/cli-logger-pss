@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 import logging
 
 from app.services.battle_detail_cache import BattleDetailCache
@@ -122,10 +123,9 @@ class ApiFlowListService:
             f" | G {row.win_gas_result or 0}/{row.lose_gas_result or 0}"
         )
         trophies = f"{row.win_trophy_result or 0}/{row.lose_trophy_result or 0}"
-        h2h_label, h2h_tooltip = self._build_h2h_labels(
-            row,
-            matchup_summaries.get(self._pair_key(row.attacker_user_id, row.defender_user_id)),
-        )
+        pair_key = self._pair_key(row.attacker_user_id, row.defender_user_id)
+        summary = matchup_summaries.get(pair_key) if pair_key is not None else None
+        h2h_label, h2h_tooltip = self._build_h2h_labels(row, summary)
         return ApiFlowRowView(
             battle_replay_id=row.id,
             api_flow_event_id=row.api_flow_event_id,
@@ -213,3 +213,54 @@ class ApiFlowListService:
                     winner_label = f"User {winner}"
                 lines.append(f"#{item.get('battle_id') or '-'} -> {winner_label}")
         return label, "\n".join(lines)
+
+    def get_h2h_report_data(
+        self,
+        low_user_id: int,
+        high_user_id: int,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        outcome: str | None = None,
+        limit: int = 1000,
+    ) -> dict[str, Any] | None:
+        """Get comprehensive H2H report data"""
+        summary = self.repository.get_h2h_summary(
+            low_user_id=low_user_id,
+            high_user_id=high_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            outcome=outcome,
+        )
+        if not summary:
+            return None
+
+        battles = self.repository.get_h2h_battles(
+            low_user_id=low_user_id,
+            high_user_id=high_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            outcome=outcome,
+            limit=limit,
+        )
+
+        trends = self.repository.get_h2h_trends(
+            low_user_id=low_user_id,
+            high_user_id=high_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            outcome=outcome,
+        )
+
+        return {
+            "summary": summary,
+            "battles": battles,
+            "trends": trends,
+        }
+
+    def get_unique_player_pairs(self) -> list[dict[str, Any]]:
+        """Get all unique player pairs for H2H selection"""
+        return self.repository.get_unique_player_pairs()
+
+    def search_player_pairs(self, search: str) -> list[dict[str, Any]]:
+        """Search player pairs by name or ID"""
+        return self.repository.search_player_pairs(search)

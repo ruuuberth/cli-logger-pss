@@ -29,7 +29,7 @@ from app.reporting.report_generator import (
     CsvReportGenerator,
     JsonReportGenerator,
 )
-from app.reporting.report_templates import BattleReplayTemplate
+from app.reporting.report_templates import BattleReplayTemplate, H2HReportTemplate
 from app.services.process_resource_monitor import ProcessResourceMonitor
 from app.services.api_flow_runtime import ApiFlowRuntime
 from app.core.config import settings
@@ -291,6 +291,234 @@ class GenerateBattleReportCommand(CliCommand):
         except Exception as e:
             print_error(f"Error generando reporte: {e}")
             return 1
+
+
+class GenerateH2HReportCommand(CliCommand):
+    """Generate H2H comparative battle report"""
+
+    def __init__(self, runtime=None):
+        super().__init__("generate_h2h_report", "Generar Reporte H2H")
+        self.runtime = runtime
+        self.service = ApiFlowCliService()
+        self.console = Console()
+
+    def execute(self, args: list[str] = None) -> int:
+        """Execute H2H report generation"""
+        try:
+            clear_console()
+
+            saved_count = 0
+            if self.runtime:
+                print_info("💾 Sincronizando eventos pendientes...")
+                result = self.runtime.flush_pending()
+                if result and result.get("ok"):
+                    saved_count = result.get("saved_count", 0)
+                    print_success(f"✅ {saved_count} eventos sincronizados")
+                elif result and not result.get("ok"):
+                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
+                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+
+            print_info("📊 Generar Reporte H2H (Comparativa de Jugadores)")
+
+            # Parse args for non-interactive use
+            opts: dict[str, str] = {}
+            if args:
+                for a in args:
+                    if a.startswith("--"):
+                        if "=" in a:
+                            k, v = a[2:].split("=", 1)
+                            opts[k] = v
+                        else:
+                            opts[a[2:]] = "true"
+
+            # Player selection method
+            print_info("Selección de jugadores:")
+            print("  1. Seleccionar de lista (pares con batallas)")
+            print("  2. Buscar por nombre/ID")
+            selection_method = opts.get("method") or prompt_input("Método [1/2] [1]", default="1")
+            if selection_method not in ("1", "2"):
+                selection_method = "1"
+
+            pair = None
+            if selection_method == "1":
+                pair = self._select_pair_from_list()
+            else:
+                pair = self._search_pair()
+
+            if not pair:
+                print_info("Cancelado")
+                return 0
+
+            low_user_id = pair["low_user_id"]
+            high_user_id = pair["high_user_id"]
+            low_name = pair.get("low_name", f"Player {low_user_id}")
+            high_name = pair.get("high_name", f"Player {high_user_id}")
+
+            # Filters
+            print_info(f"\nGenerando reporte H2H: {low_name} vs {high_name}")
+            print_info("Filtros opcionales (Enter para omitir):")
+            date_from_str = opts.get("date-from") or (prompt_input("Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
+            date_to_str = opts.get("date-to") or (prompt_input("Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
+
+            outcome = opts.get("outcome") or (prompt_input("Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default="") if opts.get("non-interactive") is None else "")
+            outcome = outcome.upper() if outcome else None
+            if outcome and outcome not in ("VICTORY", "DEFEAT", "DRAW"):
+                outcome = None
+
+            time_from = None
+            time_to = None
+            try:
+                if date_from_str:
+                    time_from = datetime.strptime(date_from_str, "%Y-%m-%d")
+                if date_to_str:
+                    time_to = datetime.strptime(date_to_str, "%Y-%m-%d")
+            except ValueError:
+                print_error("Formato de fecha inválido")
+                return 1
+
+            # Format choice
+            format_choice = opts.get("format") or prompt_input("Formato (excel/json) [excel]", default="excel")
+            if format_choice not in ("excel", "json"):
+                print_error("Formato no válido (excel/json)")
+                return 1
+
+            # Output options
+            default_output = Path(opts.get("output-dir") or Path.home() / "Desktop" / "Logger-PSS Reports")
+            if opts.get("non-interactive"):
+                output_path = Path(default_output).expanduser()
+                filename_input = opts.get("filename") or f"H2H_{low_name}_vs_{high_name}"
+                include_ts = not (opts.get("no-timestamp") in ("true", "1", "yes"))
+            else:
+                out_input = prompt_input(f"Carpeta de salida [{default_output}]", default=str(default_output))
+                output_path = Path(out_input).expanduser()
+                filename_input = opts.get("filename") or prompt_input(f"Nombre base [H2H_{low_name}_vs_{high_name}]", default=f"H2H_{low_name}_vs_{high_name}")
+                include_ts_input = prompt_input("Incluir timestamp en nombre? (y/n) [y]", default="y")
+                include_ts = include_ts_input.strip().lower() in ("y", "yes", "")
+
+            # Query H2H data
+            print_info("Obteniendo datos H2H...")
+            h2h_data = self.service.get_h2h_report_data(
+                low_user_id=low_user_id,
+                high_user_id=high_user_id,
+                date_from=time_from,
+                date_to=time_to,
+                outcome=outcome,
+                limit=int(opts.get("limit", "1000")),
+            )
+
+            if not h2h_data:
+                print_warning("No hay datos para esta pareja de jugadores")
+                return 0
+
+            # Generate report
+            config = ReportConfig(
+                title=filename_input,
+                output_path=output_path,
+                include_timestamp=include_ts,
+                format=format_choice,
+            )
+
+            if format_choice == "excel":
+                generator = ExcelReportGenerator(config)
+                # Add summary sheet
+                summary_rows = H2HReportTemplate.summary_rows(h2h_data)
+                generator.add_rows(summary_rows)
+                # Add battles sheet - need separate sheet
+                # For now, create separate generators for each sheet
+                # We'll use a workaround: generate three separate files
+                generator.generate()
+                # Battles sheet
+                battles_config = ReportConfig(
+                    title=f"{filename_input}_Batallas",
+                    output_path=output_path,
+                    include_timestamp=include_ts,
+                    format="excel",
+                )
+                battles_gen = ExcelReportGenerator(battles_config)
+                battles_rows = H2HReportTemplate.battle_rows(h2h_data)
+                battles_gen.add_rows(battles_rows)
+                battles_gen.generate()
+                # Trends sheet
+                trends_config = ReportConfig(
+                    title=f"{filename_input}_Tendencias",
+                    output_path=output_path,
+                    include_timestamp=include_ts,
+                    format="excel",
+                )
+                trends_gen = ExcelReportGenerator(trends_config)
+                trends_rows = H2HReportTemplate.trend_rows(h2h_data)
+                trends_gen.add_rows(trends_rows)
+                trends_gen.generate()
+                print_success(f"✅ Reporte H2H generado (3 archivos) en: {output_path}")
+            else:
+                generator = JsonReportGenerator(config)
+                # JSON combines all data
+                import json
+                json_data = {
+                    "summary": h2h_data.get("summary"),
+                    "battles": h2h_data.get("battles"),
+                    "trends": h2h_data.get("trends"),
+                }
+                generator.add_rows([json_data])  # Single row with all data
+                output_file = generator.generate()
+                print_success(f"✅ Reporte H2H generado: {output_file}")
+
+            return 0
+        except Exception as e:
+            print_error(f"Error generando reporte H2H: {e}")
+            return 1
+
+    def _select_pair_from_list(self) -> dict | None:
+        """Select player pair from list"""
+        pairs = self.service.get_unique_player_pairs()
+        if not pairs:
+            print_warning("No hay pares de jugadores con batallas")
+            return None
+
+        print_info("\nPares de jugadores encontrados:")
+        for i, p in enumerate(pairs):
+            print(f"  [{i}] {p.get('low_name', '?')} vs {p.get('high_name', '?')} — {p.get('total_battles', 0)} batallas ({p.get('low_wins', 0)}-{p.get('high_wins', 0)})")
+
+        selection = prompt_input("Seleccione índice (Enter para cancelar)", default="")
+        if not selection:
+            return None
+        try:
+            idx = int(selection)
+            if idx < 0 or idx >= len(pairs):
+                raise ValueError
+        except ValueError:
+            print_error("Selección inválida")
+            return None
+
+        return pairs[idx]
+
+    def _search_pair(self) -> dict | None:
+        """Search player pair by name/ID"""
+        query = prompt_input("Buscar jugador (nombre o ID): ", default="")
+        if not query:
+            return None
+
+        results = self.service.search_player_pairs(query)
+        if not results:
+            print_warning("No se encontraron coincidencias")
+            return None
+
+        print_info("\nResultados:")
+        for i, p in enumerate(results):
+            print(f"  [{i}] {p.get('low_name', '?')} vs {p.get('high_name', '?')} — {p.get('total_battles', 0)} batallas ({p.get('low_wins', 0)}-{p.get('high_wins', 0)})")
+
+        selection = prompt_input("Seleccione índice (Enter para cancelar)", default="")
+        if not selection:
+            return None
+        try:
+            idx = int(selection)
+            if idx < 0 or idx >= len(results):
+                raise ValueError
+        except ValueError:
+            print_error("Selección inválida")
+            return None
+
+        return results[idx]
 
 
 class InspectCharacterCommand(CliCommand):

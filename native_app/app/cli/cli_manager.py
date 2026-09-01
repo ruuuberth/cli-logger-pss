@@ -10,6 +10,7 @@ from app.cli.utils import print_info, print_success, print_error, _safe_print
 from app.cli.concrete_commands import (
     QueryEventsCommand,
     GenerateBattleReportCommand,
+    GenerateH2HReportCommand,
     InspectCharacterCommand,
     InspectRoomCommand,
     InspectBattleCommand,
@@ -37,6 +38,7 @@ class CliManager:
         # Initialize commands
         self.query_cmd = QueryEventsCommand(runtime=capture_runtime)
         self.report_cmd = GenerateBattleReportCommand(runtime=capture_runtime)
+        self.h2h_report_cmd = GenerateH2HReportCommand(runtime=capture_runtime)
         self.char_cmd = InspectCharacterCommand()
         self.room_cmd = InspectRoomCommand()
         self.battle_cmd = InspectBattleCommand(runtime=capture_runtime)
@@ -53,12 +55,13 @@ class CliManager:
         # Main menu items
         self.main_menu.add_item("1", "🔍 Consultar Eventos", self.cmd_query_events)
         self.main_menu.add_item("2", "📋 Generar Reportes", self.cmd_reports)
-        self.main_menu.add_item("3", "👤 Inspector de Tripulante", self.cmd_inspect_character)
-        self.main_menu.add_item("4", "🏠 Inspector de Salas", self.cmd_inspect_rooms)
-        self.main_menu.add_item("5", "🎖️ Inspector de Batalla", self.cmd_inspect_battle)
-        self.main_menu.add_item("6", "📡 Captura de Tráfico", self.cmd_capture_traffic)
-        self.main_menu.add_item("7", "📊 Monitor de Sistema", self.cmd_system_monitor)
-        self.main_menu.add_item("8", "⚙️ Configuración", self.cmd_settings)
+        self.main_menu.add_item("3", "📊 Generar Reporte H2H", self.cmd_h2h_report)
+        self.main_menu.add_item("4", "👤 Inspector de Tripulante", self.cmd_inspect_character)
+        self.main_menu.add_item("5", "🏠 Inspector de Salas", self.cmd_inspect_rooms)
+        self.main_menu.add_item("6", "🎖️ Inspector de Batalla", self.cmd_inspect_battle)
+        self.main_menu.add_item("7", "📡 Captura de Tráfico", self.cmd_capture_traffic)
+        self.main_menu.add_item("8", "📊 Monitor de Sistema", self.cmd_system_monitor)
+        self.main_menu.add_item("9", "⚙️ Configuración", self.cmd_settings)
 
     def run(self) -> int:
         """Run the CLI manager"""
@@ -106,3 +109,7 @@ class CliManager:
     def cmd_settings(self) -> None:
         """Application settings"""
         self.settings_cmd.execute()
+
+    def cmd_h2h_report(self) -> None:
+        """Generate H2H comparative report"""
+        self.h2h_report_cmd.execute()
