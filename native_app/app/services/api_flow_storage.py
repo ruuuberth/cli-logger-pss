@@ -2508,3 +2508,304 @@ class ApiFlowRepository:
             .delete(synchronize_session=False)
         )
         return int(deleted or 0)
+
+    def get_h2h_summary(self, low_user_id: int, high_user_id: int,
+                        date_from: datetime | None = None,
+                        date_to: datetime | None = None,
+                        outcome: str | None = None) -> dict[str, Any] | None:
+        """Get H2H summary metrics for a player pair"""
+        db = SessionLocal()
+        try:
+            pair_filters = [
+                and_(
+                    PlayerMatchupLog.player_low_user_id == low_user_id,
+                    PlayerMatchupLog.player_high_user_id == high_user_id,
+                )
+            ]
+            query = db.query(PlayerMatchupLog).filter(or_(*pair_filters))
+
+            if date_from is not None:
+                query = query.filter(PlayerMatchupLog.captured_at >= date_from)
+            if date_to is not None:
+                query = query.filter(PlayerMatchupLog.captured_at <= date_to)
+            if outcome:
+                query = query.filter(PlayerMatchupLog.outcome_type == outcome)
+
+            logs = query.order_by(PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc()).all()
+
+            if not logs:
+                return None
+
+            low_wins = 0
+            high_wins = 0
+            unknown_results = 0
+            total_loot_low = 0
+            total_loot_high = 0
+            trophy_sum_low = 0
+            trophy_sum_high = 0
+            trophy_count_low = 0
+            trophy_count_high = 0
+
+            first_date = None
+            last_date = None
+
+            for log in logs:
+                winner_id = self._as_int(log.winner_user_id)
+                if winner_id == low_user_id:
+                    low_wins += 1
+                elif winner_id == high_user_id:
+                    high_wins += 1
+                else:
+                    unknown_results += 1
+
+                if log.captured_at:
+                    if first_date is None or log.captured_at < first_date:
+                        first_date = log.captured_at
+                    if last_date is None or log.captured_at > last_date:
+                        last_date = log.captured_at
+
+            latest_replay = (
+                db.query(BattleReplayNormalized)
+                .filter(
+                    or_(
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == low_user_id,
+                            BattleReplayNormalized.defender_user_id == high_user_id,
+                        ),
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == high_user_id,
+                            BattleReplayNormalized.defender_user_id == low_user_id,
+                        ),
+                    )
+                )
+                .order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .first()
+            )
+
+            low_name = None
+            high_name = None
+            if latest_replay:
+                if self._as_int(latest_replay.attacker_user_id) == low_user_id:
+                    low_name = latest_replay.attacker_name
+                    high_name = latest_replay.defender_name
+                else:
+                    low_name = latest_replay.defender_name
+                    high_name = latest_replay.attacker_name
+
+            return {
+                "player_low_user_id": low_user_id,
+                "player_high_user_id": high_user_id,
+                "player_low_name": low_name,
+                "player_high_name": high_name,
+                "total_battles": len(logs),
+                "player_low_wins": low_wins,
+                "player_high_wins": high_wins,
+                "unknown_results": unknown_results,
+                "first_battle_date": first_date,
+                "last_battle_date": last_date,
+            }
+        finally:
+            db.close()
+
+    def get_h2h_battles(self, low_user_id: int, high_user_id: int,
+                        date_from: datetime | None = None,
+                        date_to: datetime | None = None,
+                        outcome: str | None = None,
+                        limit: int = 1000) -> list[dict[str, Any]]:
+        """Get detailed battles for a player pair"""
+        db = SessionLocal()
+        try:
+            query = db.query(BattleReplayNormalized).filter(
+                or_(
+                    and_(
+                        BattleReplayNormalized.attacker_user_id == low_user_id,
+                        BattleReplayNormalized.defender_user_id == high_user_id,
+                    ),
+                    and_(
+                        BattleReplayNormalized.attacker_user_id == high_user_id,
+                        BattleReplayNormalized.defender_user_id == low_user_id,
+                    ),
+                )
+            )
+
+            if date_from is not None:
+                query = query.filter(BattleReplayNormalized.captured_at >= date_from)
+            if date_to is not None:
+                query = query.filter(BattleReplayNormalized.captured_at <= date_to)
+            if outcome:
+                query = query.filter(BattleReplayNormalized.outcome_type == outcome)
+
+            battles = query.order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc()).limit(limit).all()
+
+            result = []
+            for b in battles:
+                is_low_attacker = self._as_int(b.attacker_user_id) == low_user_id
+                result.append({
+                    "captured_at": b.captured_at,
+                    "battle_id": b.battle_id,
+                    "attacker_name": b.attacker_name,
+                    "defender_name": b.defender_name,
+                    "outcome": b.outcome_type,
+                    "attacker_trophy_delta": b.win_trophy_result if is_low_attacker else b.lose_trophy_result,
+                    "defender_trophy_delta": b.lose_trophy_result if is_low_attacker else b.win_trophy_result,
+                    "loot_minerals": f"M {b.win_minerals_result or 0}/{b.lose_minerals_result or 0}",
+                    "loot_gas": f"G {b.win_gas_result or 0}/{b.lose_gas_result or 0}",
+                })
+            return result
+        finally:
+            db.close()
+
+    def get_h2h_trends(self, low_user_id: int, high_user_id: int,
+                       date_from: datetime | None = None,
+                       date_to: datetime | None = None,
+                       outcome: str | None = None,
+                       bucket: str = "day") -> list[dict[str, Any]]:
+        """Get time-series trend data for H2H (bucketed by day/week)"""
+        db = SessionLocal()
+        try:
+            query = db.query(PlayerMatchupLog).filter(
+                or_(
+                    and_(
+                        PlayerMatchupLog.player_low_user_id == low_user_id,
+                        PlayerMatchupLog.player_high_user_id == high_user_id,
+                    ),
+                    and_(
+                        PlayerMatchupLog.player_low_user_id == high_user_id,
+                        PlayerMatchupLog.player_high_user_id == low_user_id,
+                    ),
+                )
+            )
+
+            if date_from is not None:
+                query = query.filter(PlayerMatchupLog.captured_at >= date_from)
+            if date_to is not None:
+                query = query.filter(PlayerMatchupLog.captured_at <= date_to)
+            if outcome:
+                query = query.filter(PlayerMatchupLog.outcome_type == outcome)
+
+            logs = query.order_by(PlayerMatchupLog.captured_at.asc()).all()
+
+            if not logs:
+                return []
+
+            from collections import defaultdict
+
+            buckets = defaultdict(lambda: {"battle_count": 0, "player_low_wins": 0, "player_high_wins": 0,
+                                           "player_low_trophies": [], "player_high_trophies": []})
+
+            for log in logs:
+                dt = log.captured_at
+                if dt is None:
+                    continue
+
+                if bucket == "week":
+                    period = dt.strftime("%Y-W%U")
+                else:
+                    period = dt.strftime("%Y-%m-%d")
+
+                buckets[period]["battle_count"] += 1
+
+                winner_id = self._as_int(log.winner_user_id)
+                if winner_id == low_user_id:
+                    buckets[period]["player_low_wins"] += 1
+                elif winner_id == high_user_id:
+                    buckets[period]["player_high_wins"] += 1
+
+                replay = (
+                    db.query(BattleReplayNormalized)
+                    .filter(BattleReplayNormalized.battle_id == log.battle_id)
+                    .first()
+                )
+                if replay:
+                    if self._as_int(replay.attacker_user_id) == low_user_id:
+                        if replay.attacker_trophy is not None:
+                            buckets[period]["player_low_trophies"].append(replay.attacker_trophy)
+                        if replay.defender_trophy is not None:
+                            buckets[period]["player_high_trophies"].append(replay.defender_trophy)
+                    else:
+                        if replay.defender_trophy is not None:
+                            buckets[period]["player_low_trophies"].append(replay.defender_trophy)
+                        if replay.attacker_trophy is not None:
+                            buckets[period]["player_high_trophies"].append(replay.attacker_trophy)
+
+            trends = []
+            for period in sorted(buckets.keys()):
+                data = buckets[period]
+                low_trophies = data["player_low_trophies"]
+                high_trophies = data["player_high_trophies"]
+                trends.append({
+                    "period": period,
+                    "battle_count": data["battle_count"],
+                    "player_low_wins": data["player_low_wins"],
+                    "player_high_wins": data["player_high_wins"],
+                    "player_low_avg_trophies": sum(low_trophies) // len(low_trophies) if low_trophies else 0,
+                    "player_high_avg_trophies": sum(high_trophies) // len(high_trophies) if high_trophies else 0,
+                })
+
+            return trends
+        finally:
+            db.close()
+
+    def get_unique_player_pairs(self) -> list[dict[str, Any]]:
+        """Get all unique player pairs with battle counts for H2H selection"""
+        db = SessionLocal()
+        try:
+            pair_filters = [
+                and_(
+                    PlayerMatchupStat.player_low_user_id == low_id,
+                    PlayerMatchupStat.player_high_user_id == high_id,
+                )
+                for low_id, high_id in db.query(
+                    PlayerMatchupStat.player_low_user_id,
+                    PlayerMatchupStat.player_high_user_id
+                ).distinct().all()
+            ]
+
+            if not pair_filters:
+                return []
+
+            stats = db.query(PlayerMatchupStat).filter(or_(*pair_filters)).all()
+
+            result = []
+            for s in stats:
+                result.append({
+                    "low_user_id": int(s.player_low_user_id),
+                    "high_user_id": int(s.player_high_user_id),
+                    "low_name": s.player_low_name,
+                    "high_name": s.player_high_name,
+                    "total_battles": int(s.total_battles or 0),
+                    "low_wins": int(s.player_low_wins or 0),
+                    "high_wins": int(s.player_high_wins or 0),
+                })
+            return result
+        finally:
+            db.close()
+
+    def search_player_pairs(self, search: str) -> list[dict[str, Any]]:
+        """Search player pairs by name or user_id"""
+        db = SessionLocal()
+        try:
+            token = f"%{search.strip()}%"
+            stats = db.query(PlayerMatchupStat).filter(
+                or_(
+                    PlayerMatchupStat.player_low_name.ilike(token),
+                    PlayerMatchupStat.player_high_name.ilike(token),
+                    cast(PlayerMatchupStat.player_low_user_id, String).ilike(token),
+                    cast(PlayerMatchupStat.player_high_user_id, String).ilike(token),
+                )
+            ).all()
+
+            result = []
+            for s in stats:
+                result.append({
+                    "low_user_id": int(s.player_low_user_id),
+                    "high_user_id": int(s.player_high_user_id),
+                    "low_name": s.player_low_name,
+                    "high_name": s.player_high_name,
+                    "total_battles": int(s.total_battles or 0),
+                    "low_wins": int(s.player_low_wins or 0),
+                    "high_wins": int(s.player_high_wins or 0),
+                })
+            return result
+        finally:
+            db.close()

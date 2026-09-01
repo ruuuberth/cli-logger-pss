@@ -175,3 +175,64 @@ def test_clear_history_returns_both_counts() -> None:
 def test_get_battle_detail_delegates() -> None:
     service = ApiFlowListService(repository=_Repo())
     assert service.get_battle_detail(11) == {"id": 11}
+
+
+def test_get_h2h_report_data_delegates() -> None:
+    class _RepoH2H(_Repo):
+        def get_h2h_summary(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None):
+            assert low_user_id == 10
+            assert high_user_id == 20
+            return {
+                "player_low_user_id": 10,
+                "player_high_user_id": 20,
+                "player_low_name": "PlayerA",
+                "player_high_name": "PlayerB",
+                "total_battles": 5,
+                "player_low_wins": 3,
+                "player_high_wins": 2,
+                "unknown_results": 0,
+                "first_battle_date": datetime.fromisoformat("2026-01-01T10:00:00"),
+                "last_battle_date": datetime.fromisoformat("2026-01-05T10:00:00"),
+            }
+
+        def get_h2h_battles(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None, limit=1000):
+            return [
+                {"captured_at": datetime.fromisoformat("2026-01-05T10:00:00"), "battle_id": 100, "attacker_name": "A", "defender_name": "B", "outcome": "Attacker Won", "attacker_trophy_delta": 10, "defender_trophy_delta": -5, "loot_minerals": "M 100/0", "loot_gas": "G 50/0"},
+            ]
+
+        def get_h2h_trends(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None, bucket="day"):
+            return [
+                {"period": "2026-01-01", "battle_count": 2, "player_low_wins": 1, "player_high_wins": 1, "player_low_avg_trophies": 5000, "player_high_avg_trophies": 4800},
+            ]
+
+    service = ApiFlowListService(repository=_RepoH2H())
+    data = service.get_h2h_report_data(10, 20)
+
+    assert data is not None
+    assert data["summary"]["total_battles"] == 5
+    assert data["summary"]["player_low_wins"] == 3
+    assert len(data["battles"]) == 1
+    assert len(data["trends"]) == 1
+
+
+def test_get_unique_player_pairs_delegates() -> None:
+    class _RepoPairs(_Repo):
+        def get_unique_player_pairs(self):
+            return [{"low_user_id": 1, "high_user_id": 2, "low_name": "A", "high_name": "B", "total_battles": 3, "low_wins": 2, "high_wins": 1}]
+
+    service = ApiFlowListService(repository=_RepoPairs())
+    pairs = service.get_unique_player_pairs()
+    assert len(pairs) == 1
+    assert pairs[0]["low_user_id"] == 1
+
+
+def test_search_player_pairs_delegates() -> None:
+    class _RepoSearch(_Repo):
+        def search_player_pairs(self, search: str):
+            assert search == "player"
+            return [{"low_user_id": 1, "high_user_id": 2, "low_name": "PlayerA", "high_name": "PlayerB", "total_battles": 3, "low_wins": 2, "high_wins": 1}]
+
+    service = ApiFlowListService(repository=_RepoSearch())
+    pairs = service.search_player_pairs("player")
+    assert len(pairs) == 1
+    assert pairs[0]["low_name"] == "PlayerA"

@@ -81,6 +81,45 @@ class ApiFlowCliService:
             self.logger.error(f"Error getting battle detail: {e}")
             raise
 
+    def get_h2h_report_data(
+        self,
+        low_user_id: int,
+        high_user_id: int,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        outcome: str | None = None,
+        limit: int = 1000,
+    ) -> Optional[dict]:
+        """Get H2H comparative report data"""
+        try:
+            return self.list_service.get_h2h_report_data(
+                low_user_id=low_user_id,
+                high_user_id=high_user_id,
+                date_from=date_from,
+                date_to=date_to,
+                outcome=outcome,
+                limit=limit,
+            )
+        except Exception as e:
+            self.logger.error(f"Error getting H2H report data: {e}")
+            raise
+
+    def get_unique_player_pairs(self) -> list[dict]:
+        """Get all unique player pairs for H2H selection"""
+        try:
+            return self.list_service.get_unique_player_pairs()
+        except Exception as e:
+            self.logger.error(f"Error getting player pairs: {e}")
+            raise
+
+    def search_player_pairs(self, search: str) -> list[dict]:
+        """Search player pairs by name or ID"""
+        try:
+            return self.list_service.search_player_pairs(search)
+        except Exception as e:
+            self.logger.error(f"Error searching player pairs: {e}")
+            raise
+
 
 class CharacterCliService:
     """Provides character/crew functionality for CLI"""
