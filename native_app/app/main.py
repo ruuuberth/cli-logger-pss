@@ -79,7 +79,63 @@ def _configure_streams() -> None:
                 print(f"Warning: Failed to reconfigure {stream_name}: {e}", file=sys.__stderr__)
 
 
+def _run_daemon() -> int:
+    """Run daemon mode - background capture only"""
+    _configure_streams()
+    from app.daemon_manager import DaemonManager
+    
+    # Initialize DB first
+    from app.models.database import (
+        Base,
+        engine,
+        ensure_sqlite_schema,
+        ensure_sqlite_indexes,
+        log_schema_health,
+    )
+    Base.metadata.create_all(bind=engine)
+    ensure_sqlite_schema()
+    ensure_sqlite_indexes()
+    log_schema_health()
+    
+    # Run daemon
+    daemon = DaemonManager()
+    return daemon.run()
+
+
+def _run_daemon_stop() -> int:
+    """Stop daemon"""
+    from app.daemon_manager import DaemonManager
+    daemon = DaemonManager()
+    return daemon.stop()
+
+
+def _run_daemon_status() -> int:
+    """Show daemon status"""
+    from app.daemon_manager import DaemonManager
+    daemon = DaemonManager()
+    return daemon.status()
+
+
 def main() -> int:
+    # Check for daemon subcommands first
+    if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
+        if len(sys.argv) > 2:
+            subcommand = sys.argv[2]
+            if subcommand == "start":
+                return _run_daemon()
+            elif subcommand == "stop":
+                return _run_daemon_stop()
+            elif subcommand == "status":
+                return _run_daemon_status()
+            else:
+                print(f"Comando daemon desconocido: {subcommand}")
+                print("Uso: pss-native --daemon [start|stop|status]")
+                return 1
+        else:
+            print("Uso: pss-native --daemon [start|stop|status]")
+            return 1
+
+    # Normal CLI mode
     db_path = configure_environment()
     from app.core.build_info import get_build_info
     from app.core.logging_setup import configure_logging
