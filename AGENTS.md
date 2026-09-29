@@ -87,7 +87,7 @@ native_app/
 │   ├── services/            # Capture, storage, list, inspectors, catalogs
 │   └── reporting/           # Excel/CSV/JSON generators
 ├── scripts/build.sh|.ps1    # PyInstaller one-file → portable ZIP
-├── tests/                   # 125 tests (pytest)
+├── tests/                   # 126 tests (pytest)
 └── pyproject.toml           # deps, scripts, pytest config
 ```
 
