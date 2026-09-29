@@ -6,13 +6,38 @@
 
 ---
 
+## Quick Commands (Linux / macOS)
+
+```bash
+# Setup
+cd native_app && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+
+# Run tests (126 tests, ~3s)
+.venv/bin/python -m pytest
+
+# Single test
+.venv/bin/python -m pytest tests/test_api_flow_capture.py
+
+# Run app
+.venv/bin/pss-native
+
+# Daemon mode (background capture only)
+.venv/bin/pss-native --daemon start|stop|status
+
+# Build
+./scripts/build.sh
+
+# Config
+cp ../.env.dev.example .env   # .env lives INSIDE native_app/
+```
+
 ## Quick Commands (Windows)
 
 ```bash
 # Setup
-cd native_app && python -m venv .venv && .venv/Scripts/pip install -e .
+cd native_app && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 
-# Run tests (125 tests, ~6s)
+# Run tests (126 tests, ~3s)
 .venv/Scripts/python.exe -m pytest
 
 # Single test
@@ -21,12 +46,11 @@ cd native_app && python -m venv .venv && .venv/Scripts/pip install -e .
 # Run app
 .venv/Scripts/pss-native
 
-# Build
-./scripts/build.sh        # Linux
-./scripts/build.ps1       # Windows (PowerShell)
+# Daemon mode (background capture only)
+.venv/Scripts/pss-native.exe --daemon start|stop|status
 
-# Config
-cp ../.env.dev.example .env   # .env lives INSIDE native_app/
+# Build
+./scripts/build.ps1           # PowerShell
 ```
 
 ⚠️ **Windows only**: Use `.venv/Scripts/python.exe` — `python3` and `source .venv/bin/activate` do NOT work.
@@ -121,7 +145,7 @@ List values: **JSON array format preferred** (CSV deprecated).
 1. **DB path**: Defaults to `~/.pss_logger/pss_logger.db` (created by `configure_environment()`)
 2. **Addon SHA**: Update `EXPECTED_MITM_ADDON_SHA256` in `api_flow_capture.py` when `mitm_api_flow_addon.py` changes
 3. **Line endings**: `.gitattributes` enforces LF for `.py` files
-4. **Version**: Single source in `pyproject.toml` (currently `0.1.3`); embedded in build metadata at compile time
+4. **Version**: Single source in `pyproject.toml` (currently `0.2.1`); embedded in build metadata at compile time
 5. **No GUI code**: Legacy Qt UI removed; `docs/NATIVE_ROADMAP.md` deleted (uncommitted)
 
 ---
