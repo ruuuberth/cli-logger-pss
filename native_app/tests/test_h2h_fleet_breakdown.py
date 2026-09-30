@@ -61,7 +61,7 @@ def _insert_replay(
     return replay
 
 
-def _insert_ship(db, replay, *, side: str, ship_id: int, design_id: int, level: int, power: int):
+def _insert_ship(db, replay, *, side: str, ship_id: int, design_id: int, level: int | None, power: int | None):
     db.add(BattleReplayShip(
         battle_replay_id=replay.id,
         side=side,
@@ -192,6 +192,31 @@ def test_fleet_breakdown_respects_date_and_outcome_filters(monkeypatch) -> None:
     # Outcome filter
     won_b = repo.get_h2h_fleet_breakdown(10, 20, outcome="Defender Won")
     assert won_b["battles_analyzed"] == 1
+
+
+def test_fleet_breakdown_skips_missing_ship_metrics(monkeypatch) -> None:
+    """A fallback ship row (no XML) must not drag averages toward zero."""
+    repo, SessionLocal = _build_repo(monkeypatch)
+    now = datetime.now(timezone.utc)
+
+    db = SessionLocal()
+    # Complete capture: level 8, power 4200
+    r1 = _insert_replay(db, battle_id=401, attacker_user_id=10, defender_user_id=20,
+                         captured_at=now - timedelta(minutes=2))
+    _insert_ship(db, r1, side="attacker", ship_id=11, design_id=500, level=8, power=4200)
+    # Fallback-style capture: same ship, level/power unset (missing XML)
+    r2 = _insert_replay(db, battle_id=402, attacker_user_id=10, defender_user_id=20,
+                         captured_at=now - timedelta(minutes=1))
+    _insert_ship(db, r2, side="attacker", ship_id=11, design_id=500, level=None, power=None)
+    db.commit()
+    db.close()
+
+    breakdown = repo.get_h2h_fleet_breakdown(10, 20)
+    ships = {s["id"]: s for s in breakdown["player_low"]["ships"]}
+    # Averages over observed values only: 8 and 4200, not dragged to 4/2100
+    assert ships[11]["battles"] == 2
+    assert ships[11]["avg_level"] == 8
+    assert ships[11]["avg_power_score"] == 4200.0
 
 
 def test_fleet_breakdown_returns_none_for_unknown_pair(monkeypatch) -> None:

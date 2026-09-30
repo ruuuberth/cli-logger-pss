@@ -2790,6 +2790,12 @@ class ApiFlowRepository:
         Aggregates the normalized replay data for battles between the pair,
         attributing each side to the player who fielded it (attacker/defender).
         Returns None when the pair has no battles.
+
+        Retention note: production captures prune obsolete replays per pair
+        (see `_prune_obsolete_replays_for_pairs`), keeping only the newest
+        battle, so this breakdown typically reflects the latest snapshot.
+        Counts scale naturally if more replay history is present (e.g. fresh
+        imports or if retention is relaxed).
         """
         db = SessionLocal()
         try:
@@ -2900,8 +2906,12 @@ class ApiFlowRepository:
                     bucket["ship_design_name"] = self._translate_design_name(
                         s.ship_design_id, ship_map_es, ship_map_en, s.ship_name
                     )
-                bucket["levels"].append(self._as_int(s.ship_level) or 0)
-                bucket["power_scores"].append(self._as_int(s.power_score) or 0)
+                ship_level = self._as_int(s.ship_level)
+                if ship_level is not None:
+                    bucket["levels"].append(ship_level)
+                ship_power = self._as_int(s.power_score)
+                if ship_power is not None:
+                    bucket["power_scores"].append(ship_power)
 
             for room in rooms:
                 replay_row = replays_by_id.get(room.battle_replay_id)
@@ -2934,7 +2944,9 @@ class ApiFlowRepository:
                     bucket["character_design_name"] = self._translate_design_name(
                         c.character_design_id, crew_map_es, crew_map_en, c.character_name
                     )
-                bucket["levels"].append(self._as_int(c.level) or 0)
+                char_level = self._as_int(c.level)
+                if char_level is not None:
+                    bucket["levels"].append(char_level)
 
             for key in ("player_low", "player_high"):
                 players[key]["ships"] = self._finalize_breakdown_buckets(players[key]["ships"])
