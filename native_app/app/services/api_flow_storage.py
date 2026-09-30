@@ -9,6 +9,7 @@ import logging
 import os
 import unicodedata
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from sqlite3 import OperationalError as SQLiteOperationalError
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -1555,6 +1556,35 @@ class ApiFlowRepository:
             return str(design_id)
         return "Sin traduccion"
 
+    @staticmethod
+    def _load_design_maps(
+        db: Any,
+        model: Any,
+        design_id_col: Any,
+        design_ids: set[int],
+    ) -> tuple[dict[int, str], dict[int, str]]:
+        """Load (es, en) design-name maps for the given design ids."""
+        map_es: dict[int, str] = {}
+        map_en: dict[int, str] = {}
+        if not design_ids:
+            return map_es, map_en
+        try:
+            rows = (
+                db.query(design_id_col, model.name, model.name_es)
+                .filter(design_id_col.in_(sorted(design_ids)))
+                .all()
+            )
+        except SQLAlchemyOperationalError:
+            return map_es, map_en
+        for design_id, name, name_es in rows:
+            if design_id is None:
+                continue
+            if name:
+                map_en[int(design_id)] = str(name)
+            if name_es:
+                map_es[int(design_id)] = str(name_es)
+        return map_es, map_en
+
     def _pick_design_name_es(self, attrs: dict[str, Any], base_key: str) -> str | None:
         candidates = [
             f"{base_key}ES",
@@ -2745,6 +2775,217 @@ class ApiFlowRepository:
             return trends
         finally:
             db.close()
+
+    def get_h2h_fleet_breakdown(
+        self,
+        low_user_id: int,
+        high_user_id: int,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        outcome: str | None = None,
+        limit: int = 1000,
+    ) -> dict[str, Any] | None:
+        """Per-player fleet breakdown (ships/rooms/crew) for an H2H pair.
+
+        Aggregates the normalized replay data for battles between the pair,
+        attributing each side to the player who fielded it (attacker/defender).
+        Returns None when the pair has no battles.
+        """
+        db = SessionLocal()
+        try:
+            replays = (
+                db.query(BattleReplayNormalized)
+                .filter(
+                    or_(
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == low_user_id,
+                            BattleReplayNormalized.defender_user_id == high_user_id,
+                        ),
+                        and_(
+                            BattleReplayNormalized.attacker_user_id == high_user_id,
+                            BattleReplayNormalized.defender_user_id == low_user_id,
+                        ),
+                    )
+                )
+            )
+            if date_from is not None:
+                replays = replays.filter(BattleReplayNormalized.captured_at >= date_from)
+            if date_to is not None:
+                replays = replays.filter(BattleReplayNormalized.captured_at <= date_to)
+            if outcome:
+                replays = replays.filter(BattleReplayNormalized.outcome_type == outcome)
+
+            replays = (
+                replays.order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .limit(limit)
+                .all()
+            )
+            if not replays:
+                return None
+
+            replay_ids = [r.id for r in replays]
+            battle_ids = [r.battle_id for r in replays if r.battle_id is not None]
+
+            ships = (
+                db.query(BattleReplayShip)
+                .filter(BattleReplayShip.battle_replay_id.in_(replay_ids))
+                .all()
+            )
+            rooms = (
+                db.query(BattleReplayRoom)
+                .filter(BattleReplayRoom.battle_replay_id.in_(replay_ids))
+                .all()
+            )
+            characters = (
+                db.query(BattleReplayCharacter)
+                .filter(BattleReplayCharacter.battle_replay_id.in_(replay_ids))
+                .all()
+            )
+
+            # Attribute each replay row to the player who fielded that side:
+            # a row with side="attacker" belongs to the replay's attacker, etc.
+            side_owner: dict[tuple[int, str], int] = {}
+            for r in replays:
+                attacker_id = self._as_int(r.attacker_user_id)
+                defender_id = self._as_int(r.defender_user_id)
+                if attacker_id is not None:
+                    side_owner[(r.id, "attacker")] = attacker_id
+                if defender_id is not None:
+                    side_owner[(r.id, "defender")] = defender_id
+
+
+            ship_map_es, ship_map_en = self._load_design_maps(
+                db, ShipDesign, ShipDesign.ship_design_id,
+                {int(s.ship_design_id) for s in ships if s.ship_design_id is not None},
+            )
+            room_map_es, room_map_en = self._load_design_maps(
+                db, RoomDesign, RoomDesign.room_design_id,
+                {int(r.room_design_id) for r in rooms if r.room_design_id is not None},
+            )
+            crew_map_es, crew_map_en = self._load_design_maps(
+                db, CrewDesign, CrewDesign.crew_design_id,
+                {int(c.character_design_id) for c in characters if c.character_design_id is not None},
+            )
+
+            def _owner_key_for(row_side: str, replay_row: BattleReplayNormalized) -> str | None:
+                """Return 'player_low'/'player_high' for the fielding player, or None if unknown."""
+                owner_id = side_owner.get((replay_row.id, row_side))
+                if owner_id == low_user_id:
+                    return "player_low"
+                if owner_id == high_user_id:
+                    return "player_high"
+                return None
+
+
+            players = {
+                "player_low": self._init_breakdown_player(low_user_id),
+                "player_high": self._init_breakdown_player(high_user_id),
+            }
+            # Map replay_id -> replay row for owner lookups
+            replays_by_id = {r.id: r for r in replays}
+
+            for s in ships:
+                replay_row = replays_by_id.get(s.battle_replay_id)
+                if replay_row is None:
+                    continue
+                key = _owner_key_for(s.side, replay_row)
+                if key is None:
+                    continue
+                bucket = players[key]["ships"][s.ship_id or 0]
+                bucket["battles"] += 1
+                if s.ship_name:
+                    bucket["ship_name"] = self._normalize_text(s.ship_name) or bucket.get("ship_name")
+                if s.ship_design_id is not None:
+                    bucket["ship_design_id"] = int(s.ship_design_id)
+                    bucket["ship_design_name"] = self._translate_design_name(
+                        s.ship_design_id, ship_map_es, ship_map_en, s.ship_name
+                    )
+                bucket["levels"].append(self._as_int(s.ship_level) or 0)
+                bucket["power_scores"].append(self._as_int(s.power_score) or 0)
+
+            for room in rooms:
+                replay_row = replays_by_id.get(room.battle_replay_id)
+                if replay_row is None:
+                    continue
+                key = _owner_key_for(room.side, replay_row)
+                if key is None:
+                    continue
+                bucket = players[key]["rooms"][room.room_id or 0]
+                bucket["battles"] += 1
+                if room.room_design_id is not None:
+                    bucket["room_design_id"] = int(room.room_design_id)
+                    bucket["room_design_name"] = self._translate_design_name(
+                        room.room_design_id, room_map_es, room_map_en, None
+                    )
+
+            for c in characters:
+                replay_row = replays_by_id.get(c.battle_replay_id)
+                if replay_row is None:
+                    continue
+                key = _owner_key_for(c.side, replay_row)
+                if key is None:
+                    continue
+                bucket = players[key]["crew"][c.character_id or 0]
+                bucket["battles"] += 1
+                if c.character_name:
+                    bucket["character_name"] = self._normalize_text(c.character_name) or bucket.get("character_name")
+                if c.character_design_id is not None:
+                    bucket["character_design_id"] = int(c.character_design_id)
+                    bucket["character_design_name"] = self._translate_design_name(
+                        c.character_design_id, crew_map_es, crew_map_en, c.character_name
+                    )
+                bucket["levels"].append(self._as_int(c.level) or 0)
+
+            for key in ("player_low", "player_high"):
+                players[key]["ships"] = self._finalize_breakdown_buckets(players[key]["ships"])
+                players[key]["rooms"] = self._finalize_breakdown_buckets(players[key]["rooms"])
+                players[key]["crew"] = self._finalize_breakdown_buckets(players[key]["crew"])
+                players[key]["total_battles_analyzed"] = len(replays)
+
+            # Ship battle count is per-battle-per-side; ships fielded in more
+            # battles are more "representative" of the player's current fleet.
+            return {
+                "player_low_user_id": low_user_id,
+                "player_high_user_id": high_user_id,
+                "battles_analyzed": len(replays),
+                "battle_ids": battle_ids,
+                "player_low": players["player_low"],
+                "player_high": players["player_high"],
+            }
+        finally:
+            db.close()
+
+    @staticmethod
+    def _init_breakdown_player(user_id: int) -> dict[str, Any]:
+        return {
+            "user_id": user_id,
+            "ships": defaultdict(lambda: {
+                "battles": 0, "ship_name": None, "ship_design_id": None,
+                "ship_design_name": None, "levels": [], "power_scores": [],
+            }),
+            "rooms": defaultdict(lambda: {
+                "battles": 0, "room_design_id": None, "room_design_name": None,
+            }),
+            "crew": defaultdict(lambda: {
+                "battles": 0, "character_name": None, "character_design_id": None,
+                "character_design_name": None, "levels": [],
+            }),
+        }
+
+    @staticmethod
+    def _finalize_breakdown_buckets(buckets: "defaultdict") -> list[dict[str, Any]]:
+        rows = []
+        for _id, data in buckets.items():
+            levels = [lv for lv in data.pop("levels", []) if lv is not None]
+            avg_level = (sum(levels) / len(levels)) if levels else 0
+            power_scores = [p for p in data.pop("power_scores", []) if p is not None]
+            avg_power = (sum(power_scores) / len(power_scores)) if power_scores else 0
+            data["avg_level"] = round(avg_level, 1)
+            data["avg_power_score"] = round(avg_power, 1)
+            data["id"] = _id
+            rows.append(dict(data))
+        rows.sort(key=lambda r: (-int(r.get("battles", 0)), str(r.get("ship_design_name") or r.get("room_design_name") or r.get("character_design_name") or "")))
+        return rows
 
     def get_unique_player_pairs(self) -> list[dict[str, Any]]:
         """Get all unique player pairs with battle counts for H2H selection"""
