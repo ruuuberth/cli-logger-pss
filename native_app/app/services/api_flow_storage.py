@@ -2897,7 +2897,10 @@ class ApiFlowRepository:
                 key = _owner_key_for(s.side, replay_row)
                 if key is None:
                     continue
-                bucket = players[key]["ships"][s.ship_id or 0]
+                if s.ship_id is None:
+                    # Fallback ship row (missing XML, no ShipId): no fleet info.
+                    continue
+                bucket = players[key]["ships"][s.ship_id]
                 bucket["battles"] += 1
                 if s.ship_name:
                     bucket["ship_name"] = self._normalize_text(s.ship_name) or bucket.get("ship_name")
@@ -2920,7 +2923,12 @@ class ApiFlowRepository:
                 key = _owner_key_for(room.side, replay_row)
                 if key is None:
                     continue
-                bucket = players[key]["rooms"][room.room_id or 0]
+                if room.room_id is None:
+                    # Unidentified room (partial capture): cannot be counted
+                    # reliably; merging would fabricate a single room with
+                    # inflated usage counts and overwritten design names.
+                    continue
+                bucket = players[key]["rooms"][room.room_id]
                 bucket["battles"] += 1
                 if room.room_design_id is not None:
                     bucket["room_design_id"] = int(room.room_design_id)
@@ -2935,7 +2943,10 @@ class ApiFlowRepository:
                 key = _owner_key_for(c.side, replay_row)
                 if key is None:
                     continue
-                bucket = players[key]["crew"][c.character_id or 0]
+                if c.character_id is None:
+                    # Unidentified crew member (partial capture).
+                    continue
+                bucket = players[key]["crew"][c.character_id]
                 bucket["battles"] += 1
                 if c.character_name:
                     bucket["character_name"] = self._normalize_text(c.character_name) or bucket.get("character_name")

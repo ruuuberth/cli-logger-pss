@@ -73,7 +73,7 @@ def _insert_ship(db, replay, *, side: str, ship_id: int, design_id: int, level: 
     ))
 
 
-def _insert_room(db, replay, *, side: str, room_id: int, design_id: int):
+def _insert_room(db, replay, *, side: str, room_id: int | None, design_id: int | None = 600):
     db.add(BattleReplayRoom(
         battle_replay_id=replay.id,
         side=side,
@@ -217,6 +217,41 @@ def test_fleet_breakdown_skips_missing_ship_metrics(monkeypatch) -> None:
     assert ships[11]["battles"] == 2
     assert ships[11]["avg_level"] == 8
     assert ships[11]["avg_power_score"] == 4200.0
+
+
+def test_fleet_breakdown_excludes_rows_without_primary_ids(monkeypatch) -> None:
+    """Rooms/ships/crew with no primary id (partial captures) must be skipped.
+
+    Regression for the Codex P2: two unidentified rooms in the same replay
+    used to merge into a single fabricated bucket with inflated usage.
+    """
+    repo, SessionLocal = _build_repo(monkeypatch)
+    now = datetime.now(timezone.utc)
+
+    db = SessionLocal()
+    r1 = _insert_replay(db, battle_id=501, attacker_user_id=10, defender_user_id=20,
+                         captured_at=now - timedelta(minutes=2))
+    # Two rooms without RoomId in the SAME replay (partial capture)
+    _insert_room(db, r1, side="attacker", room_id=None, design_id=600)
+    _insert_room(db, r1, side="attacker", room_id=None, design_id=601)
+    # One identified room for control
+    _insert_room(db, r1, side="attacker", room_id=111, design_id=600)
+    # Fallback ship without ShipId
+    db.add(BattleReplayShip(battle_replay_id=r1.id, side="attacker", ship_id=None))
+    # Crew without CharacterId
+    db.add(BattleReplayCharacter(battle_replay_id=r1.id, side="attacker", character_id=None))
+    db.commit()
+    db.close()
+
+    breakdown = repo.get_h2h_fleet_breakdown(10, 20)
+    low = breakdown["player_low"]
+    # Only the identified room appears — no fabricated merged bucket
+    assert len(low["rooms"]) == 1
+    assert low["rooms"][0]["id"] == 111
+    assert low["rooms"][0]["battles"] == 1
+    # No ships/crew entries from id-less rows
+    assert low["ships"] == []
+    assert low["crew"] == []
 
 
 def test_fleet_breakdown_returns_none_for_unknown_pair(monkeypatch) -> None:
