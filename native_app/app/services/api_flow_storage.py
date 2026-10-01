@@ -2463,9 +2463,18 @@ class ApiFlowRepository:
             logger.info("event=matchup_stats_recomputed pairs=%s", recomputed)
         return recomputed
 
-    def _prune_obsolete_replays_for_pairs(self, db, pairs: set[tuple[int, int]]) -> int:
+    def _prune_obsolete_replays_for_pairs(self, db, pairs: set[tuple[int, int]], keep: int | None = None) -> int:
+        """Delete normalized replays beyond the newest `keep` per pair.
+
+        `keep` defaults to the configured API_FLOW_REPLAYS_PER_PAIR setting.
+        keep=1 reproduces the legacy behavior (newest replay only).
+        """
         if not pairs:
             return 0
+        if keep is None:
+            keep = int(getattr(settings, "API_FLOW_REPLAYS_PER_PAIR", 1) or 1)
+        if keep < 1:
+            keep = 1
 
         obsolete_event_ids: set[int] = set()
         deleted_replay_count = 0
@@ -2487,9 +2496,9 @@ class ApiFlowRepository:
                 .order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
                 .all()
             )
-            if len(replay_rows) <= 1:
+            if len(replay_rows) <= keep:
                 continue
-            obsolete_rows = replay_rows[1:]
+            obsolete_rows = replay_rows[keep:]
             deleted_replay_count += len(obsolete_rows)
             for row in obsolete_rows:
                 if row.api_flow_event_id is not None:
@@ -2499,9 +2508,10 @@ class ApiFlowRepository:
             self._delete_events_and_normalized(db, sorted(obsolete_event_ids))
         if deleted_replay_count:
             logger.info(
-                "event=matchup_prune_obsolete_replays deleted_replays=%s affected_pairs=%s",
+                "event=matchup_prune_obsolete_replays deleted_replays=%s affected_pairs=%s keep=%s",
                 deleted_replay_count,
                 len(pairs),
+                keep,
             )
         return deleted_replay_count
 
@@ -2791,11 +2801,10 @@ class ApiFlowRepository:
         attributing each side to the player who fielded it (attacker/defender).
         Returns None when the pair has no battles.
 
-        Retention note: production captures prune obsolete replays per pair
-        (see `_prune_obsolete_replays_for_pairs`), keeping only the newest
-        battle, so this breakdown typically reflects the latest snapshot.
-        Counts scale naturally if more replay history is present (e.g. fresh
-        imports or if retention is relaxed).
+        Retention note: captures prune normalized replays per pair, keeping
+        the newest `API_FLOW_REPLAYS_PER_PAIR` battles (default 1 — legacy
+        behavior). With retention > 1 this breakdown reports real usage
+        counts across the retained history.
         """
         db = SessionLocal()
         try:
