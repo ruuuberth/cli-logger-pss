@@ -449,7 +449,21 @@ class GenerateH2HReportCommand(CliCommand):
                 trends_rows = H2HReportTemplate.trend_rows(h2h_data)
                 trends_gen.add_rows(trends_rows)
                 trends_gen.generate()
-                print_success(f"✅ Reporte H2H generado (3 archivos) en: {output_path}")
+                # Fleet breakdown sheet
+                fleet_rows = H2HReportTemplate.fleet_breakdown_rows(h2h_data)
+                if fleet_rows:
+                    fleet_config = ReportConfig(
+                        title=f"{filename_input}_Flota",
+                        output_path=output_path,
+                        include_timestamp=include_ts,
+                        format="excel",
+                    )
+                    fleet_gen = ExcelReportGenerator(fleet_config)
+                    fleet_gen.add_rows(fleet_rows)
+                    fleet_gen.generate()
+                    print_success(f"✅ Reporte H2H generado (4 archivos) en: {output_path}")
+                else:
+                    print_success(f"✅ Reporte H2H generado (3 archivos) en: {output_path}")
             else:
                 generator = JsonReportGenerator(config)
                 # JSON combines all data
@@ -458,6 +472,7 @@ class GenerateH2HReportCommand(CliCommand):
                     "summary": h2h_data.get("summary"),
                     "battles": h2h_data.get("battles"),
                     "trends": h2h_data.get("trends"),
+                    "fleet_breakdown": h2h_data.get("fleet_breakdown"),
                 }
                 generator.add_rows([json_data])  # Single row with all data
                 output_file = generator.generate()
