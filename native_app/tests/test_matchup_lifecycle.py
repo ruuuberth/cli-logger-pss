@@ -215,6 +215,52 @@ def test_backfill_explicit_keep_overrides_settings(monkeypatch) -> None:
     db.close()
 
 
+def test_prune_counts_distinct_battles_not_rows(monkeypatch) -> None:
+    """keep=N must retain N DISTINCT battles; duplicates never waste slots.
+
+    Regression for the review finding: slicing replay_rows[keep:] counted
+    rows, so a duplicate capture evicted a distinct battle from the
+    retention window and double-counted in the fleet breakdown.
+    """
+    repo, SessionLocal = _build_repo(monkeypatch)
+    monkeypatch.setattr(storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False)
+    now = datetime.now(timezone.utc)
+
+    db = SessionLocal()
+    # Battle 300 captured twice (re-capture), then two distinct battles
+    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=10),
+                   battle_id=300, attacker_user_id=10, attacker_name="Alice",
+                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
+    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=9),
+                   battle_id=300, attacker_user_id=10, attacker_name="Alice",
+                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
+    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=8),
+                   battle_id=400, attacker_user_id=10, attacker_name="Alice",
+                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
+    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=7),
+                   battle_id=500, attacker_user_id=10, attacker_name="Alice",
+                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
+    db.commit()
+    db.close()
+
+    metrics = repo.backfill_matchup_history_and_prune()
+
+    db = SessionLocal()
+    replays = db.query(BattleReplayNormalized).all()
+    battle_ids = sorted({r.battle_id for r in replays})
+    # keep=3 DISTINCT battles: 300 (newest row only), 400, 500 — not [300, 300, 400]
+    assert battle_ids == [300, 400, 500], f"got {battle_ids}"
+    assert len(replays) == 3, f"duplicate must not waste a slot, got {len(replays)} rows"
+    newest_300 = [r for r in replays if r.battle_id == 300]
+    assert len(newest_300) == 1  # only the newest capture of battle 300 survives
+    # 4 rows -> 3 survivors = 1 deleted (the older duplicate of 300)
+    assert metrics["deleted_obsolete_replays"] == 1
+    # Matchup logs keep every distinct battle (dupes don't duplicate logs —
+    # ux_player_matchup_logs_pair_battle unique constraint)
+    assert db.query(PlayerMatchupLog).count() == 3
+    db.close()
+
+
 def test_backfill_default_keep_is_one(monkeypatch) -> None:
     """Without configuration the legacy behavior (keep newest 1) is preserved."""
     repo, SessionLocal = _build_repo(monkeypatch)

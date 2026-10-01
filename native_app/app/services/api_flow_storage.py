@@ -2466,6 +2466,11 @@ class ApiFlowRepository:
     def _prune_obsolete_replays_for_pairs(self, db, pairs: set[tuple[int, int]], keep: int | None = None) -> int:
         """Delete normalized replays beyond the newest `keep` per pair.
 
+        `keep` counts DISTINCT battles: when the same battle was captured
+        more than once, only the newest row per kept battle survives, so a
+        duplicate capture never wastes a retention slot and never
+        double-counts in the H2H fleet breakdown.
+
         `keep` defaults to the configured API_FLOW_REPLAYS_PER_PAIR setting.
         keep=1 reproduces the legacy behavior (newest replay only).
         """
@@ -2480,7 +2485,11 @@ class ApiFlowRepository:
         deleted_replay_count = 0
         for low_id, high_id in sorted(pairs):
             replay_rows = (
-                db.query(BattleReplayNormalized.id, BattleReplayNormalized.api_flow_event_id)
+                db.query(
+                    BattleReplayNormalized.id,
+                    BattleReplayNormalized.api_flow_event_id,
+                    BattleReplayNormalized.battle_id,
+                )
                 .filter(
                     or_(
                         and_(
@@ -2498,7 +2507,29 @@ class ApiFlowRepository:
             )
             if len(replay_rows) <= keep:
                 continue
-            obsolete_rows = replay_rows[keep:]
+
+            # Newest-first, one retention slot per distinct battle_id:
+            # the newest row of each kept battle survives, every older
+            # duplicate of a kept battle is pruned along with the battles
+            # that fall outside the keep window.
+            kept_battle_ids: set[int] = set()
+            survivor_ids: set[int] = set()
+            for row in replay_rows:
+                battle_id = self._as_int(row.battle_id)
+                if battle_id is None:
+                    # Cannot attribute to a distinct battle: keep the newest
+                    # such row only (legacy row semantics).
+                    battle_id = int(row.id)
+                if battle_id in kept_battle_ids:
+                    continue  # older duplicate of an already-kept battle
+                if len(kept_battle_ids) >= keep:
+                    continue  # retention window full
+                kept_battle_ids.add(battle_id)
+                survivor_ids.add(int(row.id))
+
+            obsolete_rows = [row for row in replay_rows if int(row.id) not in survivor_ids]
+            if not obsolete_rows:
+                continue
             deleted_replay_count += len(obsolete_rows)
             for row in obsolete_rows:
                 if row.api_flow_event_id is not None:
