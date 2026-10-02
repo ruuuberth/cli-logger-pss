@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     API_FLOW_BODY_MAX_CHARS: int = 4000
     API_FLOW_RETENTION_DAYS: int = 7
     API_FLOW_MAX_DB_MB: int = 512
+    # Normalized replay history kept per player pair. 1 = legacy behavior
+    # (only the newest battle's ships/rooms/crew per pair). Raise to give the
+    # H2H fleet breakdown (#8) real usage history at a linear DB cost.
+    API_FLOW_REPLAYS_PER_PAIR: int = 1
     API_FLOW_CAPTURE_HTTPS: bool = True
     API_FLOW_IGNORE_HOSTS: List[str] = [
         "player-auth.services.api.unity.com",
