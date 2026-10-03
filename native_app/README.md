@@ -21,7 +21,7 @@ python -m app.main
 ## Alcance funcional
 
 La app captura tráfico desde `Flujo de la API` (excepto hosts en passthrough).  
-La UI y normalización están enfocadas en replay de batalla (`/BattleService/GetBattle3`).
+La CLI y normalización están enfocadas en replay de batalla (`/BattleService/GetBattle3`).
 
 Pipeline:
 1. Captura con `mitmdump`.
@@ -31,29 +31,23 @@ Pipeline:
 5. Sync de catálogos de diseño (`ship_designs`, `room_designs`, `crew_designs`).
 6. Consolidación H2H por pareja (`player_matchup_logs`, `player_matchup_stats`) y poda de replay obsoleto.
 
-Arquitectura de ventana principal:
-- `app/ui/main_window.py`: solo UI, timers y wiring.
+Arquitectura de la consola:
+- `app/cli/cli_manager.py`: menú Rich de 9 comandos.
+- `app/cli/concrete_commands.py`: implementación de cada comando (eventos, reportes, H2H, inspectores, captura, monitor, settings).
+- `app/cli/cli_services.py`: wrappers de servicios para la CLI.
 - `app/services/api_flow_runtime.py`: captura, backlog, flush y startup sync.
 - `app/services/api_flow_list_service.py`: búsqueda, paginación, formateo de filas y cache de detalle.
-- `app/services/process_resource_monitor.py`: lectura de CPU/RAM desde `/proc`.
-- `app/ui/api_flow_runtime_bridge.py`: bridge Qt fino entre runtime y ventana.
-- `app/ui/models/api_flow_table_model.py`: modelo de la tabla principal del flujo.
-- `app/ui/delegates/row_action_delegate.py`: acciones por fila sin `QPushButton` reales.
-- `app/services/perf_metrics.py`: medición ligera de hotspots en desarrollo.
+- `app/services/process_resource_monitor.py`: lectura de CPU/RAM desde `/proc` (usada por el Monitor de Sistema).
+- `app/daemon_manager.py`: daemon de captura en background (`pss-native --daemon`).
 
-## Catalogos locales (UI)
+## Catalogos locales (inspectores)
 
-La UI usa los catálogos locales del juego (`Data/Prod`) como fuente principal
-para traducir nombres (naves, salas, tripulación y condiciones/acciones).
+Los inspectores CLI usan los catálogos locales del juego (`Data/Prod`) como fuente
+principal para traducir nombres (naves, salas, tripulación y condiciones/acciones).
+La ruta base se auto-detecta (`CatalogoResolver.default_base_dir()` →
+`~/.config/unity3d/SavySoda/Pixel Starships/Data`); no hay UI de configuración.
 
-Fallbacks:
-1. Archivos locales.
-2. DB de diseño si existe.
-3. `Sin traduccion`.
-
-Puedes configurar la ruta desde el Inspector Manager.
-
-Para acciones `SetItem` del inspector de IA, el proyecto mantiene un mapping
+Para acciones `SetItem` del inspector de salas, el proyecto mantiene un mapping
 manual por sala en `app/resources/room_item_slot_mappings.json`. Ese archivo
 resuelve placeholders de slot a nombres canonicos de item, y luego el nombre
 visible sale de `ItemDesigns.txt` ignorando nivel.
@@ -64,22 +58,14 @@ El inspector de tripulación usa una capa equivalente, pero sin mapping manual:
 - traduce IA con `ActionTypes.txt` y `ConditionTypes.txt`
 - traduce equipamiento con `ItemDesigns.txt`
 
-La tabla principal de tripulantes ya no muestra `character_attributes_json`
-crudo; expone stats limpias y botones de `Equipo` e `Inspector IA`.
+El inspector de tripulación muestra stats limpias (no el `character_attributes_json`
+crudo).
 
 ## Rendimiento
 
-La tabla principal del flujo ya no usa `QTableWidget` ni `setCellWidget()` por
-fila. Usa `QTableView + model + delegate`, con lo que el scroll y el repintado
-son bastante más baratos en CPU y RAM.
-
-El `BattleInspectorWindow` sigue la misma dirección para sus tablas más pesadas
-(`Salas`, `Tripulación`, `Comandos`, `IA`, `Equipo`), y evita `resizeRowsToContents()`
-global para no pagar ese coste en cada apertura.
-
-La apertura de detalles de batalla usa cache en memoria para replays recientes,
-y el listado principal usa una query más ligera que evita materializar filas ORM
-completas cuando no hace falta.
+La apertura de detalles de batalla usa cache en memoria para replays recientes
+(`battle_detail_cache`), y el listado principal usa una query más ligera que evita
+materializar filas ORM completas cuando no hace falta.
 
 ## Variables de entorno
 
@@ -160,9 +146,9 @@ Backfill:
 ## Politica H2H
 
 - Pareja canonica: `(min(attacker_user_id, defender_user_id), max(...))`.
-- Solo queda 1 replay vigente por pareja (el mas reciente por `captured_at/id`).
+- Quedan hasta N replays vigentes por pareja: los N mas recientes **por batalla distinta** (`API_FLOW_REPLAYS_PER_PAIR`, default 1 = solo el mas reciente por `captured_at/id`; una re-captura de la misma batalla no ocupa slot).
 - El mini logger H2H guarda ganador por `battle_id` sin duplicados por pareja.
-- El resumen H2H se recalcula desde logger y se muestra en el `Battle Inspector`.
+- El reporte H2H (comando 3) se genera desde logger: `_Resumen`, `_Batallas`, `_Tendencias` y `_Flota` (si hay datos).
 - Purga por TTL/tamano borra replay viejo, pero conserva logger/resumen.
 
 ## Build
@@ -185,19 +171,20 @@ Cada ZIP incluye:
 
 Workflows:
 - `Native Build` (`.github/workflows/native-build.yml`):
-  - corre en `PR` a `develop` y `main` (y manual)
+  - corre en `PR` a `main` (y manual)
   - compila Linux + Windows
   - publica artifacts de run:
     - `pss-logger-native-linux-portable.zip`
     - `pss-logger-native-windows-portable.zip`
-- `Native Pre-release (develop)` (`.github/workflows/prerelease-develop.yml`):
-  - corre en `push` a `develop`
-  - publica canal `develop-latest` como pre-release
-  - adjunta ZIP portable + `SHA256SUMS.txt` (+ firma opcional)
+- `Secret Scan` (`.github/workflows/secret-scan.yml`):
+  - corre en PR/push a `develop` y `main`
+- `Native Pre-release (develop)` (`.github/workflows/prerelease-develop.yml.disabled`):
+  - **deshabilitado** — no hay canal `develop-latest` actualmente
 - `Native Release` (`.github/workflows/release.yml`):
-  - corre en tags `v*`
+  - corre en tags `v*` y en push a `main`
   - publica release estable con ZIP portable Linux/Windows
   - adjunta `SHA256SUMS.txt` (+ firma opcional)
+  - en push a `main` (sin tag), genera automaticamente un tag fechado `vYYYY.MM.DD-<sha>` y publica con ese nombre
   - elimina assets legacy sueltos si existen en el release/tag
 
 Firma opcional:

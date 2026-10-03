@@ -29,10 +29,12 @@ Este repositorio prioriza la app nativa de replay logger en `native_app/`.
 
 ## CI/CD contract
 
-- PR hacia `develop` o `main`:
+- PR hacia `main`:
   - ejecuta `Native Build` (Linux + Windows) como control de calidad.
+- PR/push hacia `develop` o `main`:
+  - ejecuta el secret scan (gitleaks). Los PRs a `develop` NO ejecutan builds/tests por ahora — la validación funcional corre localmente (`pytest -q`).
 - Push a `develop`:
-  - ejecuta `Native Pre-release (develop)` y actualiza `develop-latest`.
+  - no dispara pre-release (workflow deshabilitado).
 - Push de tag `v*`:
   - ejecuta `Native Release` y publica release estable.
 
