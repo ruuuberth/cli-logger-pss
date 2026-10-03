@@ -251,10 +251,20 @@ class ApiFlowListService:
             outcome=outcome,
         )
 
+        breakdown = self.repository.get_h2h_fleet_breakdown(
+            low_user_id=low_user_id,
+            high_user_id=high_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            outcome=outcome,
+            limit=limit,
+        )
+
         return {
             "summary": summary,
             "battles": battles,
             "trends": trends,
+            "fleet_breakdown": breakdown,
         }
 
     def get_unique_player_pairs(self) -> list[dict[str, Any]]:

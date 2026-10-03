@@ -166,3 +166,50 @@ class H2HReportTemplate(ReportTemplate):
                 f"Promedio Trofeos {h2h_data.get('summary', {}).get('player_high_name', 'Player B')}": t.get("player_high_avg_trophies", 0),
             })
         return rows
+
+    @staticmethod
+    def fleet_breakdown_rows(h2h_data: dict) -> list[dict[str, Any]]:
+        """Generate fleet-breakdown sheet rows from H2H data.
+
+        One row per player/entity: ships, rooms and crew fielded across the
+        battles analyzed, with usage counts so frequently-fielded entities
+        surface first.
+        """
+        breakdown = h2h_data.get("fleet_breakdown") or {}
+        rows: list[dict[str, Any]] = []
+        for player_key, label_key in (("player_low", "player_low_name"), ("player_high", "player_high_name")):
+            player = breakdown.get(player_key) or {}
+            player_name = (h2h_data.get("summary", {}) or {}).get(label_key) or player_key
+            battles = player.get("total_battles_analyzed", 0)
+
+            for s in player.get("ships", []):
+                rows.append({
+                    "Jugador": player_name,
+                    "Tipo": "Nave",
+                    "Nombre": s.get("ship_design_name") or s.get("ship_name") or f"Ship {s.get('id', '-')}",
+                    "Ship ID": s.get("id", "-"),
+                    "Nivel Promedio": s.get("avg_level", 0),
+                    "Power Score Promedio": s.get("avg_power_score", 0),
+                    "Batallas Usado": f"{s.get('battles', 0)}/{battles}",
+                })
+            for rm in player.get("rooms", []):
+                rows.append({
+                    "Jugador": player_name,
+                    "Tipo": "Sala",
+                    "Nombre": rm.get("room_design_name") or f"Room {rm.get('id', '-')}",
+                    "Ship ID": "-",
+                    "Nivel Promedio": "-",
+                    "Power Score Promedio": "-",
+                    "Batallas Usado": f"{rm.get('battles', 0)}/{battles}",
+                })
+            for c in player.get("crew", []):
+                rows.append({
+                    "Jugador": player_name,
+                    "Tipo": "Tripulacion",
+                    "Nombre": c.get("character_design_name") or c.get("character_name") or f"Crew {c.get('id', '-')}",
+                    "Ship ID": "-",
+                    "Nivel Promedio": c.get("avg_level", 0),
+                    "Power Score Promedio": "-",
+                    "Batallas Usado": f"{c.get('battles', 0)}/{battles}",
+                })
+        return rows

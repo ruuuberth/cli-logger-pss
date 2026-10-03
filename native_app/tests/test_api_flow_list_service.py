@@ -205,6 +205,16 @@ def test_get_h2h_report_data_delegates() -> None:
                 {"period": "2026-01-01", "battle_count": 2, "player_low_wins": 1, "player_high_wins": 1, "player_low_avg_trophies": 5000, "player_high_avg_trophies": 4800},
             ]
 
+        def get_h2h_fleet_breakdown(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None, limit=1000):
+            return {
+                "player_low_user_id": low_user_id,
+                "player_high_user_id": high_user_id,
+                "battles_analyzed": 5,
+                "battle_ids": [100],
+                "player_low": {"user_id": 10, "ships": [], "rooms": [], "crew": [], "total_battles_analyzed": 5},
+                "player_high": {"user_id": 20, "ships": [], "rooms": [], "crew": [], "total_battles_analyzed": 5},
+            }
+
     service = ApiFlowListService(repository=_RepoH2H())
     data = service.get_h2h_report_data(10, 20)
 
@@ -213,6 +223,7 @@ def test_get_h2h_report_data_delegates() -> None:
     assert data["summary"]["player_low_wins"] == 3
     assert len(data["battles"]) == 1
     assert len(data["trends"]) == 1
+    assert data["fleet_breakdown"]["battles_analyzed"] == 5
 
 
 def test_get_unique_player_pairs_delegates() -> None:

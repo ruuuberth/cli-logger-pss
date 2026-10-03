@@ -449,7 +449,21 @@ class GenerateH2HReportCommand(CliCommand):
                 trends_rows = H2HReportTemplate.trend_rows(h2h_data)
                 trends_gen.add_rows(trends_rows)
                 trends_gen.generate()
-                print_success(f"✅ Reporte H2H generado (3 archivos) en: {output_path}")
+                # Fleet breakdown sheet
+                fleet_rows = H2HReportTemplate.fleet_breakdown_rows(h2h_data)
+                if fleet_rows:
+                    fleet_config = ReportConfig(
+                        title=f"{filename_input}_Flota",
+                        output_path=output_path,
+                        include_timestamp=include_ts,
+                        format="excel",
+                    )
+                    fleet_gen = ExcelReportGenerator(fleet_config)
+                    fleet_gen.add_rows(fleet_rows)
+                    fleet_gen.generate()
+                    print_success(f"✅ Reporte H2H generado (4 archivos) en: {output_path}")
+                else:
+                    print_success(f"✅ Reporte H2H generado (3 archivos) en: {output_path}")
             else:
                 generator = JsonReportGenerator(config)
                 # JSON combines all data
@@ -458,6 +472,7 @@ class GenerateH2HReportCommand(CliCommand):
                     "summary": h2h_data.get("summary"),
                     "battles": h2h_data.get("battles"),
                     "trends": h2h_data.get("trends"),
+                    "fleet_breakdown": h2h_data.get("fleet_breakdown"),
                 }
                 generator.add_rows([json_data])  # Single row with all data
                 output_file = generator.generate()
@@ -818,6 +833,7 @@ class SettingsCommand(CliCommand):
             "MITMPROXY_LISTEN_PORT",
             "API_FLOW_BODY_MAX_CHARS",
             "API_FLOW_RETENTION_DAYS",
+            "API_FLOW_REPLAYS_PER_PAIR",
             "API_FLOW_MAX_DB_MB",
             "API_FLOW_CAPTURE_HTTPS",
             "API_FLOW_IGNORE_HOSTS",
@@ -1258,6 +1274,7 @@ class SettingsCommand(CliCommand):
             "MITMPROXY_LISTEN_PORT": "Puerto donde escuchar el proxy",
             "API_FLOW_BODY_MAX_CHARS": "Máximo caracteres del body de respuesta",
             "API_FLOW_RETENTION_DAYS": "Días de retención de eventos",
+            "API_FLOW_REPLAYS_PER_PAIR": "Replays normalizados por pareja (1 = solo el más reciente)",
             "API_FLOW_MAX_DB_MB": "Tamaño máximo de BD en MB",
             "API_FLOW_CAPTURE_HTTPS": "Capturar tráfico HTTPS",
             "API_FLOW_IGNORE_HOSTS": "Hosts a ignorar (array JSON)",
