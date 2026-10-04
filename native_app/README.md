@@ -184,10 +184,9 @@ Workflows:
 - `Native Pre-release (develop)` (`.github/workflows/prerelease-develop.yml.disabled`):
   - **deshabilitado** — no hay canal `develop-latest` actualmente
 - `Native Release` (`.github/workflows/release.yml`):
-  - corre en tags `v*` y en push a `main`
+  - corre en tags `v*` (y manual)
   - publica release estable con ZIP portable Linux/Windows
   - adjunta `SHA256SUMS.txt` (+ firma opcional)
-  - en push a `main` (sin tag), genera automaticamente un tag fechado `vYYYY.MM.DD-<sha>` y publica con ese nombre
   - elimina assets legacy sueltos si existen en el release/tag
 
 Firma opcional:

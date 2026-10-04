@@ -112,7 +112,6 @@ Salida principal:
 - PR a `main`: compila Linux + Windows (`native-build.yml`) y sube ZIP portable de CI.
 - PR/push a `develop` o `main`: corre el secret scan (gitleaks).
 - Push de tag `v*`: crea release estable con ZIPs Linux/Windows + `SHA256SUMS.txt`.
-- Push de merge a `main`: además dispara `release.yml`, que genera un tag fechado `vYYYY.MM.DD-<sha>` y publica una release con ese nombre.
 - Política de assets: no se publican binarios sueltos (`pss-logger-native` / `.exe`), solo ZIP portable.
 - El build falla si el ejecutable no contiene los marcadores de diagnostico del fix del addon mitmproxy.
 
