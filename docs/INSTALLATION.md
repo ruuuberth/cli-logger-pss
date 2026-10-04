@@ -9,11 +9,11 @@
 
 ```bash
 git clone <repository-url>
-cd "Logger PSS"
+cd cli-logger-pss
 cd native_app
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 cp ../.env.dev.example .env
 ```
 
@@ -34,7 +34,7 @@ Configura el cliente/juego con proxy local:
 ## Captura por defecto
 
 - Se captura todo el flujo (excepto hosts en `API_FLOW_IGNORE_HOSTS`).
-- La UI principal muestra solo batallas `GetBattle3` normalizadas.
+- `Consultar Eventos` y los inspectores trabajan sobre batallas `GetBattle3` normalizadas.
 
 Variables para ajustar filtros:
 - `API_FLOW_CAPTURE_HOST_ALLOWLIST`

@@ -23,7 +23,8 @@ Objetivo: simular branch protection por proceso para evitar pushes directos a `d
 
 Un PR se puede mergear solo si cumple:
 
-- `Native Build` Linux y Windows en verde.
+- PR a `develop`: secret scan (gitleaks) en verde; validación funcional local (`pytest -q`).
+- PR a `main`: `Native Build` Linux y Windows en verde (además del secret scan).
 - Plantilla de PR completa.
 - Al menos una aprobación manual.
 - Sin conflictos y sin commits WIP.
@@ -33,8 +34,8 @@ Un PR se puede mergear solo si cumple:
 ### Pre-release (canal de pruebas)
 
 - Trigger: push a `develop`.
-- Workflow esperado: `Native Pre-release (develop)`.
-- Assets a validar:
+- Estado actual: **deshabilitado** (`prerelease-develop.yml.disabled`).
+- Assets que publicaría al reactivarse:
   - `pss-logger-native-linux-portable.zip`
   - `pss-logger-native-windows-portable.zip`
   - `SHA256SUMS.txt`
@@ -78,7 +79,8 @@ Un PR se puede mergear solo si cumple:
 ### Antes de merge a `develop`
 
 - [ ] PR abierto desde rama feature/fix/refactor/docs/chore
-- [ ] CI Linux/Windows verde
+- [ ] Secret scan (gitleaks) verde
+- [ ] suite local verde (`pytest -q`)
 - [ ] aprobación manual
 - [ ] documentación actualizada si aplica
 

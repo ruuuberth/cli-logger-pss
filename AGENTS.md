@@ -12,7 +12,7 @@
 # Setup
 cd native_app && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
-# Run tests (126 tests, ~3s)
+# Run tests (140 tests, ~4s)
 .venv/bin/python -m pytest
 
 # Single test
@@ -37,7 +37,7 @@ cp ../.env.dev.example .env   # .env lives INSIDE native_app/
 # Setup
 cd native_app && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 
-# Run tests (126 tests, ~3s)
+# Run tests (140 tests, ~4s)
 .venv/Scripts/python.exe -m pytest
 
 # Single test
@@ -63,7 +63,7 @@ cd native_app && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 main.py
   → configure_environment()  # resolves DB path (~/.pss_logger/pss_logger.db)
   → ApiFlowRuntime.start_capture()  # failure-tolerant, runs before CLI
-  → CliManager interactive menu (7 commands)
+  → CliManager interactive menu (9 commands)
 ```
 
 **Data pipeline**: mitmproxy addon → stdout JSON → ApiFlowCaptureManager → ApiFlowRuntime (queue) → ApiFlowRepository.save_events() → `api_flow_events` → **same-call normalization** → `battle_replay_*` tables → H2H matchup log/stats.
@@ -77,9 +77,9 @@ native_app/
 ├── app/
 │   ├── main.py              # Entry point, build info, logging, DB init
 │   ├── cli/
-│   │   ├── cli_manager.py   # Menu + 7 command handlers
-│   │   ├── concrete_commands.py  # QueryEvents, GenerateReport, InspectChar, InspectRoom, InspectBattle, CaptureTraffic, SystemMonitor, Settings
-│   │   └── cli_services.py  # Qt-free wrappers over services
+│   │   ├── cli_manager.py   # Menu + 9 command handlers
+│   │   ├── concrete_commands.py  # QueryEvents, GenerateReport, GenerateH2HReport, InspectChar, InspectRoom, InspectBattle, CaptureTraffic, SystemMonitor, Settings
+│   │   └── cli_services.py  # Service wrappers over services
 │   ├── core/
 │   │   ├── config.py        # Pydantic Settings (env + .env)
 │   │   └── build_info.py    # Version/git SHA from embedded metadata
@@ -87,7 +87,7 @@ native_app/
 │   ├── services/            # Capture, storage, list, inspectors, catalogs
 │   └── reporting/           # Excel/CSV/JSON generators
 ├── scripts/build.sh|.ps1    # PyInstaller one-file → portable ZIP
-├── tests/                   # 126 tests (pytest)
+├── tests/                   # 140 tests (pytest)
 └── pyproject.toml           # deps, scripts, pytest config
 ```
 
@@ -103,6 +103,7 @@ native_app/
 | `API_FLOW_CAPTURE_HOST_ALLOWLIST` | JSON array, e.g. `["api.pixelstarships.com"]` |
 | `API_FLOW_CAPTURE_PATH_ALLOWLIST` | JSON array, e.g. `["/BattleService/GetBattle3"]` |
 | `API_FLOW_IGNORE_HOSTS` | JSON array of hosts to skip |
+| `API_FLOW_REPLAYS_PER_PAIR` | Normalized replays kept per player pair (default 1 = newest only; higher = fleet-breakdown usage history) |
 | `CLI_FORCE_ASCII` | Force ASCII output (Windows legacy) |
 
 List values: **JSON array format preferred** (CSV deprecated).
@@ -114,9 +115,10 @@ List values: **JSON array format preferred** (CSV deprecated).
 | Trigger | Workflow | Notes |
 |---------|----------|-------|
 | PR → `main` | `native-build.yml` | Linux + Windows build + pytest (capture/build_info) |
+| PR/push `develop`, `main` | `secret-scan.yml` | Gitleaks |
 | Tag `v*` | `release.yml` | Stable release: portable ZIPs + SHA256SUMS |
-| Push `develop` | `prerelease-develop.yml.disabled` | **Disabled** |
-| Any | `secret-scan.yml` | Gitleaks on `develop`/`main` |
+| Push `main` (merge) | `release.yml` | Auto-tags `vYYYY.MM.DD-<sha>` and publishes a dated release too |
+| ~~Push `develop`~~ | `prerelease-develop.yml.disabled` | **Disabled** — no develop pre-releases currently |
 
 **Release assets**: portable ZIPs only (no loose binaries). Build fails if `EXPECTED_MITM_ADDON_SHA256` in `api_flow_capture.py` mismatches `mitm_api_flow_addon.py`.
 
@@ -145,8 +147,8 @@ List values: **JSON array format preferred** (CSV deprecated).
 1. **DB path**: Defaults to `~/.pss_logger/pss_logger.db` (created by `configure_environment()`)
 2. **Addon SHA**: Update `EXPECTED_MITM_ADDON_SHA256` in `api_flow_capture.py` when `mitm_api_flow_addon.py` changes
 3. **Line endings**: `.gitattributes` enforces LF for `.py` files
-4. **Version**: Single source in `pyproject.toml` (currently `0.2.1`); embedded in build metadata at compile time
-5. **No GUI code**: Legacy Qt UI removed; `docs/NATIVE_ROADMAP.md` deleted (uncommitted)
+4. **Version**: Single source in `pyproject.toml` (currently `0.3.0`); embedded in build metadata at compile time. Release workflow derives the release number from the git tag (`vX.Y.Z`), so keep tag and pyproject aligned
+5. **No GUI code**: Legacy Qt UI removed — the app is CLI-only (Rich console menu, 9 commands). Qt-era docs references were purged in `docs/sync-v0.3.0-reality`
 
 ---
 

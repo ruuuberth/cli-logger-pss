@@ -7,7 +7,7 @@
 1. Captura respuestas de batalla (`GetBattle3`) usando `mitmproxy`.
 2. Guarda el evento crudo y una versión limpia del payload.
 3. Normaliza los datos en tablas relacionales (nave, salas, tripulación, comandos).
-4. Muestra los resultados en una UI con búsqueda, paginación e inspectores.
+4. Muestra los resultados en una CLI con búsqueda, paginación e inspectores.
 5. Mantiene estadísticas H2H (head-to-head) por pareja de jugadores.
 
 ## Para que sirve
@@ -58,7 +58,7 @@ La app escribe logs en el mismo directorio de la base de datos local:
 
 - Linux: `~/.pss_logger/pss_logger.log`
 
-Cada arranque registra el build activo (`version`, `git_sha`, `build_time`) y la UI muestra una linea `Build: ...` para que soporte pueda confirmar exactamente que ZIP se esta ejecutando.
+Cada arranque registra el build activo (`version`, `git_sha`, `build_time`) en el log (`event=build_info`) para que soporte pueda confirmar exactamente que ZIP se esta ejecutando.
 
 Puedes personalizar:
 - `APP_LOG_PATH` para ruta completa del log.
@@ -89,10 +89,10 @@ Base SQLite local (`native_app/pss_logger_dev.db` o `native_app/pss_logger.db`):
 
 ## Flujo de uso
 
-1. Abrir la app.
+1. Abrir la app (`pss-native`).
 2. Iniciar captura (si no arranca automaticamente).
 3. Jugar batallas.
-4. Volver a la app y abrir `Inspector` en una fila.
+4. Volver a la app y usar los inspectores (`Consultar Eventos` → ID).
 5. Revisar detalle por naves, salas, tripulación y comandos.
 
 ## Build del binario nativo
@@ -108,9 +108,10 @@ Salida principal:
 
 ## Publicación automática de binarios
 
-- PR a `develop` o `main`: compila Linux + Windows y sube ZIP portable de CI.
-- Push a `develop`: actualiza pre-release `develop-latest` con ZIPs + `SHA256SUMS.txt`.
+- PR a `main`: compila Linux + Windows (`native-build.yml`) y sube ZIP portable de CI.
+- PR/push a `develop` o `main`: corre el secret scan (gitleaks).
 - Push de tag `v*`: crea release estable con ZIPs Linux/Windows + `SHA256SUMS.txt`.
+- Push de merge a `main`: además dispara `release.yml`, que genera un tag fechado `vYYYY.MM.DD-<sha>` y publica una release con ese nombre.
 - Política de assets: no se publican binarios sueltos (`pss-logger-native` / `.exe`), solo ZIP portable.
 - El build falla si el ejecutable no contiene los marcadores de diagnostico del fix del addon mitmproxy.
 

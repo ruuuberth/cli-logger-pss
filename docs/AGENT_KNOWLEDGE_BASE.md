@@ -5,7 +5,7 @@
 
 ## 1. Project identity
 
-**Logger PSS** is a desktop/native application for capturing and analyzing Pixel Starships battle traffic. The application captures `BattleService/GetBattle3` responses through mitmproxy, persists raw/clean payloads, normalizes battle replays into relational SQLite tables, and exposes CLI/UI inspection and reporting workflows.
+**Logger PSS** is a CLI application for capturing and analyzing Pixel Starships battle traffic. The application captures `BattleService/GetBattle3` responses through mitmproxy, persists raw/clean payloads, normalizes battle replays into relational SQLite tables, and exposes CLI inspection and reporting workflows.
 
 Primary runtime entry point:
 
@@ -77,23 +77,23 @@ Pixel Starships
 | `app/services/perf_metrics.py` | Lightweight performance measurements |
 | `app/services/process_resource_monitor.py` | CPU/RAM/process resource monitoring |
 | `app/models/pss_models.py` | SQLAlchemy models/tables |
-| `app/cli/*` | CLI manager, commands, and Qt-free service wrappers |
+| `app/cli/*` | CLI manager, commands, and service wrappers |
 | `app/reporting/*` | XLSX/CSV/JSON reporting |
-| `app/ui/*` | Presentation layer; should not own parsing/persistence/capture logic |
+
+> La capa `app/ui/*` fue eliminada junto con la UI Qt. La presentación es la consola Rich (`app/cli/*`); no reintroducir UI frameworks.
 
 ## 4. Architectural invariants
 
 Agents MUST preserve these unless a task explicitly changes the architecture:
 
-- `MainWindow`/UI code must not contain network parsing, persistence, or capture orchestration.
+- `MainWindow`/UI code no longer exists: the Qt UI was removed. Presentation lives in `app/cli/*` and must not contain network parsing, persistence, or capture orchestration.
 - `ApiFlowRuntime` is the boundary that knows both capture and repository layers.
-- Capture filtering belongs in the mitmproxy addon, not in the UI.
+- Capture filtering belongs in the mitmproxy addon, not in the CLI.
 - Preserve replay data: normalization must not silently discard fields that may be useful for future inspection.
-- The main flow table uses `QTableView + model + delegate`; do not reintroduce per-row `QWidget`/`QTableWidget` patterns for large datasets.
-- Large inspector tables must avoid global `resizeRowsToContents()`.
-- Local catalogs are the primary source for UI translations; API catalog synchronization is a fallback/update path.
+- Local catalogs are the primary source for inspector translations; API catalog synchronization is a fallback/update path.
 - H2H pair identity is unordered: `(A,B)` and `(B,A)` represent the same pair.
 - H2H insertion updates the minimal matchup log, prunes obsolete replay data for the pair, and recalculates aggregate stats.
+- Retention keeps the N most recent replays per pair **counting distinct battles** (`API_FLOW_REPLAYS_PER_PAIR`, default 1); duplicate captures of the same battle never waste a retention slot.
 - Individual event deletion must keep replay data and H2H aggregates consistent.
 - Retention/TTL logic must preserve referential and cross-table consistency.
 
@@ -201,7 +201,7 @@ Important test areas include:
 - build metadata
 - configuration
 - H2H accounting
-- UI model/delegate behavior
+- CLI command behavior
 - reporting
 
 Do not remove or weaken tests merely to make a failing implementation pass. Fix the implementation or update the test only when the intended behavior has deliberately changed.
@@ -221,7 +221,7 @@ Only example environment files belong in Git. Secret scanning runs in CI. Never 
 Do not assume `python3`, `source`, or Unix `.venv/bin/*` paths on Windows. Use `.venv/Scripts/*`.
 
 ### UI performance
-Avoid rebuilding large datasets into widget-heavy structures. Prefer models, delegates, pagination, and caches already established by the architecture.
+No aplica: la UI Qt fue eliminada. La CLI es liviana por diseño; si el listado crece, mantener la paginación existente en `api_flow_list_service.py` y los caches (`battle_detail_cache`).
 
 ### Replay loss
 When parsing an API response, unknown fields should generally be retained in the raw/clean payload even if they are not yet normalized into a dedicated table.
@@ -241,7 +241,7 @@ While editing:
 
 1. Make the smallest coherent change.
 2. Preserve public behavior unless the task requests a breaking change.
-3. Keep parsing, persistence, UI, and orchestration responsibilities separated.
+3. Keep parsing, persistence, CLI presentation, and orchestration responsibilities separated.
 4. Add/update tests for new behavior and regressions.
 5. Do not mix unrelated refactors into a bug fix.
 
@@ -264,8 +264,8 @@ Use this as a first-pass routing guide:
 | Persistence | `services/api_flow_storage.py` | models, migrations, DB tests |
 | New replay field | parser/storage + `models/pss_models.py` | inspectors, reports, tests |
 | H2H bug | matchup methods in storage | logs, stats, deletion/retention tests |
-| Listing/pagination | `services/api_flow_list_service.py` | UI model, query tests |
-| Inspector behavior | corresponding UI inspector | model/schema/parser tests |
+| Listing/pagination | `services/api_flow_list_service.py` | CLI query command, query tests |
+| Inspector behavior | corresponding CLI inspector command | model/schema/parser tests |
 | CLI command | `app/cli/concrete_commands.py` | `cli_manager.py`, CLI services, tests |
 | Config | `app/core/config.py` | `.env.example`, tests, docs |
 | Reporting | `app/reporting/` | CLI commands, XLSX/CSV/JSON tests |
