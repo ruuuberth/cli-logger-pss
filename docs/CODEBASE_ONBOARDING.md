@@ -21,7 +21,7 @@
 - Inspectores de batalla/salas/tripulación: `battle_inspector_resolver.py`, `room_item_mapping.py`, `character_inspector_resolver.py`, `battle_inspector_exporter.py` (en `services/`)
 - Reporting: `native_app/app/reporting/` (XLSX/CSV/JSON)
 
-> **Nota histórica**: la UI Qt fue eliminada. No existe `app/ui/` — toda interacción es por consola (Rich). Los servicios que alimentaban la UI (`battle_detail_cache`, `perf_metrics`, `process_resource_monitor`, `room_item_mapping`, `character_inspector_resolver`) siguen vivos y los consumen los inspectores CLI vía `cli_services`.
+> **Nota histórica**: la UI Qt fue eliminada. No existe `app/ui/` — toda interacción es por consola (Rich). Los servicios que alimentaban la UI siguen vivos, consumidos por la CLI: `battle_detail_cache` y `perf_metrics` desde `api_flow_list_service`; `process_resource_monitor` desde el Monitor de Sistema (`concrete_commands`); `room_item_mapping` y `character_inspector_resolver` desde `cli_services` (inspectores).
 
 ## Flujo principal
 
