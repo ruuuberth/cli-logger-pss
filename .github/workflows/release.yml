@@ -109,6 +109,8 @@ jobs:
           name: pss-logger-native-linux
           path: native_app/dist/pss-logger-native-linux-portable.zip
           if-no-files-found: error
+          # Consumed by publish-release within the same run; keep storage quota low.
+          retention-days: 1
 
   build-windows:
     name: Build Windows Binary
@@ -159,6 +161,8 @@ jobs:
           name: pss-logger-native-windows
           path: native_app/dist/pss-logger-native-windows-portable.zip
           if-no-files-found: error
+          # Consumed by publish-release within the same run; keep storage quota low.
+          retention-days: 1
 
   publish-release:
     name: Publish stable release
