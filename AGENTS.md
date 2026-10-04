@@ -114,6 +114,7 @@ List values: **JSON array format preferred** (CSV deprecated).
 
 | Trigger | Workflow | Notes |
 |---------|----------|-------|
+| PR → `develop` | `native-tests.yml` | Pytest suite (Linux, lightweight) |
 | PR → `main` | `native-build.yml` | Linux + Windows build + pytest (capture/build_info) |
 | PR/push `develop`, `main` | `secret-scan.yml` | Gitleaks |
 | Tag `v*` | `release.yml` | Stable release: portable ZIPs + SHA256SUMS |

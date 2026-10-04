@@ -170,6 +170,9 @@ Cada ZIP incluye:
 ## CI/CD de binarios
 
 Workflows:
+- `Native Tests` (`.github/workflows/native-tests.yml`):
+  - corre en `PR` a `develop` (y manual)
+  - ejecuta la suite pytest en Linux (liviano, sin builds PyInstaller)
 - `Native Build` (`.github/workflows/native-build.yml`):
   - corre en `PR` a `main` (y manual)
   - compila Linux + Windows

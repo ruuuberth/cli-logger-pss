@@ -108,6 +108,7 @@ Salida principal:
 
 ## Publicación automática de binarios
 
+- PR a `develop`: corre la suite pytest (`native-tests.yml`, Linux).
 - PR a `main`: compila Linux + Windows (`native-build.yml`) y sube ZIP portable de CI.
 - PR/push a `develop` o `main`: corre el secret scan (gitleaks).
 - Push de tag `v*`: crea release estable con ZIPs Linux/Windows + `SHA256SUMS.txt`.

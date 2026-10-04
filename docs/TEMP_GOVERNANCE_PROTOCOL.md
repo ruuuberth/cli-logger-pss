@@ -23,7 +23,7 @@ Objetivo: simular branch protection por proceso para evitar pushes directos a `d
 
 Un PR se puede mergear solo si cumple:
 
-- PR a `develop`: secret scan (gitleaks) en verde; validación funcional local (`pytest -q`).
+- PR a `develop`: `Native Tests` (pytest) en verde, además del secret scan (gitleaks).
 - PR a `main`: `Native Build` Linux y Windows en verde (además del secret scan).
 - Plantilla de PR completa.
 - Al menos una aprobación manual.
@@ -79,8 +79,8 @@ Un PR se puede mergear solo si cumple:
 ### Antes de merge a `develop`
 
 - [ ] PR abierto desde rama feature/fix/refactor/docs/chore
+- [ ] `Native Tests` (pytest) en verde
 - [ ] Secret scan (gitleaks) verde
-- [ ] suite local verde (`pytest -q`)
 - [ ] aprobación manual
 - [ ] documentación actualizada si aplica
 
