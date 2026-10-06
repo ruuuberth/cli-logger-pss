@@ -63,7 +63,7 @@
   3. Recalcula stats agregadas de la pareja.
 - Backfill de arranque: puebla logger histórico faltante, recalcula stats, poda replays obsoletos existentes.
 - `delete_event` individual: elimina replay/evento y descuenta del logger/stats de la pareja.
-- Reporte H2H (comando 3 del menú): genera `_Resumen`, `_Batallas`, `_Tendencias` y (si hay datos) `_Flota` en Excel; JSON incluye `fleet_breakdown`.
+- Reporte H2H (comando 3 del menú): genera **un solo workbook Excel** con hojas `Resumen`, `Batallas`, `Tendencias` y (si hay datos) `Flota`; JSON incluye `fleet_breakdown`.
 
 ## Inspectores CLI
 
