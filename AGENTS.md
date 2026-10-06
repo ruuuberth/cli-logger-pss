@@ -114,10 +114,10 @@ List values: **JSON array format preferred** (CSV deprecated).
 
 | Trigger | Workflow | Notes |
 |---------|----------|-------|
+| PR → `develop` | `native-tests.yml` | Pytest suite (Linux, lightweight) |
 | PR → `main` | `native-build.yml` | Linux + Windows build + pytest (capture/build_info) |
 | PR/push `develop`, `main` | `secret-scan.yml` | Gitleaks |
 | Tag `v*` | `release.yml` | Stable release: portable ZIPs + SHA256SUMS |
-| Push `main` (merge) | `release.yml` | Auto-tags `vYYYY.MM.DD-<sha>` and publishes a dated release too |
 | ~~Push `develop`~~ | `prerelease-develop.yml.disabled` | **Disabled** — no develop pre-releases currently |
 
 **Release assets**: portable ZIPs only (no loose binaries). Build fails if `EXPECTED_MITM_ADDON_SHA256` in `api_flow_capture.py` mismatches `mitm_api_flow_addon.py`.
