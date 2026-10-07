@@ -365,6 +365,10 @@ class GenerateH2HReportCommand(CliCommand):
             if outcome and outcome not in ("VICTORY", "DEFEAT", "DRAW"):
                 outcome = None
 
+            trend_bucket_raw = opts.get("trend-bucket") or (prompt_input("Agrupar tendencias (dia/semana) [dia]", default="") if opts.get("non-interactive") is None else "")
+            trend_bucket_raw = trend_bucket_raw.strip().lower()
+            trend_bucket = "week" if trend_bucket_raw in ("semana", "week", "w") else "day"
+
             time_from = None
             time_to = None
             try:
@@ -404,6 +408,7 @@ class GenerateH2HReportCommand(CliCommand):
                 date_to=time_to,
                 outcome=outcome,
                 limit=int(opts.get("limit", "1000")),
+                trend_bucket=trend_bucket,
             )
 
             if not h2h_data:

@@ -89,6 +89,8 @@ class ApiFlowCliService:
         date_to: datetime | None = None,
         outcome: str | None = None,
         limit: int = 1000,
+        *,
+        trend_bucket: str = "day",
     ) -> Optional[dict]:
         """Get H2H comparative report data"""
         try:
@@ -99,6 +101,7 @@ class ApiFlowCliService:
                 date_to=date_to,
                 outcome=outcome,
                 limit=limit,
+                trend_bucket=trend_bucket,
             )
         except Exception as e:
             self.logger.error(f"Error getting H2H report data: {e}")
