@@ -148,7 +148,7 @@ Backfill:
 - Pareja canonica: `(min(attacker_user_id, defender_user_id), max(...))`.
 - Quedan hasta N replays vigentes por pareja: los N mas recientes **por batalla distinta** (`API_FLOW_REPLAYS_PER_PAIR`, default 1 = solo el mas reciente por `captured_at/id`; una re-captura de la misma batalla no ocupa slot).
 - El mini logger H2H guarda ganador por `battle_id` sin duplicados por pareja.
-- El reporte H2H (comando 3) se genera desde logger: `_Resumen`, `_Batallas`, `_Tendencias` y `_Flota` (si hay datos).
+- El reporte H2H (comando 3) se genera desde logger como **un solo workbook Excel** con hojas `Resumen`, `Batallas`, `Tendencias` y `Flota` (si hay datos).
 - Purga por TTL/tamano borra replay viejo, pero conserva logger/resumen.
 
 ## Build

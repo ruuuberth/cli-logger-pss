@@ -419,51 +419,16 @@ class GenerateH2HReportCommand(CliCommand):
             )
 
             if format_choice == "excel":
+                # Single multi-sheet workbook: Resumen/Batallas/Tendencias (+ Flota)
                 generator = ExcelReportGenerator(config)
-                # Add summary sheet
-                summary_rows = H2HReportTemplate.summary_rows(h2h_data)
-                generator.add_rows(summary_rows)
-                # Add battles sheet - need separate sheet
-                # For now, create separate generators for each sheet
-                # We'll use a workaround: generate three separate files
-                generator.generate()
-                # Battles sheet
-                battles_config = ReportConfig(
-                    title=f"{filename_input}_Batallas",
-                    output_path=output_path,
-                    include_timestamp=include_ts,
-                    format="excel",
-                )
-                battles_gen = ExcelReportGenerator(battles_config)
-                battles_rows = H2HReportTemplate.battle_rows(h2h_data)
-                battles_gen.add_rows(battles_rows)
-                battles_gen.generate()
-                # Trends sheet
-                trends_config = ReportConfig(
-                    title=f"{filename_input}_Tendencias",
-                    output_path=output_path,
-                    include_timestamp=include_ts,
-                    format="excel",
-                )
-                trends_gen = ExcelReportGenerator(trends_config)
-                trends_rows = H2HReportTemplate.trend_rows(h2h_data)
-                trends_gen.add_rows(trends_rows)
-                trends_gen.generate()
-                # Fleet breakdown sheet
+                generator.add_sheet("Resumen", H2HReportTemplate.summary_rows(h2h_data))
+                generator.add_sheet("Batallas", H2HReportTemplate.battle_rows(h2h_data))
+                generator.add_sheet("Tendencias", H2HReportTemplate.trend_rows(h2h_data))
                 fleet_rows = H2HReportTemplate.fleet_breakdown_rows(h2h_data)
                 if fleet_rows:
-                    fleet_config = ReportConfig(
-                        title=f"{filename_input}_Flota",
-                        output_path=output_path,
-                        include_timestamp=include_ts,
-                        format="excel",
-                    )
-                    fleet_gen = ExcelReportGenerator(fleet_config)
-                    fleet_gen.add_rows(fleet_rows)
-                    fleet_gen.generate()
-                    print_success(f"✅ Reporte H2H generado (4 archivos) en: {output_path}")
-                else:
-                    print_success(f"✅ Reporte H2H generado (3 archivos) en: {output_path}")
+                    generator.add_sheet("Flota", fleet_rows)
+                output_file = generator.generate()
+                print_success(f"✅ Reporte H2H generado: {output_file}")
             else:
                 generator = JsonReportGenerator(config)
                 # JSON combines all data
