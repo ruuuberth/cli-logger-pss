@@ -32,6 +32,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            native_app/pyproject.toml
+            native_app/requirements.txt
 
       - name: Install package with dev extra
         working-directory: native_app
@@ -65,6 +69,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            native_app/pyproject.toml
+            native_app/requirements.txt
 
       - name: Install package with dev extra
         working-directory: native_app
@@ -81,6 +89,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pytest-results-windows
-          path: native_app/.pytest_cache\
+          path: native_app/.pytest_cache/
           if-no-files-found: ignore
           retention-days: 3
