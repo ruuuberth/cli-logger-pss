@@ -108,3 +108,9 @@ jobs:
           PSS_BUILD_GIT_SHA: ${{ github.sha }}
           PSS_BUILD_SOURCE: native-build
         run: ./scripts/build.ps1
+
+      - name: Install test dependencies
+        run: python -m pip install pytest
+
+      - name: Run build verification tests
+        run: python -m pytest -q tests/test_api_flow_capture.py tests/test_build_info.py

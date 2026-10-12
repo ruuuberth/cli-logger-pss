@@ -30,7 +30,10 @@ def _atomic_write(target: Path, write_fn: Callable[[Path], None]) -> Path:
         write_fn(tmp)
         os.replace(tmp, target)
     except BaseException:
-        tmp.unlink(missing_ok=True)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass  # Windows: unlink fails with an open handle; leave the temp
         raise
     return target
 
@@ -177,7 +180,16 @@ class ExcelReportGenerator(ReportGenerator):
             ws = wb.create_sheet(name)
             self._write_sheet(ws, rows)
 
-        return _atomic_write(output_file, lambda p: wb.save(p))
+        def _write_xlsx(p: Path) -> None:
+            # Save via a file object we own: the ``with`` guarantees the OS
+            # handle is closed even if ``wb.save`` raises mid-write. openpyxl
+            # leaves its zip archive open on failure, and Windows cannot
+            # unlink a file with an open handle, so passing the path would
+            # strand the temp file in _atomic_write's cleanup.
+            with open(p, "wb") as f:
+                wb.save(f)
+
+        return _atomic_write(output_file, _write_xlsx)
 
 
 class CsvReportGenerator(ReportGenerator):
