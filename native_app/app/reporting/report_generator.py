@@ -1,11 +1,52 @@
 """Report Generator base class and interfaces"""
 from __future__ import annotations
 
+import csv
+import json
+import os
+import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from dataclasses import dataclass
 from datetime import datetime
+
+
+def _atomic_write(target: Path, write_fn: Callable[[Path], None]) -> Path:
+    """Write ``write_fn(tmp)`` and publish atomically with ``os.replace``.
+
+    - temp file lives in ``target.parent`` (same filesystem; required for the
+      atomicity of ``os.replace``), never in the system temp dir
+    - success: ``os.replace(tmp, target)`` — atomic rename, readers see the
+      old or the new file, never a half-written one
+    - failure: unlink the temp and re-raise; the destination remains
+      byte-identical (if it existed) or absent (if it did not)
+
+    Note: this covers in-process failures (any exception, incl. ``OSError``);
+    it does not add fsync durability against OS/power crashes.
+    """
+    tmp = target.parent / f".{target.name}.tmp-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    try:
+        write_fn(tmp)
+        os.replace(tmp, target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return target
+
+
+def _write_csv_rows(path: Path, rows: list[dict[str, Any]], headers: list[str]) -> None:
+    """Write CSV rows to ``path`` (DictWriter needs an open file object)."""
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_json_rows(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Write JSON rows to ``path`` (json.dump needs an open file object)."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=2, ensure_ascii=False, default=str)
 
 
 @dataclass
@@ -136,8 +177,7 @@ class ExcelReportGenerator(ReportGenerator):
             ws = wb.create_sheet(name)
             self._write_sheet(ws, rows)
 
-        wb.save(output_file)
-        return output_file
+        return _atomic_write(output_file, lambda p: wb.save(p))
 
 
 class CsvReportGenerator(ReportGenerator):
@@ -156,13 +196,8 @@ class CsvReportGenerator(ReportGenerator):
         # Get headers
         headers = list(self.data[0].keys()) if self.data else []
 
-        # Write CSV
-        with open(output_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-            writer.writerows(self.data)
-
-        return output_file
+        # Write CSV (to temp, then publish atomically)
+        return _atomic_write(output_file, lambda p: _write_csv_rows(p, self.data, headers))
 
 
 class JsonReportGenerator(ReportGenerator):
@@ -178,8 +213,5 @@ class JsonReportGenerator(ReportGenerator):
         output_file = self._get_output_filename("json")
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write JSON
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False, default=str)
-
-        return output_file
+        # Write JSON (to temp, then publish atomically)
+        return _atomic_write(output_file, lambda p: _write_json_rows(p, self.data))
