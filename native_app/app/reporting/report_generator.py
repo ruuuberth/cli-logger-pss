@@ -1,11 +1,52 @@
 """Report Generator base class and interfaces"""
 from __future__ import annotations
 
+import csv
+import json
+import os
+import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from dataclasses import dataclass
 from datetime import datetime
+
+
+def _atomic_write(target: Path, write_fn: Callable[[Path], None]) -> Path:
+    """Write ``write_fn(tmp)`` and publish atomically with ``os.replace``.
+
+    - temp file lives in ``target.parent`` (same filesystem; required for the
+      atomicity of ``os.replace``), never in the system temp dir
+    - success: ``os.replace(tmp, target)`` — atomic rename, readers see the
+      old or the new file, never a half-written one
+    - failure: unlink the temp and re-raise; the destination remains
+      byte-identical (if it existed) or absent (if it did not)
+
+    Note: this covers in-process failures (any exception, incl. ``OSError``);
+    it does not add fsync durability against OS/power crashes.
+    """
+    tmp = target.parent / f".{target.name}.tmp-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    try:
+        write_fn(tmp)
+        os.replace(tmp, target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return target
+
+
+def _write_csv_rows(path: Path, rows: list[dict[str, Any]], headers: list[str]) -> None:
+    """Write CSV rows to ``path`` (DictWriter needs an open file object)."""
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_json_rows(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Write JSON rows to ``path`` (json.dump needs an open file object)."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=2, ensure_ascii=False, default=str)
 
 
 @dataclass
@@ -49,54 +90,94 @@ class ReportGenerator(ABC):
 class ExcelReportGenerator(ReportGenerator):
     """Generate reports in Excel format (.xlsx)"""
 
+    DEFAULT_SHEET = "Data"
+    _INVALID_SHEET_CHARS = set('[]:*?/\\')
+    _MAX_SHEET_NAME_LENGTH = 31
+
+    def __init__(self, config: ReportConfig):
+        super().__init__(config)
+        # Single source of truth: sheet name -> rows (insertion-ordered).
+        self._sheets: dict[str, list[dict[str, Any]]] = {}
+
+    def add_sheet(self, name: str, rows: list[dict[str, Any]]) -> None:
+        """Add rows to a named sheet (created on first call for that name).
+
+        Per-sheet emptiness is the caller's choice: an empty ``rows`` list
+        still registers the sheet.
+        """
+        name = name or self.DEFAULT_SHEET
+        if name in self._sheets:
+            raise ValueError(f"Ya existe una hoja con el nombre: {name}")
+        if len(name) > self._MAX_SHEET_NAME_LENGTH:
+            raise ValueError(
+                f"Nombre de hoja demasiado largo (máx. {self._MAX_SHEET_NAME_LENGTH} caracteres): {name!r}"
+            )
+        invalid = sorted(set(name) & self._INVALID_SHEET_CHARS)
+        if invalid:
+            raise ValueError(f"Nombre de hoja contiene caracteres no válidos ({''.join(invalid)}): {name!r}")
+        self._sheets.setdefault(name, []).extend(rows)
+
+    def add_rows(self, rows: list[dict[str, Any]]) -> None:
+        """Add rows to the default sheet (backward-compatible entry point)."""
+        self.add_sheet(self.DEFAULT_SHEET, rows)
+
+    def _write_sheet(self, ws, rows: list[dict[str, Any]]) -> None:
+        """Write headers and rows with styling into a worksheet."""
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+
+        if not rows:
+            return
+
+        headers = list(rows[0].keys())
+
+        # Write headers
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Write data rows
+        for row_idx, row_data in enumerate(rows, 2):
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=row_data.get(header))
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+        # Auto-adjust column widths
+        for col_idx, header in enumerate(headers, 1):
+            max_length = len(str(header))
+            for row_data in rows:
+                max_length = max(max_length, len(str(row_data.get(header, ""))))
+            ws.column_dimensions[get_column_letter(col_idx)].width = min(max_length + 2, 50)
+
     def generate(self) -> Path:
-        """Generate Excel report"""
+        """Generate Excel report (one workbook, one sheet per added dataset)"""
         try:
             from openpyxl import Workbook
-            from openpyxl.styles import Font, PatternFill, Alignment
         except ImportError:
             raise ImportError("openpyxl no está instalado. Instala con: pip install openpyxl")
 
-        if not self.data:
+        if not any(self._sheets.values()):
             raise ValueError("No hay datos para reportar")
 
         output_file = self._get_output_filename("xlsx")
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create workbook
+        # Create workbook and drop the default sheet so every sheet is
+        # created uniformly via create_sheet (preserves insertion order).
         wb = Workbook()
-        ws = wb.active
-        ws.title = "Data"
+        default_ws = wb.active
+        if default_ws is not None:
+            wb.remove(default_ws)
+        for name, rows in self._sheets.items():
+            ws = wb.create_sheet(name)
+            self._write_sheet(ws, rows)
 
-        # Get headers from first row
-        if self.data:
-            headers = list(self.data[0].keys())
-            
-            # Write headers
-            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-            header_font = Font(bold=True, color="FFFFFF")
-            
-            for col_idx, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col_idx, value=header)
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-
-            # Write data rows
-            for row_idx, row_data in enumerate(self.data, 2):
-                for col_idx, header in enumerate(headers, 1):
-                    cell = ws.cell(row=row_idx, column=col_idx, value=row_data.get(header))
-                    cell.alignment = Alignment(horizontal="left", vertical="center")
-
-            # Auto-adjust column widths
-            for col_idx, header in enumerate(headers, 1):
-                max_length = len(str(header))
-                for row_data in self.data:
-                    max_length = max(max_length, len(str(row_data.get(header, ""))))
-                ws.column_dimensions[chr(64 + col_idx)].width = min(max_length + 2, 50)
-
-        wb.save(output_file)
-        return output_file
+        return _atomic_write(output_file, lambda p: wb.save(p))
 
 
 class CsvReportGenerator(ReportGenerator):
@@ -115,13 +196,8 @@ class CsvReportGenerator(ReportGenerator):
         # Get headers
         headers = list(self.data[0].keys()) if self.data else []
 
-        # Write CSV
-        with open(output_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-            writer.writerows(self.data)
-
-        return output_file
+        # Write CSV (to temp, then publish atomically)
+        return _atomic_write(output_file, lambda p: _write_csv_rows(p, self.data, headers))
 
 
 class JsonReportGenerator(ReportGenerator):
@@ -137,8 +213,5 @@ class JsonReportGenerator(ReportGenerator):
         output_file = self._get_output_filename("json")
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write JSON
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False, default=str)
-
-        return output_file
+        # Write JSON (to temp, then publish atomically)
+        return _atomic_write(output_file, lambda p: _write_json_rows(p, self.data))

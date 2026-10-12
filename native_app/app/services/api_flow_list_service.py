@@ -222,6 +222,8 @@ class ApiFlowListService:
         date_to: datetime | None = None,
         outcome: str | None = None,
         limit: int = 1000,
+        *,
+        trend_bucket: str = "day",
     ) -> dict[str, Any] | None:
         """Get comprehensive H2H report data"""
         summary = self.repository.get_h2h_summary(
@@ -249,6 +251,7 @@ class ApiFlowListService:
             date_from=date_from,
             date_to=date_to,
             outcome=outcome,
+            bucket=trend_bucket,
         )
 
         breakdown = self.repository.get_h2h_fleet_breakdown(
