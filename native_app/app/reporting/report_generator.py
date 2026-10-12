@@ -30,7 +30,10 @@ def _atomic_write(target: Path, write_fn: Callable[[Path], None]) -> Path:
         write_fn(tmp)
         os.replace(tmp, target)
     except BaseException:
-        tmp.unlink(missing_ok=True)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass  # Windows: unlink fails with an open handle; leave the temp
         raise
     return target
 
