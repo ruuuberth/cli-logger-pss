@@ -44,7 +44,6 @@ Con esto la captura queda enfocada en batallas y evita ruido de otros servicios.
 
 Formato recomendado para listas en `.env`: JSON array.
 Ejemplo: `API_FLOW_IGNORE_HOSTS=["host1","host2"]`
-Compatibilidad temporal: el formato CSV (`host1,host2`) sigue funcionando en esta release pero queda deprecado.
 
 ## Seguridad
 
