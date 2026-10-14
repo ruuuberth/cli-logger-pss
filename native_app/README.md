@@ -117,10 +117,6 @@ Variables de entorno útiles para reportes (ejemplos en `.env.dev.example`):
 - `REPORT_INCLUDE_TIMESTAMP` : `true|false`
 
 
-Compatibilidad temporal:
-- CSV (`host1,host2`) sigue funcionando en esta release con warning deprecado.
-- En la siguiente release se retirará el soporte CSV.
-
 ## DB local
 
 Con `.env.dev.example`:
