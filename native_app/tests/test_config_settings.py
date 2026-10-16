@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
+
+import pytest
+from pydantic_settings import SettingsError
 
 from app.core.config import Settings
 
@@ -17,7 +19,8 @@ def test_settings_loads_from_env_file(tmp_path: Path, monkeypatch) -> None:
         "DATABASE_URL=sqlite:///./custom.db\n"
         'API_FLOW_IGNORE_HOSTS=["one.test","two.test"]\n'
         'API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"]\n'
-        'API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3","/BattleService/GetBattle3/"]\n',
+        'API_FLOW_CAPTURE_PATH_ALLOWLIST='
+        '["/BattleService/GetBattle3","/BattleService/GetBattle3/"]\n',
         encoding="utf-8",
     )
 
@@ -32,9 +35,11 @@ def test_settings_loads_from_env_file(tmp_path: Path, monkeypatch) -> None:
     ]
 
 
-def test_settings_empty_string_list_field_returns_empty_list(
+def test_settings_empty_json_array_list_field_returns_empty_list(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """Empty-value contract (issue #16): an empty list is spelled `FIELD=[]`."""
+    monkeypatch.delenv("API_FLOW_IGNORE_HOSTS", raising=False)
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
         "API_FLOW_IGNORE_HOSTS=[]\n",
@@ -42,6 +47,28 @@ def test_settings_empty_string_list_field_returns_empty_list(
     )
     loaded = Settings()
     assert loaded.API_FLOW_IGNORE_HOSTS == []
+
+
+def test_settings_allowed_hosts_env_json_override(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """ALLOWED_HOSTS accepts only a JSON array from OS env vars (no CSV fallback)."""
+    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ALLOWED_HOSTS", '["https://example.com"]')
+    loaded = Settings()
+    assert loaded.ALLOWED_HOSTS == ["https://example.com"]
+
+
+def test_settings_allowed_hosts_env_csv_raises_settings_error(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A CSV value for ALLOWED_HOSTS via OS env var raises SettingsError (issue #16)."""
+    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ALLOWED_HOSTS", "https://example.com,https://other.com")
+    with pytest.raises(SettingsError):
+        Settings()
 
 
 def test_settings_default_capture_allowlists(monkeypatch, tmp_path: Path) -> None:

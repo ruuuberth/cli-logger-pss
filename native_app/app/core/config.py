@@ -1,4 +1,5 @@
 import logging
+from typing import Any, List
 
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
@@ -7,10 +8,54 @@ from pydantic_settings import (
     EnvSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
+    SettingsError,
 )
-from typing import List
 
 logger = logging.getLogger(__name__)
+
+# Contrato de valores de lista desde la eliminación del soporte CSV (#16):
+# los campos tipo List solo aceptan JSON array. Un valor vacío (`FIELD=`) es
+# inválido y falla al arrancar; para una lista vacía usar `FIELD=[]`.
+_JSON_ARRAY_HINT = (
+    'Usa formato JSON array en .env, p. ej. API_FLOW_IGNORE_HOSTS=["api.pixelstarships.com"]. '
+    "Para una lista vacía usa FIELD=[] (p. ej. API_FLOW_IGNORE_HOSTS=[])."
+)
+
+
+def _raise_config_invalid(field_name: str, value: Any, exc: Exception) -> None:
+    logger.error(
+        "event=config_invalid field=%s hint=%s",
+        field_name,
+        _JSON_ARRAY_HINT,
+        exc_info=True,
+    )
+    raise SettingsError(
+        f"valor inválido para '{field_name}' ({value!r}): {_JSON_ARRAY_HINT}"
+    ) from exc
+
+
+class HintedEnvSettingsSource(EnvSettingsSource):
+    """EnvSettingsSource con log + hint de migración al fallar un valor de lista."""
+
+    def decode_complex_value(
+        self, field_name: str, field: FieldInfo, value: Any
+    ) -> Any:
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except ValueError as exc:
+            _raise_config_invalid(field_name, value, exc)
+
+
+class HintedDotEnvSettingsSource(DotEnvSettingsSource):
+    """DotEnvSettingsSource con log + hint de migración al fallar un valor de lista."""
+
+    def decode_complex_value(
+        self, field_name: str, field: FieldInfo, value: Any
+    ) -> Any:
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except ValueError as exc:
+            _raise_config_invalid(field_name, value, exc)
 
 
 class Settings(BaseSettings):
@@ -85,11 +130,11 @@ class Settings(BaseSettings):
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ):
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,
-            env_settings,
-            dotenv_settings,
+            HintedEnvSettingsSource(settings_cls),
+            HintedDotEnvSettingsSource(settings_cls),
             file_secret_settings,
         )
 
