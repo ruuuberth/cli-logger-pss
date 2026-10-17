@@ -29,7 +29,7 @@ def _atomic_write(target: Path, write_fn: Callable[[Path], None]) -> Path:
     try:
         write_fn(tmp)
         os.replace(tmp, target)
-    except BaseException:
+    except Exception:
         try:
             tmp.unlink(missing_ok=True)
         except OSError:
