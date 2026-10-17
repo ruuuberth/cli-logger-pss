@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List
+from typing import Any
 
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
@@ -34,28 +34,24 @@ def _raise_config_invalid(field_name: str, value: Any, exc: Exception) -> None:
     ) from exc
 
 
-class HintedEnvSettingsSource(EnvSettingsSource):
+class _HintedDecodeMixin:
+    """Shared ``decode_complex_value``: logs the migration hint before re-raising."""
+
+    def decode_complex_value(
+        self, field_name: str, field: FieldInfo, value: Any
+    ) -> Any:
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except ValueError as exc:
+            _raise_config_invalid(field_name, value, exc)
+
+
+class HintedEnvSettingsSource(_HintedDecodeMixin, EnvSettingsSource):
     """EnvSettingsSource con log + hint de migración al fallar un valor de lista."""
 
-    def decode_complex_value(
-        self, field_name: str, field: FieldInfo, value: Any
-    ) -> Any:
-        try:
-            return super().decode_complex_value(field_name, field, value)
-        except ValueError as exc:
-            _raise_config_invalid(field_name, value, exc)
 
-
-class HintedDotEnvSettingsSource(DotEnvSettingsSource):
+class HintedDotEnvSettingsSource(_HintedDecodeMixin, DotEnvSettingsSource):
     """DotEnvSettingsSource con log + hint de migración al fallar un valor de lista."""
-
-    def decode_complex_value(
-        self, field_name: str, field: FieldInfo, value: Any
-    ) -> Any:
-        try:
-            return super().decode_complex_value(field_name, field, value)
-        except ValueError as exc:
-            _raise_config_invalid(field_name, value, exc)
 
 
 class Settings(BaseSettings):
@@ -69,7 +65,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./pss_logger.db"
 
     # CORS
-    ALLOWED_HOSTS: List[str] = [
+    ALLOWED_HOSTS: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
@@ -97,15 +93,15 @@ class Settings(BaseSettings):
     # H2H fleet breakdown (#8) real usage history at a linear DB cost.
     API_FLOW_REPLAYS_PER_PAIR: int = 1
     API_FLOW_CAPTURE_HTTPS: bool = True
-    API_FLOW_IGNORE_HOSTS: List[str] = [
+    API_FLOW_IGNORE_HOSTS: list[str] = [
         "player-auth.services.api.unity.com",
         "config.services.api.unity.com",
         "config.uca.cloud.unity3d.com",
         "collect.analytics.unity3d.com",
         "perf-events.cloud.unity3d.com",
     ]
-    API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = ["api.pixelstarships.com"]
-    API_FLOW_CAPTURE_PATH_ALLOWLIST: List[str] = ["/BattleService/GetBattle3"]
+    API_FLOW_CAPTURE_HOST_ALLOWLIST: list[str] = ["api.pixelstarships.com"]
+    API_FLOW_CAPTURE_PATH_ALLOWLIST: list[str] = ["/BattleService/GetBattle3"]
 
     # Reporting
     REPORT_ENABLE: bool = True
