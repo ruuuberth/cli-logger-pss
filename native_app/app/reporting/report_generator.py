@@ -118,7 +118,7 @@ class ExcelReportGenerator(ReportGenerator):
         invalid = sorted(set(name) & self._INVALID_SHEET_CHARS)
         if invalid:
             raise ValueError(f"Nombre de hoja contiene caracteres no válidos ({''.join(invalid)}): {name!r}")
-        self._sheets.setdefault(name, []).extend(rows)
+        self._sheets[name] = list(rows)
 
     def add_rows(self, rows: list[dict[str, Any]]) -> None:
         """Add rows to the default sheet (backward-compatible entry point)."""
