@@ -106,7 +106,7 @@ native_app/
 | `API_FLOW_REPLAYS_PER_PAIR` | Normalized replays kept per player pair (default 1 = newest only; higher = fleet-breakdown usage history) |
 | `CLI_FORCE_ASCII` | Force ASCII output (Windows legacy) |
 
-List values: **JSON array format preferred** (CSV deprecated).
+List values: **JSON array format required** (CSV support removed in v0.4.0).
 
 ---
 
@@ -147,7 +147,7 @@ List values: **JSON array format preferred** (CSV deprecated).
 1. **DB path**: Defaults to `~/.pss_logger/pss_logger.db` (created by `configure_environment()`)
 2. **Addon SHA**: Update `EXPECTED_MITM_ADDON_SHA256` in `api_flow_capture.py` when `mitm_api_flow_addon.py` changes
 3. **Line endings**: `.gitattributes` enforces LF for `.py` files
-4. **Version**: Single source in `pyproject.toml` (currently `0.3.0`); embedded in build metadata at compile time. Release workflow derives the release number from the git tag (`vX.Y.Z`), so keep tag and pyproject aligned
+4. **Version**: Single source in `pyproject.toml` (currently `0.4.0`); embedded in build metadata at compile time. Release workflow derives the release number from the git tag (`vX.Y.Z`), so keep tag and pyproject aligned
 5. **No GUI code**: Legacy Qt UI removed — the app is CLI-only (Rich console menu, 9 commands). Qt-era docs references were purged in `docs/sync-v0.3.0-reality`
 
 ---

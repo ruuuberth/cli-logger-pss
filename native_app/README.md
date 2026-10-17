@@ -88,8 +88,9 @@ Defaults recomendados para rendimiento:
 - `API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"]`
 - `API_FLOW_IGNORE_HOSTS` debe incluir hosts Unity de auth/config/perf para evitar ruido TLS.
 
-Formato recomendado de listas en `.env`: JSON array, por ejemplo:
+Formato requerido de listas en `.env`: JSON array, por ejemplo:
 - `API_FLOW_IGNORE_HOSTS=["player-auth.services.api.unity.com","perf-events.cloud.unity3d.com"]`
+- Una lista vacía se escribe `FIELD=[]`; un valor vacío (`FIELD=`) es inválido y falla al arrancar (issue #16).
 
 ## Reporting (CLI)
 
@@ -115,11 +116,6 @@ Variables de entorno útiles para reportes (ejemplos en `.env.dev.example`):
 - `REPORT_OUTPUT_DIR` : ruta por defecto para reportes
 - `REPORT_DEFAULT_FORMAT` : `excel|csv|json`
 - `REPORT_INCLUDE_TIMESTAMP` : `true|false`
-
-
-Compatibilidad temporal:
-- CSV (`host1,host2`) sigue funcionando en esta release con warning deprecado.
-- En la siguiente release se retirará el soporte CSV.
 
 ## DB local
 

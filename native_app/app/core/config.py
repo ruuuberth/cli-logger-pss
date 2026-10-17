@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
@@ -7,49 +8,50 @@ from pydantic_settings import (
     EnvSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
+    SettingsError,
 )
-from typing import List
 
 logger = logging.getLogger(__name__)
 
-
-_LIST_FIELDS = {
-    "ALLOWED_HOSTS",
-    "API_FLOW_IGNORE_HOSTS",
-    "API_FLOW_CAPTURE_HOST_ALLOWLIST",
-    "API_FLOW_CAPTURE_PATH_ALLOWLIST",
-}
-
-
-class _ListCompatMixin:
-    _warned_fields: set[str] = set()
-
-    def _prepare_list_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        if field_name in _LIST_FIELDS and isinstance(value, str):
-            cleaned_value = value.strip()
-            if not cleaned_value:
-                return []
-            if cleaned_value.startswith("["):
-                return super().prepare_field_value(field_name, field, value, value_is_complex)
-            if field_name not in self._warned_fields:
-                logger.warning(
-                    "event=config_list_csv_deprecated field=%s message=%s",
-                    field_name,
-                    'Usa JSON array en .env, ejemplo: ["api.pixelstarships.com"]',
-                )
-                self._warned_fields.add(field_name)
-            return [token.strip() for token in cleaned_value.split(",") if token.strip()]
-        return super().prepare_field_value(field_name, field, value, value_is_complex)
+# Contrato de valores de lista desde la eliminación del soporte CSV (#16):
+# los campos tipo List solo aceptan JSON array. Un valor vacío (`FIELD=`) es
+# inválido y falla al arrancar; para una lista vacía usar `FIELD=[]`.
+_JSON_ARRAY_HINT = (
+    'Usa formato JSON array en .env, p. ej. API_FLOW_IGNORE_HOSTS=["api.pixelstarships.com"]. '
+    "Para una lista vacía usa FIELD=[] (p. ej. API_FLOW_IGNORE_HOSTS=[])."
+)
 
 
-class ListCompatEnvSettingsSource(_ListCompatMixin, EnvSettingsSource):
-    def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        return self._prepare_list_field_value(field_name, field, value, value_is_complex)
+def _raise_config_invalid(field_name: str, value: Any, exc: Exception) -> None:
+    logger.error(
+        "event=config_invalid field=%s hint=%s",
+        field_name,
+        _JSON_ARRAY_HINT,
+        exc_info=True,
+    )
+    raise SettingsError(
+        f"valor inválido para '{field_name}' ({value!r}): {_JSON_ARRAY_HINT}"
+    ) from exc
 
 
-class ListCompatDotEnvSettingsSource(_ListCompatMixin, DotEnvSettingsSource):
-    def prepare_field_value(self, field_name: str, field: FieldInfo, value, value_is_complex: bool):
-        return self._prepare_list_field_value(field_name, field, value, value_is_complex)
+class _HintedDecodeMixin:
+    """Shared ``decode_complex_value``: logs the migration hint before re-raising."""
+
+    def decode_complex_value(
+        self, field_name: str, field: FieldInfo, value: Any
+    ) -> Any:
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except ValueError as exc:
+            _raise_config_invalid(field_name, value, exc)
+
+
+class HintedEnvSettingsSource(_HintedDecodeMixin, EnvSettingsSource):
+    """EnvSettingsSource con log + hint de migración al fallar un valor de lista."""
+
+
+class HintedDotEnvSettingsSource(_HintedDecodeMixin, DotEnvSettingsSource):
+    """DotEnvSettingsSource con log + hint de migración al fallar un valor de lista."""
 
 
 class Settings(BaseSettings):
@@ -58,18 +60,18 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "PixelStarships Logger"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    
+
     # Database
     DATABASE_URL: str = "sqlite:///./pss_logger.db"
-    
+
     # CORS
-    ALLOWED_HOSTS: List[str] = [
+    ALLOWED_HOSTS: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
     ]
-    
+
     # PixelStarships API
     PSS_API_BASE_URL: str = "https://api.pixelstarships.com"
     PSS_API_REQUEST_TIMEOUT_SECONDS: int = 20
@@ -91,15 +93,15 @@ class Settings(BaseSettings):
     # H2H fleet breakdown (#8) real usage history at a linear DB cost.
     API_FLOW_REPLAYS_PER_PAIR: int = 1
     API_FLOW_CAPTURE_HTTPS: bool = True
-    API_FLOW_IGNORE_HOSTS: List[str] = [
+    API_FLOW_IGNORE_HOSTS: list[str] = [
         "player-auth.services.api.unity.com",
         "config.services.api.unity.com",
         "config.uca.cloud.unity3d.com",
         "collect.analytics.unity3d.com",
         "perf-events.cloud.unity3d.com",
     ]
-    API_FLOW_CAPTURE_HOST_ALLOWLIST: List[str] = ["api.pixelstarships.com"]
-    API_FLOW_CAPTURE_PATH_ALLOWLIST: List[str] = ["/BattleService/GetBattle3"]
+    API_FLOW_CAPTURE_HOST_ALLOWLIST: list[str] = ["api.pixelstarships.com"]
+    API_FLOW_CAPTURE_PATH_ALLOWLIST: list[str] = ["/BattleService/GetBattle3"]
 
     # Reporting
     REPORT_ENABLE: bool = True
@@ -117,7 +119,6 @@ class Settings(BaseSettings):
     LOG_FILE: str = "./native_app/logs/native_app.log"
 
     @classmethod
-
     def settings_customise_sources(
         cls,
         settings_cls,
@@ -125,12 +126,13 @@ class Settings(BaseSettings):
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ):
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,
-            ListCompatEnvSettingsSource(settings_cls),
-            ListCompatDotEnvSettingsSource(settings_cls),
+            HintedEnvSettingsSource(settings_cls),
+            HintedDotEnvSettingsSource(settings_cls),
             file_secret_settings,
         )
-    
+
+
 settings = Settings()
