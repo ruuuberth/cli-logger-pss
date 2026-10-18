@@ -12,7 +12,7 @@
 # Setup
 cd native_app && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
-# Run tests (140 tests, ~4s)
+# Run tests (~4s)
 .venv/bin/python -m pytest
 
 # Single test
@@ -37,7 +37,7 @@ cp ../.env.dev.example .env   # .env lives INSIDE native_app/
 # Setup
 cd native_app && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 
-# Run tests (140 tests, ~4s)
+# Run tests (~4s)
 .venv/Scripts/python.exe -m pytest
 
 # Single test
@@ -87,7 +87,7 @@ native_app/
 │   ├── services/            # Capture, storage, list, inspectors, catalogs
 │   └── reporting/           # Excel/CSV/JSON generators
 ├── scripts/build.sh|.ps1    # PyInstaller one-file → portable ZIP
-├── tests/                   # 140 tests (pytest)
+├── tests/                   # pytest suite
 └── pyproject.toml           # deps, scripts, pytest config
 ```
 
