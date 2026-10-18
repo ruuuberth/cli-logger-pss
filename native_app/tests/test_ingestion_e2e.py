@@ -85,7 +85,7 @@ def _battle_xml(
         f'DefendingUserXml="{defender_user}" '
         f'AttackingShipXml="{attacker_ship}" '
         f'DefendingShipXml="{defender_ship}" '
-        f'Commands="{commands}" '
+        f'Commands="{commands}"'
         "/></GetBattle></BattleService>"
     )
 
