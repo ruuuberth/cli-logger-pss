@@ -83,7 +83,7 @@
 
 ```bash
 cd native_app
-.venv/bin/python -m pytest -q          # suite completa (140 tests)
+.venv/bin/python -m pytest -q          # suite completa (~4s)
 python -m app.main                     # arranca la CLI
 pss-native                             # entry point instalado
 pss-native --daemon start|stop|status  # daemon de captura

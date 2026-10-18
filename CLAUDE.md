@@ -24,7 +24,7 @@ python3 -m venv .venv
 
 ### Tests
 ```bash
-# Full suite (~140 tests, ~4s). Run from native_app/ because pyproject sets pythonpath=["."].
+# Full suite (~4s). Run from native_app/ because pyproject sets pythonpath=["."].
 .venv/bin/python -m pytest
 
 # Single test file
