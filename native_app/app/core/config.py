@@ -13,12 +13,14 @@ from pydantic_settings import (
 
 logger = logging.getLogger(__name__)
 
-# Contrato de valores de lista desde la eliminación del soporte CSV (#16):
-# los campos tipo List solo aceptan JSON array. Un valor vacío (`FIELD=`) es
-# inválido y falla al arrancar; para una lista vacía usar `FIELD=[]`.
-_JSON_ARRAY_HINT = (
-    'Usa formato JSON array en .env, p. ej. API_FLOW_IGNORE_HOSTS=["api.pixelstarships.com"]. '
-    "Para una lista vacía usa FIELD=[] (p. ej. API_FLOW_IGNORE_HOSTS=[])."
+# Contrato de valores desde la eliminación del soporte CSV (#16): los
+# campos complejos solo aceptan JSON desde .env/vars de entorno — los
+# campos de lista toman un array JSON, y un valor vacío (`FIELD=`) es
+# inválido y falla al arrancar.
+_JSON_FORMAT_HINT = (
+    'Usa JSON válido en .env (los campos de lista toman un array, p. ej. '
+    'API_FLOW_IGNORE_HOSTS=["api.pixelstarships.com"]; para una lista '
+    'vacía usa FIELD=[], p. ej. API_FLOW_IGNORE_HOSTS=[]).'
 )
 
 
@@ -26,11 +28,11 @@ def _raise_config_invalid(field_name: str, value: Any, exc: Exception) -> None:
     logger.error(
         "event=config_invalid field=%s hint=%s",
         field_name,
-        _JSON_ARRAY_HINT,
+        _JSON_FORMAT_HINT,
         exc_info=True,
     )
     raise SettingsError(
-        f"valor inválido para '{field_name}' ({value!r}): {_JSON_ARRAY_HINT}"
+        f"valor inválido para '{field_name}' ({value!r}): {_JSON_FORMAT_HINT}"
     ) from exc
 
 
@@ -47,11 +49,11 @@ class _HintedDecodeMixin:
 
 
 class HintedEnvSettingsSource(_HintedDecodeMixin, EnvSettingsSource):
-    """EnvSettingsSource con log + hint de migración al fallar un valor de lista."""
+    """EnvSettingsSource con log + hint de migración al fallar un valor."""
 
 
 class HintedDotEnvSettingsSource(_HintedDecodeMixin, DotEnvSettingsSource):
-    """DotEnvSettingsSource con log + hint de migración al fallar un valor de lista."""
+    """DotEnvSettingsSource con log + hint de migración al fallar un valor."""
 
 
 class Settings(BaseSettings):
