@@ -16,7 +16,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare release tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       release_tag: ${{ steps.determine_tag.outputs.release_tag }}
@@ -53,7 +53,7 @@ jobs:
 
   build-linux:
     name: Build Linux Binary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs:
       - prepare
@@ -164,7 +164,7 @@ jobs:
 
   publish-release:
     name: Publish stable release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs:
       - prepare
