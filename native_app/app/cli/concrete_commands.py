@@ -273,9 +273,8 @@ class GenerateBattleReportCommand(CliCommand):
                 title=filename_input,
                 output_path=output_path,
                 include_timestamp=include_ts,
-                format=format_choice,
             )
-            
+
             if format_choice == "excel":
                 generator = ExcelReportGenerator(config)
             elif format_choice == "csv":
@@ -420,7 +419,6 @@ class GenerateH2HReportCommand(CliCommand):
                 title=filename_input,
                 output_path=output_path,
                 include_timestamp=include_ts,
-                format=format_choice,
             )
 
             if format_choice == "excel":
