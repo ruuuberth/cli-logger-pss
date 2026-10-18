@@ -32,7 +32,6 @@ def _generator(tmp_path, cls=ExcelReportGenerator, title="test report"):
             title=title,
             output_path=tmp_path,
             include_timestamp=False,
-            format="excel",
         )
     )
 

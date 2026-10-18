@@ -75,7 +75,6 @@ class ReportConfig:
     title: str
     output_path: Path
     include_timestamp: bool = True
-    format: str = "excel"  # excel, csv, json
 
 
 class ReportGenerator(ABC):
