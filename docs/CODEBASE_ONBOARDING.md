@@ -71,6 +71,7 @@
 - Las acciones `SetItem` se resuelven con el mapping manual por sala en `native_app/app/resources/room_item_slot_mappings.json`, usando nombres canónicos del catálogo de items e ignorando nivel.
 - El inspector de tripulación usa `CharacterActionsNormalized` y `CharacterItemsNormalized` dentro de `battle_replay_characters.character_attributes_json` para renderizar IA, equipo y stats limpias sin exponer el JSON crudo.
 - `Inspector de Batalla` (6) imprime el detalle del replay por clave-valor tras sincronizar eventos pendientes (`runtime.flush_pending()`).
+- `battle_inspector_exporter.py` es la capa de exportación JSON del inspector de batalla: compone `CatalogoResolver`, `room_item_mapping` y `character_inspector_resolver` en un payload simplificado (batalla, salas, tripulantes y acciones). **Hoy está sin cablear en la CLI** — `Inspector de Batalla` (6) imprime el detalle crudo y no pasa por él; su destino (rewire o eliminación) se decide en #33.
 
 ## Convenciones importantes
 
