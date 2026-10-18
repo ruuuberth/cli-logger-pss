@@ -111,6 +111,8 @@ def test_settings_empty_string_list_field_raises_settings_error(
 
     error_records = [
         r for r in caplog.records
-        if r.levelno == logging.ERROR and "field=API_FLOW_IGNORE_HOSTS" in r.getMessage()
+        if r.levelno == logging.ERROR
+        and "event=config_invalid" in r.getMessage()
+        and "field=API_FLOW_IGNORE_HOSTS" in r.getMessage()
     ]
     assert error_records, "expected a structured event=config_invalid ERROR record"
