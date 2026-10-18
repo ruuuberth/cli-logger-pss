@@ -13,14 +13,13 @@ from pydantic_settings import (
 
 logger = logging.getLogger(__name__)
 
-# Contrato de valores desde la eliminación del soporte CSV (#16): los
-# campos complejos solo aceptan JSON desde .env/vars de entorno — los
-# campos de lista toman un array JSON, y un valor vacío (`FIELD=`) es
-# inválido y falla al arrancar.
+# Setting-value contract since CSV support removal (#16): complex fields
+# only accept JSON from .env/env vars — list fields take a JSON array, and
+# a bare empty value (`FIELD=`) is invalid and fails at startup.
 _JSON_FORMAT_HINT = (
-    'Usa JSON válido en .env (los campos de lista toman un array, p. ej. '
-    'API_FLOW_IGNORE_HOSTS=["api.pixelstarships.com"]; para una lista '
-    'vacía usa FIELD=[], p. ej. API_FLOW_IGNORE_HOSTS=[]).'
+    'Use valid JSON in .env (list fields take an array, e.g. '
+    'API_FLOW_IGNORE_HOSTS=["api.pixelstarships.com"]; for an empty list '
+    'use FIELD=[], e.g. API_FLOW_IGNORE_HOSTS=[]).'
 )
 
 
@@ -32,7 +31,7 @@ def _raise_config_invalid(field_name: str, value: Any, exc: Exception) -> None:
         exc_info=True,
     )
     raise SettingsError(
-        f"valor inválido para '{field_name}' ({value!r}): {_JSON_FORMAT_HINT}"
+        f"invalid value for '{field_name}' ({value!r}): {_JSON_FORMAT_HINT}"
     ) from exc
 
 
@@ -49,11 +48,11 @@ class _HintedDecodeMixin:
 
 
 class HintedEnvSettingsSource(_HintedDecodeMixin, EnvSettingsSource):
-    """EnvSettingsSource con log + hint de migración al fallar un valor."""
+    """EnvSettingsSource that logs the JSON-format hint before re-raising."""
 
 
 class HintedDotEnvSettingsSource(_HintedDecodeMixin, DotEnvSettingsSource):
-    """DotEnvSettingsSource con log + hint de migración al fallar un valor."""
+    """DotEnvSettingsSource that logs the JSON-format hint before re-raising."""
 
 
 class Settings(BaseSettings):
