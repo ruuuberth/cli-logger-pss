@@ -127,13 +127,19 @@ class DaemonManager:
         try:
             pid = self._read_pid()
             if sys.platform == "win32":
-                # Check if process exists on Windows
+                # Check if process exists on Windows. Match the exact PID
+                # column instead of a substring so PID 12 does not falsely
+                # match 123, 1200, etc.
                 import subprocess
                 result = subprocess.run(
                     ["tasklist", "/FI", f"PID eq {pid}"],
                     capture_output=True, text=True
                 )
-                return str(pid) in result.stdout
+                for line in result.stdout.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 2 and parts[1] == str(pid):
+                        return True
+                return False
             else:
                 # On Unix, signal 0 checks if process exists
                 os.kill(pid, 0)
