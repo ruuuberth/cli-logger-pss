@@ -318,7 +318,7 @@ def test_excel_heterogeneous_rows_preserve_extra_keys(tmp_path) -> None:
     # Missing values serialize as None
     assert ws.cell(row=2, column=3).value is None
     assert ws.cell(row=3, column=3).value == "LOST_C"
-    assert ws.cell(row=3, column=4) is None or ws.cell(row=3, column=4).value is None
+    assert ws.cell(row=3, column=4).value is None
     assert ws.cell(row=4, column=2).value is None
     assert ws.cell(row=4, column=4).value == "LOST_D"
 
