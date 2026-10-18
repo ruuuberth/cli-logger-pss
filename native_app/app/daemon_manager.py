@@ -127,9 +127,11 @@ class DaemonManager:
         try:
             pid = self._read_pid()
             if sys.platform == "win32":
-                # Check if process exists on Windows. Match the exact PID
-                # column instead of a substring so PID 12 does not falsely
-                # match 123, 1200, etc.
+                # Check if process exists on Windows. Match the PID as a
+                # whole whitespace-delimited token instead of a substring so
+                # PID 12 does not falsely match 123, 1200, etc. A plain token
+                # check also survives image names with spaces ("My App.exe"),
+                # which shift tasklist's fixed-width columns.
                 import subprocess
                 result = subprocess.run(
                     ["tasklist", "/FI", f"PID eq {pid}"],
@@ -137,7 +139,7 @@ class DaemonManager:
                 )
                 for line in result.stdout.splitlines():
                     parts = line.split()
-                    if len(parts) >= 2 and parts[1] == str(pid):
+                    if str(pid) in parts:
                         return True
                 return False
             else:

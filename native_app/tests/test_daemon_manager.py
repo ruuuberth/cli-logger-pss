@@ -188,6 +188,34 @@ def test_is_running_win32_tasklist_pid_prefix_does_not_match(tmp_path, monkeypat
     assert dm._is_running() is False
 
 
+def test_is_running_win32_tasklist_spaced_image_name(tmp_path, monkeypatch) -> None:
+    """Regression: image names with spaces shift tasklist columns.
+
+    tasklist pads the image-name column to a fixed width, so a name like
+    "My App.exe" makes parts[1] hold "App.exe" instead of the PID. The PID
+    must still be found as a whole whitespace-delimited token.
+    """
+    dm = _make_manager(tmp_path)
+    dm.daemon_dir.mkdir(parents=True, exist_ok=True)
+    dm.pid_file.write_text("12\n")
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    def _fake_run(cmd, capture_output, text):
+        class _Result:
+            stdout = (
+                "Nombre de la imagen                     PID Sesión        Uso de memoria\n"
+                "========================= ======== ================ ============\n"
+                "My App.exe                              12 Consola                    1     5,678 K\n"
+            )
+
+        return _Result()
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    # Old code: parts[1] == "App.exe" != "12" -> False (bug). Fixed: "12" is a token -> True.
+    assert dm._is_running() is True
+
+
 # ---------------------------------------------------------------------------
 # stop
 # ---------------------------------------------------------------------------
