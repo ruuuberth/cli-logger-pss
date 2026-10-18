@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build-linux:
     name: Build Linux Binary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -124,7 +124,7 @@ jobs:
 
   publish-prerelease:
     name: Publish develop pre-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs:
       - build-linux
