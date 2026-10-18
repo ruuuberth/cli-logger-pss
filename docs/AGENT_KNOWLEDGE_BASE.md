@@ -142,7 +142,7 @@ API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"]
 API_FLOW_IGNORE_HOSTS=["..."]
 ```
 
-JSON arrays are the preferred list format. CSV list syntax exists only for compatibility and is deprecated.
+JSON arrays are the preferred list format.
 
 The intended narrow capture target is the Pixel Starships battle endpoint. Avoid broadening capture filters unless the task requires it.
 
