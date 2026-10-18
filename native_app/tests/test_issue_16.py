@@ -109,4 +109,8 @@ def test_settings_empty_string_list_field_raises_settings_error(
         with pytest.raises(SettingsError):
             Settings()
 
-    assert "event=config_invalid field=API_FLOW_IGNORE_HOSTS" in caplog.text
+    error_records = [
+        r for r in caplog.records
+        if r.levelno == logging.ERROR and "field=API_FLOW_IGNORE_HOSTS" in r.getMessage()
+    ]
+    assert error_records, "expected a structured event=config_invalid ERROR record"
