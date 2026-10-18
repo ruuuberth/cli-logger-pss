@@ -18,7 +18,7 @@
 - Configuración: `native_app/app/core/config.py`
 - Modelos DB: `native_app/app/models/pss_models.py`
 - Resolución de catálogos del juego (Data/Prod): `native_app/app/services/catalogo.py`
-- Inspectores de batalla/salas/tripulación: `battle_inspector_resolver.py`, `room_item_mapping.py`, `character_inspector_resolver.py`, `battle_inspector_exporter.py` (en `services/`)
+- Inspectores de batalla/salas/tripulación: `battle_inspector_resolver.py`, `room_item_mapping.py`, `character_inspector_resolver.py` (en `services/`)
 - Reporting: `native_app/app/reporting/` (XLSX/CSV/JSON)
 
 > **Nota histórica**: la UI Qt fue eliminada. No existe `app/ui/` — toda interacción es por consola (Rich). Los servicios que alimentaban la UI siguen vivos, consumidos por la CLI: `battle_detail_cache` y `perf_metrics` desde `api_flow_list_service`; `process_resource_monitor` desde el Monitor de Sistema (`concrete_commands`); `room_item_mapping` y `character_inspector_resolver` desde `cli_services` (inspectores).
@@ -70,8 +70,7 @@
 - `Inspector de Tripulante` (4) y `Inspector de Salas` (5) usan `character_inspector_resolver` / `room_item_mapping` sobre las tablas normalizadas.
 - Las acciones `SetItem` se resuelven con el mapping manual por sala en `native_app/app/resources/room_item_slot_mappings.json`, usando nombres canónicos del catálogo de items e ignorando nivel.
 - El inspector de tripulación usa `CharacterActionsNormalized` y `CharacterItemsNormalized` dentro de `battle_replay_characters.character_attributes_json` para renderizar IA, equipo y stats limpias sin exponer el JSON crudo.
-- `Inspector de Batalla` (6) imprime el detalle del replay por clave-valor tras sincronizar eventos pendientes (`runtime.flush_pending()`).
-- `battle_inspector_exporter.py` es la capa de exportación JSON del inspector de batalla: compone `CatalogoResolver`, `room_item_mapping` y `character_inspector_resolver` en un payload simplificado (batalla, salas, tripulantes y acciones). **Hoy está sin cablear en la CLI** — `Inspector de Batalla` (6) imprime el detalle crudo y no pasa por él; su destino (rewire o eliminación) se decide en #33.
+- `Inspector de Batalla` (6) imprime el detalle del replay por clave-valor tras sincronizar eventos pendientes (`runtime.flush_pending()`); no existe capa de exportación JSON: `battle_inspector_exporter.py` fue eliminado en #33 (código muerto desde que el merge `e7656b3` perdió su cableado en la CLI). Si se quiere recuperar el render rico, la wiring original está preservada en el commit `aa738a8`.
 
 ## Convenciones importantes
 
