@@ -52,6 +52,23 @@ def _write_json_rows(path: Path, rows: list[dict[str, Any]]) -> None:
         json.dump(rows, f, indent=2, ensure_ascii=False, default=str)
 
 
+def _union_headers(rows: list[dict[str, Any]]) -> list[str]:
+    """Union of all keys across ``rows``, preserving first-seen order.
+
+    Keys from the first row keep their original order; any new key appearing
+    in later rows is appended at first sight. Missing values serialize as
+    ``None``/empty, consistent with ``row_data.get(header)`` used by Excel.
+    """
+    headers: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key in row.keys():
+            if key not in seen:
+                headers.append(key)
+                seen.add(key)
+    return headers
+
+
 @dataclass
 class ReportConfig:
     """Configuration for report generation"""
@@ -132,7 +149,7 @@ class ExcelReportGenerator(ReportGenerator):
         if not rows:
             return
 
-        headers = list(rows[0].keys())
+        headers = _union_headers(rows)
 
         # Write headers
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -206,7 +223,7 @@ class CsvReportGenerator(ReportGenerator):
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Get headers
-        headers = list(self.data[0].keys()) if self.data else []
+        headers = _union_headers(self.data)
 
         # Write CSV (to temp, then publish atomically)
         return _atomic_write(output_file, lambda p: _write_csv_rows(p, self.data, headers))

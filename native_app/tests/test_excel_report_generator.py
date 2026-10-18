@@ -292,3 +292,50 @@ def test_h2h_command_omits_flota_sheet_when_no_fleet_rows(tmp_path, monkeypatch)
     from openpyxl import load_workbook
     wb = load_workbook(files[0])
     assert wb.sheetnames == ["Resumen", "Batallas", "Tendencias"]
+
+
+# --- Regression for #29: heterogeneous rows must not silently drop data ---
+
+
+def test_excel_heterogeneous_rows_preserve_extra_keys(tmp_path) -> None:
+    """Rows with keys absent from the first row must keep their columns."""
+    gen = _generator(tmp_path)
+    gen.add_sheet(
+        "Data",
+        [
+            {"A": "a1", "B": "b1"},
+            {"A": "a2", "B": "b2", "C_extra": "LOST_C"},
+            {"A": "a3", "D_extra": "LOST_D"},
+        ],
+    )
+    output_file = gen.generate()
+
+    wb = load_workbook(output_file)
+    ws = wb["Data"]
+    assert ws.cell(row=1, column=1).value == "A"
+    assert ws.cell(row=1, column=2).value == "B"
+    assert ws.cell(row=1, column=3).value == "C_extra"
+    assert ws.cell(row=1, column=4).value == "D_extra"
+    # Missing values serialize as None
+    assert ws.cell(row=2, column=3).value is None
+    assert ws.cell(row=3, column=3).value == "LOST_C"
+    assert ws.cell(row=3, column=4) is None or ws.cell(row=3, column=4).value is None
+    assert ws.cell(row=4, column=2).value is None
+    assert ws.cell(row=4, column=4).value == "LOST_D"
+
+
+def test_union_headers_preserves_first_row_order_then_new_keys() -> None:
+    from app.reporting.report_generator import _union_headers
+
+    rows = [
+        {"z": 1, "a": 2},
+        {"a": 3, "m": 4},
+        {"q": 5, "a": 6},
+    ]
+    assert _union_headers(rows) == ["z", "a", "m", "q"]
+
+
+def test_union_headers_empty_returns_empty() -> None:
+    from app.reporting.report_generator import _union_headers
+
+    assert _union_headers([]) == []
