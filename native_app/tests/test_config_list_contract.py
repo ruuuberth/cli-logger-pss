@@ -42,7 +42,7 @@ def test_settings_json_arrays_work_with_dotenv(
 def test_settings_csv_raises_validation_error(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """CSV list syntax in .env raises SettingsError instead of being parsed (issue #16)."""
+    """CSV list syntax in .env raises SettingsError instead of being parsed."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("API_FLOW_IGNORE_HOSTS", raising=False)
     monkeypatch.delenv("API_FLOW_CAPTURE_HOST_ALLOWLIST", raising=False)
@@ -65,7 +65,7 @@ def test_settings_csv_raises_validation_error(
 def test_settings_single_value_no_brackets_raises_error(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """A single bare value for a list field raises SettingsError (issue #16 fix)."""
+    """A single bare value for a list field raises SettingsError."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("API_FLOW_IGNORE_HOSTS", raising=False)
     monkeypatch.delenv("API_FLOW_CAPTURE_HOST_ALLOWLIST", raising=False)
@@ -88,7 +88,7 @@ def test_settings_single_value_no_brackets_raises_error(
 def test_settings_empty_string_list_field_raises_settings_error(
     tmp_path: Path, monkeypatch, caplog
 ) -> None:
-    """Empty-value contract (issue #16): `FIELD=` is invalid; use `FIELD=[]`.
+    """Empty-value contract: `FIELD=` is invalid; use `FIELD=[]`.
 
     Deliberate break documented by this PR: a bare empty value no longer
     yields an empty list. `API_FLOW_IGNORE_HOSTS=[]` is the required spelling.
