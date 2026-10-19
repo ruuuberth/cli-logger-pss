@@ -1,13 +1,16 @@
 """Pure data structures for API flow events (no Qt dependencies)"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+
+from app.services.api_flow_list_service import ApiFlowPage, ApiFlowRowView
 
 
 @dataclass(frozen=True)
 class ApiFlowRowDTO:
     """Represents a single API flow event row in pure Python"""
+
     battle_replay_id: int | None
     api_flow_event_id: int | None
     captured_at_label: str
@@ -21,7 +24,7 @@ class ApiFlowRowDTO:
     h2h_tooltip: str
 
     @classmethod
-    def from_service_model(cls, row_view: "ApiFlowRowView") -> "ApiFlowRowDTO":
+    def from_service_model(cls, row_view: ApiFlowRowView) -> ApiFlowRowDTO:
         """Convert from service ApiFlowRowView to pure DTO"""
         return cls(
             battle_replay_id=row_view.battle_replay_id,
@@ -41,13 +44,14 @@ class ApiFlowRowDTO:
 @dataclass(frozen=True)
 class ApiFlowPageDTO:
     """Represents a page of API flow events"""
+
     total: int
     page: int
     max_page: int
     rows: list[ApiFlowRowDTO]
 
     @classmethod
-    def from_service_model(cls, page: "ApiFlowPage") -> "ApiFlowPageDTO":
+    def from_service_model(cls, page: ApiFlowPage) -> ApiFlowPageDTO:
         """Convert from service ApiFlowPage to pure DTO"""
         return cls(
             total=page.total,
@@ -60,6 +64,7 @@ class ApiFlowPageDTO:
 @dataclass(frozen=True)
 class BattleDetailDTO:
     """Represents detailed battle information"""
+
     battle_id: str
     attacker_name: str
     defender_name: str
@@ -73,6 +78,7 @@ class BattleDetailDTO:
 @dataclass(frozen=True)
 class CaptureStatsDTO:
     """Represents live capture statistics"""
+
     events_total: int
     events_per_second: float
     uptime_seconds: int

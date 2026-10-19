@@ -4,16 +4,16 @@ import base64
 import binascii
 import gzip
 import json
-import re
 import logging
 import os
+import re
 import unicodedata
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from sqlite3 import OperationalError as SQLiteOperationalError
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from html import unescape
+from sqlite3 import OperationalError as SQLiteOperationalError
 from typing import Any
 
 from sqlalchemy import String, and_, cast, or_, text
@@ -81,7 +81,16 @@ class BattleReplayListRow:
 
 class ApiFlowRepository:
     _ALLOWED_DIRECTIONS = {"request", "response", "error"}
-    _ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT"}
+    _ALLOWED_METHODS = {
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD",
+        "OPTIONS",
+        "CONNECT",
+    }
 
     def __init__(self) -> None:
         self.body_max_chars = max(128, int(settings.API_FLOW_BODY_MAX_CHARS))
@@ -123,11 +132,16 @@ class ApiFlowRepository:
                 if affected_pairs:
                     self._prune_obsolete_replays_for_pairs(db, affected_pairs)
                     self._recompute_matchup_stats_for_pairs(db, affected_pairs)
-            design_catalog_updated = self._sync_design_catalogs_from_saved_rows(db, rows)
+            design_catalog_updated = self._sync_design_catalogs_from_saved_rows(
+                db, rows
+            )
             db.commit()
             if design_catalog_updated:
                 self._recent_catalog_sync_count += int(design_catalog_updated)
-                logger.info("event=design_catalogs_synced_from_save count=%s", design_catalog_updated)
+                logger.info(
+                    "event=design_catalogs_synced_from_save count=%s",
+                    design_catalog_updated,
+                )
             return len(rows)
         except (SQLiteOperationalError, SQLAlchemyOperationalError) as exc:
             db.rollback()
@@ -151,7 +165,9 @@ class ApiFlowRepository:
         if not path:
             return False
         base_path = path.split("?", 1)[0].rstrip("/") or "/"
-        allowlist = settings.API_FLOW_CAPTURE_PATH_ALLOWLIST or ["/BattleService/GetBattle3"]
+        allowlist = settings.API_FLOW_CAPTURE_PATH_ALLOWLIST or [
+            "/BattleService/GetBattle3"
+        ]
         for allowed in allowlist:
             allowed_base = str(allowed or "").split("?", 1)[0].rstrip("/") or "/"
             if base_path == allowed_base:
@@ -224,7 +240,7 @@ class ApiFlowRepository:
 
     def purge_by_ttl(self, retention_days: int) -> int:
         retention_days = max(1, int(retention_days))
-        threshold = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        threshold = datetime.now(UTC) - timedelta(days=retention_days)
         db = SessionLocal()
         try:
             event_ids = [
@@ -238,7 +254,9 @@ class ApiFlowRepository:
             return int(deleted or 0)
         except Exception:
             db.rollback()
-            logger.exception("event=api_flow_purge_ttl_error retention_days=%s", retention_days)
+            logger.exception(
+                "event=api_flow_purge_ttl_error retention_days=%s", retention_days
+            )
             return 0
         finally:
             db.close()
@@ -266,7 +284,9 @@ class ApiFlowRepository:
                     break
             except Exception:
                 db.rollback()
-                logger.exception("event=api_flow_purge_size_error max_db_mb=%s", max_db_mb)
+                logger.exception(
+                    "event=api_flow_purge_size_error max_db_mb=%s", max_db_mb
+                )
                 break
             finally:
                 db.close()
@@ -331,7 +351,11 @@ class ApiFlowRepository:
                 if replay is not None
                 else None
             )
-            battle_id = int(replay.battle_id) if replay is not None and replay.battle_id is not None else None
+            battle_id = (
+                int(replay.battle_id)
+                if replay is not None and replay.battle_id is not None
+                else None
+            )
             deleted = self._delete_events_and_normalized(db, [int(event_id)])
             if pair is not None and battle_id is not None:
                 db.query(PlayerMatchupLog).filter(
@@ -373,7 +397,10 @@ class ApiFlowRepository:
             page = max(0, page)
             page_size = max(1, page_size)
             rows = (
-                query.order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                query.order_by(
+                    BattleReplayNormalized.captured_at.desc(),
+                    BattleReplayNormalized.id.desc(),
+                )
                 .offset(page * page_size)
                 .limit(page_size)
                 .all()
@@ -453,7 +480,10 @@ class ApiFlowRepository:
             page = max(0, page)
             page_size = max(1, page_size)
             rows = (
-                query.order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                query.order_by(
+                    BattleReplayNormalized.captured_at.desc(),
+                    BattleReplayNormalized.id.desc(),
+                )
                 .offset(page * page_size)
                 .limit(page_size)
                 .all()
@@ -461,7 +491,9 @@ class ApiFlowRepository:
             return total, [
                 BattleReplayListRow(
                     id=int(row.id),
-                    api_flow_event_id=int(row.api_flow_event_id) if row.api_flow_event_id is not None else None,
+                    api_flow_event_id=int(row.api_flow_event_id)
+                    if row.api_flow_event_id is not None
+                    else None,
                     captured_at=row.captured_at,
                     attacker_name=row.attacker_name,
                     attacker_trophy=row.attacker_trophy,
@@ -499,9 +531,7 @@ class ApiFlowRepository:
                 for low_id, high_id in pairs
             ]
             stats_rows = (
-                db.query(PlayerMatchupStat)
-                .filter(or_(*pair_filters))
-                .all()
+                db.query(PlayerMatchupStat).filter(or_(*pair_filters)).all()
                 if pair_filters
                 else []
             )
@@ -592,7 +622,9 @@ class ApiFlowRepository:
                     {
                         "battle_id": row.battle_id,
                         "winner_user_id": row.winner_user_id,
-                        "captured_at": row.captured_at.isoformat() if row.captured_at is not None else None,
+                        "captured_at": row.captured_at.isoformat()
+                        if row.captured_at is not None
+                        else None,
                         "outcome_type": row.outcome_type,
                     }
                     for row in logs[:5]
@@ -632,7 +664,9 @@ class ApiFlowRepository:
             ship_design_map_es: dict[int, str] = {}
             if ship_design_ids:
                 design_rows = (
-                    db.query(ShipDesign.ship_design_id, ShipDesign.name, ShipDesign.name_es)
+                    db.query(
+                        ShipDesign.ship_design_id, ShipDesign.name, ShipDesign.name_es
+                    )
                     .filter(ShipDesign.ship_design_id.in_(list(ship_design_ids)))
                     .all()
                 )
@@ -659,7 +693,11 @@ class ApiFlowRepository:
             if room_design_ids:
                 try:
                     room_rows = (
-                        db.query(RoomDesign.room_design_id, RoomDesign.name, RoomDesign.name_es)
+                        db.query(
+                            RoomDesign.room_design_id,
+                            RoomDesign.name,
+                            RoomDesign.name_es,
+                        )
                         .filter(RoomDesign.room_design_id.in_(list(room_design_ids)))
                         .all()
                     )
@@ -688,8 +726,14 @@ class ApiFlowRepository:
             if character_design_ids:
                 try:
                     character_rows = (
-                        db.query(CrewDesign.crew_design_id, CrewDesign.name, CrewDesign.name_es)
-                        .filter(CrewDesign.crew_design_id.in_(list(character_design_ids)))
+                        db.query(
+                            CrewDesign.crew_design_id,
+                            CrewDesign.name,
+                            CrewDesign.name_es,
+                        )
+                        .filter(
+                            CrewDesign.crew_design_id.in_(list(character_design_ids))
+                        )
                         .all()
                     )
                     for design_id, name, name_es in character_rows:
@@ -704,7 +748,10 @@ class ApiFlowRepository:
             commands = (
                 db.query(BattleReplayCommand)
                 .filter(BattleReplayCommand.battle_replay_id == replay.id)
-                .order_by(BattleReplayCommand.command_order.asc(), BattleReplayCommand.id.asc())
+                .order_by(
+                    BattleReplayCommand.command_order.asc(),
+                    BattleReplayCommand.id.asc(),
+                )
                 .all()
             )
             matchup_summary: dict[str, Any] | None = None
@@ -720,8 +767,16 @@ class ApiFlowRepository:
                     )
                     .first()
                 )
-                low_name = replay.attacker_name if replay.attacker_user_id == low_id else replay.defender_name
-                high_name = replay.attacker_name if replay.attacker_user_id == high_id else replay.defender_name
+                low_name = (
+                    replay.attacker_name
+                    if replay.attacker_user_id == low_id
+                    else replay.defender_name
+                )
+                high_name = (
+                    replay.attacker_name
+                    if replay.attacker_user_id == high_id
+                    else replay.defender_name
+                )
                 if stat is not None:
                     matchup_summary = {
                         "player_low_user_id": int(stat.player_low_user_id),
@@ -747,7 +802,9 @@ class ApiFlowRepository:
                         PlayerMatchupLog.player_low_user_id == low_id,
                         PlayerMatchupLog.player_high_user_id == high_id,
                     )
-                    .order_by(PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc())
+                    .order_by(
+                        PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc()
+                    )
                     .limit(5)
                     .all()
                 )
@@ -755,14 +812,18 @@ class ApiFlowRepository:
                     {
                         "battle_id": row.battle_id,
                         "winner_user_id": row.winner_user_id,
-                        "captured_at": row.captured_at.isoformat() if row.captured_at is not None else None,
+                        "captured_at": row.captured_at.isoformat()
+                        if row.captured_at is not None
+                        else None,
                         "outcome_type": row.outcome_type,
                     }
                     for row in recent_logs
                 ]
             return {
                 "replay": self._serialize_battle_replay_row(replay),
-                "api_flow_event": self._serialize_row(api_flow_event) if api_flow_event else None,
+                "api_flow_event": self._serialize_row(api_flow_event)
+                if api_flow_event
+                else None,
                 "ships": [
                     self._serialize_battle_replay_ship_row(
                         row,
@@ -787,14 +848,18 @@ class ApiFlowRepository:
                     )
                     for row in characters
                 ],
-                "commands": [self._serialize_battle_replay_command_row(row) for row in commands],
+                "commands": [
+                    self._serialize_battle_replay_command_row(row) for row in commands
+                ],
                 "matchup_summary": matchup_summary,
                 "matchup_recent_log": matchup_recent_log,
             }
         finally:
             db.close()
 
-    def sync_battle_replays_from_api_flow(self, batch_size: int = 500, max_event_id: int | None = None) -> int:
+    def sync_battle_replays_from_api_flow(
+        self, batch_size: int = 500, max_event_id: int | None = None
+    ) -> int:
         db = SessionLocal()
         inserted = 0
         try:
@@ -813,7 +878,11 @@ class ApiFlowRepository:
                 )
                 if max_event_id is not None:
                     query = query.filter(ApiFlowEvent.id <= int(max_event_id))
-                candidates = query.order_by(ApiFlowEvent.id.asc()).limit(max(1, batch_size)).all()
+                candidates = (
+                    query.order_by(ApiFlowEvent.id.asc())
+                    .limit(max(1, batch_size))
+                    .all()
+                )
                 if not candidates:
                     return inserted
 
@@ -842,7 +911,9 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def backfill_matchup_history_and_prune(self, batch_size_pairs: int = 200) -> dict[str, int]:
+    def backfill_matchup_history_and_prune(
+        self, batch_size_pairs: int = 200
+    ) -> dict[str, int]:
         db = SessionLocal()
         metrics = {
             "inserted_logs": 0,
@@ -860,7 +931,10 @@ class ApiFlowRepository:
 
             affected_pairs = set(log_result["affected_pairs"])
             pair_rows = (
-                db.query(PlayerMatchupLog.player_low_user_id, PlayerMatchupLog.player_high_user_id)
+                db.query(
+                    PlayerMatchupLog.player_low_user_id,
+                    PlayerMatchupLog.player_high_user_id,
+                )
                 .distinct()
                 .all()
             )
@@ -877,8 +951,12 @@ class ApiFlowRepository:
                 db.query(PlayerMatchupStat).delete(synchronize_session=False)
             for index in range(0, len(pair_list), pair_batch_size):
                 chunk_pairs = set(pair_list[index : index + pair_batch_size])
-                metrics["deleted_obsolete_replays"] += self._prune_obsolete_replays_for_pairs(db, chunk_pairs)
-                metrics["updated_pairs"] += self._recompute_matchup_stats_for_pairs(db, chunk_pairs)
+                metrics["deleted_obsolete_replays"] += (
+                    self._prune_obsolete_replays_for_pairs(db, chunk_pairs)
+                )
+                metrics["updated_pairs"] += self._recompute_matchup_stats_for_pairs(
+                    db, chunk_pairs
+                )
 
             db.commit()
             logger.info(
@@ -898,7 +976,13 @@ class ApiFlowRepository:
     def get_startup_sync_snapshot(self) -> dict[str, int]:
         db = SessionLocal()
         try:
-            max_event_id = db.query(ApiFlowEvent.id).order_by(ApiFlowEvent.id.desc()).limit(1).scalar() or 0
+            max_event_id = (
+                db.query(ApiFlowEvent.id)
+                .order_by(ApiFlowEvent.id.desc())
+                .limit(1)
+                .scalar()
+                or 0
+            )
             max_replay_id = (
                 db.query(BattleReplayNormalized.id)
                 .order_by(BattleReplayNormalized.id.desc())
@@ -913,7 +997,9 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def backfill_response_body_cleaned(self, batch_size: int = 100, max_event_id: int | None = None) -> int:
+    def backfill_response_body_cleaned(
+        self, batch_size: int = 100, max_event_id: int | None = None
+    ) -> int:
         db = SessionLocal()
         updated = 0
         try:
@@ -929,7 +1015,9 @@ class ApiFlowRepository:
             )
             if max_event_id is not None:
                 query = query.filter(ApiFlowEvent.id <= int(max_event_id))
-            candidates = query.order_by(ApiFlowEvent.id.asc()).limit(max(1, batch_size)).all()
+            candidates = (
+                query.order_by(ApiFlowEvent.id.asc()).limit(max(1, batch_size)).all()
+            )
             if not candidates:
                 return 0
 
@@ -950,7 +1038,9 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def backfill_room_attributes(self, batch_size: int = 100, max_replay_id: int | None = None) -> int:
+    def backfill_room_attributes(
+        self, batch_size: int = 100, max_replay_id: int | None = None
+    ) -> int:
         db = SessionLocal()
         updated = 0
         try:
@@ -958,18 +1048,29 @@ class ApiFlowRepository:
             while True:
                 query = (
                     db.query(BattleReplayNormalized, ApiFlowEvent)
-                    .join(ApiFlowEvent, ApiFlowEvent.id == BattleReplayNormalized.api_flow_event_id)
+                    .join(
+                        ApiFlowEvent,
+                        ApiFlowEvent.id == BattleReplayNormalized.api_flow_event_id,
+                    )
                     .filter(ApiFlowEvent.response_body_cleaned.isnot(None))
                     .filter(BattleReplayNormalized.id > last_seen_id)
                 )
                 if max_replay_id is not None:
-                    query = query.filter(BattleReplayNormalized.id <= int(max_replay_id))
-                candidates = query.order_by(BattleReplayNormalized.id.asc()).limit(max(1, batch_size)).all()
+                    query = query.filter(
+                        BattleReplayNormalized.id <= int(max_replay_id)
+                    )
+                candidates = (
+                    query.order_by(BattleReplayNormalized.id.asc())
+                    .limit(max(1, batch_size))
+                    .all()
+                )
                 if not candidates:
                     break
                 for replay, api_flow_event in candidates:
                     last_seen_id = max(last_seen_id, int(replay.id))
-                    parsed = self._extract_battle_nodes_from_cleaned(api_flow_event.response_body_cleaned)
+                    parsed = self._extract_battle_nodes_from_cleaned(
+                        api_flow_event.response_body_cleaned
+                    )
                     if parsed is None:
                         continue
                     new_rows = self._build_room_rows_for_replay(replay.id, parsed)
@@ -980,12 +1081,18 @@ class ApiFlowRepository:
                         .filter(BattleReplayRoom.battle_replay_id == replay.id)
                         .all()
                     )
-                    by_key: dict[tuple[str, int | None, int | None], BattleReplayRoom] = {}
+                    by_key: dict[
+                        tuple[str, int | None, int | None], BattleReplayRoom
+                    ] = {}
                     for row in existing_rows:
                         key = (str(row.side or ""), row.room_id, row.ship_id)
                         by_key[key] = row
                     for new_row in new_rows:
-                        key = (str(new_row.side or ""), new_row.room_id, new_row.ship_id)
+                        key = (
+                            str(new_row.side or ""),
+                            new_row.room_id,
+                            new_row.ship_id,
+                        )
                         existing = by_key.get(key)
                         if existing is None:
                             continue
@@ -1006,7 +1113,9 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def sync_battle_replay_children(self, batch_size: int = 200, max_replay_id: int | None = None) -> int:
+    def sync_battle_replay_children(
+        self, batch_size: int = 200, max_replay_id: int | None = None
+    ) -> int:
         db = SessionLocal()
         inserted = 0
         try:
@@ -1020,7 +1129,11 @@ class ApiFlowRepository:
             )
             if max_replay_id is not None:
                 query = query.filter(BattleReplayNormalized.id <= int(max_replay_id))
-            parents = query.order_by(BattleReplayNormalized.id.asc()).limit(max(1, batch_size)).all()
+            parents = (
+                query.order_by(BattleReplayNormalized.id.asc())
+                .limit(max(1, batch_size))
+                .all()
+            )
             if not parents:
                 return 0
 
@@ -1037,7 +1150,9 @@ class ApiFlowRepository:
                 battle_row = parent_map.get(api_flow_row.id)
                 if battle_row is None:
                     continue
-                child_rows = self._build_battle_replay_child_rows([api_flow_row], [battle_row])
+                child_rows = self._build_battle_replay_child_rows(
+                    [api_flow_row], [battle_row]
+                )
                 if not child_rows:
                     continue
                 try:
@@ -1122,7 +1237,7 @@ class ApiFlowRepository:
 
         captured_at = self._parse_datetime(event.get("captured_at"))
         if captured_at is None:
-            captured_at = datetime.now(timezone.utc)
+            captured_at = datetime.now(UTC)
 
         query_value = event.get("query")
         if query_value is None:
@@ -1150,8 +1265,12 @@ class ApiFlowRepository:
             "response_body_cleaned": response_body_cleaned,
             "request_size_bytes": self._as_int(event.get("request_size_bytes")),
             "response_size_bytes": self._as_int(event.get("response_size_bytes")),
-            "content_type_request": self._as_text(event.get("content_type_request"), 255),
-            "content_type_response": self._as_text(event.get("content_type_response"), 255),
+            "content_type_request": self._as_text(
+                event.get("content_type_request"), 255
+            ),
+            "content_type_response": self._as_text(
+                event.get("content_type_response"), 255
+            ),
             "tls": bool(event.get("tls")),
             "error_text": self._as_text(event.get("error_text"), 2048),
             "game_process_hint": self._as_text(event.get("game_process_hint"), 255),
@@ -1274,7 +1393,7 @@ class ApiFlowRepository:
             return None
         if isinstance(value, datetime):
             if value.tzinfo is None:
-                return value.replace(tzinfo=timezone.utc)
+                return value.replace(tzinfo=UTC)
             return value
 
         try:
@@ -1283,7 +1402,7 @@ class ApiFlowRepository:
                 text_value = text_value[:-1] + "+00:00"
             parsed = datetime.fromisoformat(text_value)
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                parsed = parsed.replace(tzinfo=UTC)
             return parsed
         except Exception:
             return None
@@ -1323,13 +1442,19 @@ class ApiFlowRepository:
             return self._normalize_text(unescape(xml_text))
 
         cleaned_tree = self._xml_to_clean_dict(root)
-        return self._normalize_text(json.dumps(cleaned_tree, ensure_ascii=False, indent=2))
+        return self._normalize_text(
+            json.dumps(cleaned_tree, ensure_ascii=False, indent=2)
+        )
 
     def _xml_to_clean_dict(self, node: ET.Element) -> dict[str, Any]:
         attributes: dict[str, Any] = {}
         for key, value in node.attrib.items():
             decoded_value = self._normalize_text(unescape(str(value)))
-            if decoded_value is not None and decoded_value.strip().startswith("<") and decoded_value.strip().endswith(">"):
+            if (
+                decoded_value is not None
+                and decoded_value.strip().startswith("<")
+                and decoded_value.strip().endswith(">")
+            ):
                 nested = self._try_parse_nested_xml(decoded_value)
                 attributes[key] = nested if nested is not None else decoded_value
             else:
@@ -1358,7 +1483,9 @@ class ApiFlowRepository:
             return None
         normalized = unicodedata.normalize("NFKC", str(value))
         normalized = self._repair_mojibake_text(normalized)
-        normalized = normalized.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
+        normalized = (
+            normalized.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
+        )
         normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
         if not normalized:
             return None
@@ -1377,12 +1504,16 @@ class ApiFlowRepository:
             return text
         return repaired if repaired.strip() else text
 
-    def _build_battle_replay_rows(self, rows: list[ApiFlowEvent]) -> list[BattleReplayNormalized]:
+    def _build_battle_replay_rows(
+        self, rows: list[ApiFlowEvent]
+    ) -> list[BattleReplayNormalized]:
         out: list[BattleReplayNormalized] = []
         for row in rows:
             if not row.path or not row.path.startswith("/BattleService/GetBattle3"):
                 continue
-            normalized = self._extract_battle_replay_normalized_from_cleaned(row.response_body_cleaned)
+            normalized = self._extract_battle_replay_normalized_from_cleaned(
+                row.response_body_cleaned
+            )
             if normalized is None:
                 continue
             normalized["api_flow_event_id"] = row.id
@@ -1402,7 +1533,9 @@ class ApiFlowRepository:
             battle_row = battle_by_event_id.get(api_flow_row.id)
             if battle_row is None:
                 continue
-            parsed = self._extract_battle_nodes_from_cleaned(api_flow_row.response_body_cleaned)
+            parsed = self._extract_battle_nodes_from_cleaned(
+                api_flow_row.response_body_cleaned
+            )
             if parsed is None:
                 continue
 
@@ -1413,7 +1546,9 @@ class ApiFlowRepository:
 
         return out
 
-    def _serialize_battle_replay_row(self, row: BattleReplayNormalized) -> dict[str, Any]:
+    def _serialize_battle_replay_row(
+        self, row: BattleReplayNormalized
+    ) -> dict[str, Any]:
         return {
             "id": row.id,
             "api_flow_event_id": row.api_flow_event_id,
@@ -1521,7 +1656,9 @@ class ApiFlowRepository:
             "character_attributes_json": row.character_attributes_json,
         }
 
-    def _serialize_battle_replay_command_row(self, row: BattleReplayCommand) -> dict[str, Any]:
+    def _serialize_battle_replay_command_row(
+        self, row: BattleReplayCommand
+    ) -> dict[str, Any]:
         return {
             "id": row.id,
             "battle_replay_id": row.battle_replay_id,
@@ -1619,20 +1756,28 @@ class ApiFlowRepository:
             "attacking_ship_id": self._as_int(battle_attrs.get("AttackingShipId")),
             "defending_ship_id": self._as_int(battle_attrs.get("DefendingShipId")),
             "outcome_type": self._as_text(battle_attrs.get("OutcomeType"), 64),
-            "client_outcome_type": self._as_text(battle_attrs.get("ClientOutcomeType"), 64),
+            "client_outcome_type": self._as_text(
+                battle_attrs.get("ClientOutcomeType"), 64
+            ),
             "win_trophy_result": self._as_int(battle_attrs.get("WinTrophyResult")),
             "win_minerals_result": self._as_int(battle_attrs.get("WinMineralsResult")),
             "win_gas_result": self._as_int(battle_attrs.get("WinGasResult")),
             "lose_trophy_result": self._as_int(battle_attrs.get("LoseTrophyResult")),
-            "lose_minerals_result": self._as_int(battle_attrs.get("LoseMineralsResult")),
+            "lose_minerals_result": self._as_int(
+                battle_attrs.get("LoseMineralsResult")
+            ),
             "lose_gas_result": self._as_int(battle_attrs.get("LoseGasResult")),
             "battle_end_frame": self._as_int(battle_attrs.get("BattleEndFrame")),
             "client_end_frame": self._as_int(battle_attrs.get("ClientEndFrame")),
             "attacker_user_id": self._as_int(attacker_user_attrs.get("Id")),
-            "attacker_name": self._as_text(self._normalize_text(attacker_user_attrs.get("Name")), 255),
+            "attacker_name": self._as_text(
+                self._normalize_text(attacker_user_attrs.get("Name")), 255
+            ),
             "attacker_trophy": self._as_int(attacker_user_attrs.get("Trophy")),
             "defender_user_id": self._as_int(defender_user_attrs.get("Id")),
-            "defender_name": self._as_text(self._normalize_text(defender_user_attrs.get("Name")), 255),
+            "defender_name": self._as_text(
+                self._normalize_text(defender_user_attrs.get("Name")), 255
+            ),
             "defender_trophy": self._as_int(defender_user_attrs.get("Trophy")),
             "battle_attributes_json": battle_attrs,
             "attacker_user_attributes_json": attacker_user_attrs,
@@ -1656,10 +1801,18 @@ class ApiFlowRepository:
         if not isinstance(battle_attrs, dict):
             return None
 
-        attacker_user_attrs = self._extract_nested_attrs(battle_attrs.get("AttackingUserXml"))
-        defender_user_attrs = self._extract_nested_attrs(battle_attrs.get("DefendingUserXml"))
-        attacker_ship_node = self._extract_nested_node(battle_attrs.get("AttackingShipXml"))
-        defender_ship_node = self._extract_nested_node(battle_attrs.get("DefendingShipXml"))
+        attacker_user_attrs = self._extract_nested_attrs(
+            battle_attrs.get("AttackingUserXml")
+        )
+        defender_user_attrs = self._extract_nested_attrs(
+            battle_attrs.get("DefendingUserXml")
+        )
+        attacker_ship_node = self._extract_nested_node(
+            battle_attrs.get("AttackingShipXml")
+        )
+        defender_ship_node = self._extract_nested_node(
+            battle_attrs.get("DefendingShipXml")
+        )
         commands_node = self._extract_nested_node(battle_attrs.get("Commands"))
         return {
             "payload": payload,
@@ -1701,10 +1854,15 @@ class ApiFlowRepository:
             return nested_node
         return None
 
-    def _build_ship_rows_for_replay(self, battle_replay_id: int, parsed: dict[str, Any]) -> list[BattleReplayShip]:
+    def _build_ship_rows_for_replay(
+        self, battle_replay_id: int, parsed: dict[str, Any]
+    ) -> list[BattleReplayShip]:
         out: list[BattleReplayShip] = []
         battle_attrs = parsed.get("battle_attrs") or {}
-        for side, key in (("attacker", "attacker_ship_node"), ("defender", "defender_ship_node")):
+        for side, key in (
+            ("attacker", "attacker_ship_node"),
+            ("defender", "defender_ship_node"),
+        ):
             ship_node = parsed.get(key)
             attrs: dict[str, Any] = {}
             if isinstance(ship_node, dict):
@@ -1732,7 +1890,9 @@ class ApiFlowRepository:
                     side=side,
                     ship_id=self._as_int(attrs.get("ShipId")) or default_ship_id,
                     ship_design_id=self._as_int(attrs.get("ShipDesignId")),
-                    ship_name=self._as_text(self._normalize_text(attrs.get("ShipName")), 255),
+                    ship_name=self._as_text(
+                        self._normalize_text(attrs.get("ShipName")), 255
+                    ),
                     ship_level=self._as_int(attrs.get("ShipLevel")),
                     power_score=self._as_int(attrs.get("PowerScore")),
                     hp=self._as_float(attrs.get("Hp")),
@@ -1742,13 +1902,20 @@ class ApiFlowRepository:
             )
         return out
 
-    def _build_room_rows_for_replay(self, battle_replay_id: int, parsed: dict[str, Any]) -> list[BattleReplayRoom]:
+    def _build_room_rows_for_replay(
+        self, battle_replay_id: int, parsed: dict[str, Any]
+    ) -> list[BattleReplayRoom]:
         out: list[BattleReplayRoom] = []
-        for side, key in (("attacker", "attacker_ship_node"), ("defender", "defender_ship_node")):
+        for side, key in (
+            ("attacker", "attacker_ship_node"),
+            ("defender", "defender_ship_node"),
+        ):
             ship_node = parsed.get(key)
             if not isinstance(ship_node, dict):
                 continue
-            for room_node in self._extract_children_by_path(ship_node, ["Rooms", "Room"]):
+            for room_node in self._extract_children_by_path(
+                ship_node, ["Rooms", "Room"]
+            ):
                 attrs = room_node.get("attributes")
                 if not isinstance(attrs, dict):
                     continue
@@ -1777,11 +1944,16 @@ class ApiFlowRepository:
         self, battle_replay_id: int, parsed: dict[str, Any]
     ) -> list[BattleReplayCharacter]:
         out: list[BattleReplayCharacter] = []
-        for side, key in (("attacker", "attacker_ship_node"), ("defender", "defender_ship_node")):
+        for side, key in (
+            ("attacker", "attacker_ship_node"),
+            ("defender", "defender_ship_node"),
+        ):
             ship_node = parsed.get(key)
             if not isinstance(ship_node, dict):
                 continue
-            for char_node in self._extract_children_by_path(ship_node, ["Characters", "Character"]):
+            for char_node in self._extract_children_by_path(
+                ship_node, ["Characters", "Character"]
+            ):
                 attrs = char_node.get("attributes")
                 if not isinstance(attrs, dict):
                     continue
@@ -1797,8 +1969,12 @@ class ApiFlowRepository:
                         side=side,
                         character_id=self._as_int(attrs.get("CharacterId")),
                         ship_id=self._as_int(attrs.get("ShipId")),
-                        character_design_id=self._as_int(attrs.get("CharacterDesignId")),
-                        character_name=self._as_text(self._normalize_text(attrs.get("CharacterName")), 255),
+                        character_design_id=self._as_int(
+                            attrs.get("CharacterDesignId")
+                        ),
+                        character_name=self._as_text(
+                            self._normalize_text(attrs.get("CharacterName")), 255
+                        ),
                         level=self._as_int(attrs.get("Level")),
                         xp=self._as_int(attrs.get("Xp")),
                         character_attributes_json=attrs,
@@ -1806,7 +1982,9 @@ class ApiFlowRepository:
                 )
         return out
 
-    def _flatten_node_attributes(self, node: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    def _flatten_node_attributes(
+        self, node: dict[str, Any], prefix: str = ""
+    ) -> dict[str, Any]:
         out: dict[str, Any] = {}
         children = node.get("children")
         if not isinstance(children, list):
@@ -1880,7 +2058,9 @@ class ApiFlowRepository:
     def _normalize_character_attributes(self, attrs: dict[str, Any]) -> dict[str, Any]:
         character_actions: dict[int, dict[str, Any]] = {}
         character_items: dict[int, dict[str, Any]] = {}
-        action_pattern = re.compile(r"^CharacterActions\.CharacterAction\[(\d+)\]\.(.+)$")
+        action_pattern = re.compile(
+            r"^CharacterActions\.CharacterAction\[(\d+)\]\.(.+)$"
+        )
         item_pattern = re.compile(r"^Items\.Item\[(\d+)\]\.(.+)$")
 
         for key, value in attrs.items():
@@ -1927,13 +2107,17 @@ class ApiFlowRepository:
             ]
         return cleaned
 
-    def _build_command_rows_for_replay(self, battle_replay_id: int, parsed: dict[str, Any]) -> list[BattleReplayCommand]:
+    def _build_command_rows_for_replay(
+        self, battle_replay_id: int, parsed: dict[str, Any]
+    ) -> list[BattleReplayCommand]:
         out: list[BattleReplayCommand] = []
         commands_node = parsed.get("commands_node")
         if not isinstance(commands_node, dict):
             return out
 
-        command_nodes = self._extract_children_by_path(commands_node, ["Commands", None])
+        command_nodes = self._extract_children_by_path(
+            commands_node, ["Commands", None]
+        )
         if not command_nodes:
             return out
 
@@ -1955,7 +2139,9 @@ class ApiFlowRepository:
             )
         return out
 
-    def _extract_children_by_path(self, node: dict[str, Any], path: list[str | None]) -> list[dict[str, Any]]:
+    def _extract_children_by_path(
+        self, node: dict[str, Any], path: list[str | None]
+    ) -> list[dict[str, Any]]:
         current: list[dict[str, Any]] = [node]
         for expected_tag in path:
             next_nodes: list[dict[str, Any]] = []
@@ -1978,22 +2164,40 @@ class ApiFlowRepository:
             db.add(row)
             db.flush()
 
-    def _sync_design_catalogs_from_saved_rows(self, db, rows: list[ApiFlowEvent]) -> int:
+    def _sync_design_catalogs_from_saved_rows(
+        self, db, rows: list[ApiFlowEvent]
+    ) -> int:
         total_updated = 0
         for row in rows:
-            if not row.path or not row.path.startswith("/DesignService/ListAllStaticDesigns2"):
+            if not row.path or not row.path.startswith(
+                "/DesignService/ListAllStaticDesigns2"
+            ):
                 continue
-            parsed_ship_designs = self._extract_ship_designs_from_payload(row.response_body_preview)
-            parsed_room_designs = self._extract_room_designs_from_payload(row.response_body_preview)
-            parsed_character_designs = self._extract_character_designs_from_payload(row.response_body_preview)
-            if not parsed_ship_designs and not parsed_room_designs and not parsed_character_designs:
+            parsed_ship_designs = self._extract_ship_designs_from_payload(
+                row.response_body_preview
+            )
+            parsed_room_designs = self._extract_room_designs_from_payload(
+                row.response_body_preview
+            )
+            parsed_character_designs = self._extract_character_designs_from_payload(
+                row.response_body_preview
+            )
+            if (
+                not parsed_ship_designs
+                and not parsed_room_designs
+                and not parsed_character_designs
+            ):
                 continue
             total_updated += self._upsert_ship_designs(db, parsed_ship_designs)
             total_updated += self._upsert_room_designs(db, parsed_room_designs)
-            total_updated += self._upsert_character_designs(db, parsed_character_designs)
+            total_updated += self._upsert_character_designs(
+                db, parsed_character_designs
+            )
         return total_updated
 
-    def _extract_ship_designs_from_payload(self, response_body_preview: str | None) -> list[dict[str, Any]]:
+    def _extract_ship_designs_from_payload(
+        self, response_body_preview: str | None
+    ) -> list[dict[str, Any]]:
         xml_text = self._decode_design_payload_to_xml(response_body_preview)
         if not xml_text:
             return []
@@ -2009,14 +2213,23 @@ class ApiFlowRepository:
             ship_design_id = self._as_int(attrs.get("ShipDesignId"))
             if ship_design_id is None:
                 continue
-            name_en = self._as_text(self._normalize_text(attrs.get("ShipDesignName")), 255)
-            name_es = self._as_text(self._normalize_text(self._pick_design_name_es(attrs, "ShipDesignName")), 255)
+            name_en = self._as_text(
+                self._normalize_text(attrs.get("ShipDesignName")), 255
+            )
+            name_es = self._as_text(
+                self._normalize_text(
+                    self._pick_design_name_es(attrs, "ShipDesignName")
+                ),
+                255,
+            )
             out.append(
                 {
                     "ship_design_id": ship_design_id,
                     "name": name_en,
                     "name_es": name_es,
-                    "description": self._as_text(self._normalize_text(attrs.get("ShipDescription")), 4096),
+                    "description": self._as_text(
+                        self._normalize_text(attrs.get("ShipDescription")), 4096
+                    ),
                     "class_type": self._as_text(attrs.get("ShipType"), 100),
                     "stats": {
                         "ShipLevel": attrs.get("ShipLevel"),
@@ -2029,7 +2242,9 @@ class ApiFlowRepository:
             )
         return out
 
-    def _extract_room_designs_from_payload(self, response_body_preview: str | None) -> list[dict[str, Any]]:
+    def _extract_room_designs_from_payload(
+        self, response_body_preview: str | None
+    ) -> list[dict[str, Any]]:
         xml_text = self._decode_design_payload_to_xml(response_body_preview)
         if not xml_text:
             return []
@@ -2046,13 +2261,17 @@ class ApiFlowRepository:
             if room_design_id is None:
                 continue
             name_en = self._as_text(self._normalize_text(attrs.get("RoomName")), 255)
-            name_es = self._as_text(self._normalize_text(self._pick_design_name_es(attrs, "RoomName")), 255)
+            name_es = self._as_text(
+                self._normalize_text(self._pick_design_name_es(attrs, "RoomName")), 255
+            )
             out.append(
                 {
                     "room_design_id": room_design_id,
                     "name": name_en,
                     "name_es": name_es,
-                    "description": self._as_text(self._normalize_text(attrs.get("RoomDescription")), 4096),
+                    "description": self._as_text(
+                        self._normalize_text(attrs.get("RoomDescription")), 4096
+                    ),
                     "room_type": self._as_text(attrs.get("RoomType"), 100),
                     "stats": {
                         "MinShipLevel": attrs.get("MinShipLevel"),
@@ -2064,7 +2283,9 @@ class ApiFlowRepository:
             )
         return out
 
-    def _extract_character_designs_from_payload(self, response_body_preview: str | None) -> list[dict[str, Any]]:
+    def _extract_character_designs_from_payload(
+        self, response_body_preview: str | None
+    ) -> list[dict[str, Any]]:
         xml_text = self._decode_design_payload_to_xml(response_body_preview)
         if not xml_text:
             return []
@@ -2080,14 +2301,24 @@ class ApiFlowRepository:
             character_design_id = self._as_int(attrs.get("CharacterDesignId"))
             if character_design_id is None:
                 continue
-            name_en = self._as_text(self._normalize_text(attrs.get("CharacterDesignName")), 255)
-            name_es = self._as_text(self._normalize_text(self._pick_design_name_es(attrs, "CharacterDesignName")), 255)
+            name_en = self._as_text(
+                self._normalize_text(attrs.get("CharacterDesignName")), 255
+            )
+            name_es = self._as_text(
+                self._normalize_text(
+                    self._pick_design_name_es(attrs, "CharacterDesignName")
+                ),
+                255,
+            )
             out.append(
                 {
                     "crew_design_id": character_design_id,
                     "name": name_en,
                     "name_es": name_es,
-                    "description": self._as_text(self._normalize_text(attrs.get("CharacterDesignDescription")), 4096),
+                    "description": self._as_text(
+                        self._normalize_text(attrs.get("CharacterDesignDescription")),
+                        4096,
+                    ),
                     "race": self._as_text(attrs.get("RaceType"), 100),
                     "role": self._as_text(attrs.get("CharacterType"), 100),
                     "stats": {
@@ -2100,7 +2331,9 @@ class ApiFlowRepository:
             )
         return out
 
-    def _decode_design_payload_to_xml(self, response_body_preview: str | None) -> str | None:
+    def _decode_design_payload_to_xml(
+        self, response_body_preview: str | None
+    ) -> str | None:
         text_value = self._as_full_text(response_body_preview)
         if not text_value:
             return None
@@ -2136,11 +2369,13 @@ class ApiFlowRepository:
             return 0
         target_ids = [int(item["ship_design_id"]) for item in designs]
         existing_rows = (
-            db.query(ShipDesign)
-            .filter(ShipDesign.ship_design_id.in_(target_ids))
-            .all()
+            db.query(ShipDesign).filter(ShipDesign.ship_design_id.in_(target_ids)).all()
         )
-        existing_by_id = {int(row.ship_design_id): row for row in existing_rows if row.ship_design_id is not None}
+        existing_by_id = {
+            int(row.ship_design_id): row
+            for row in existing_rows
+            if row.ship_design_id is not None
+        }
 
         updated = 0
         for item in designs:
@@ -2177,11 +2412,13 @@ class ApiFlowRepository:
             return 0
         target_ids = [int(item["room_design_id"]) for item in designs]
         existing_rows = (
-            db.query(RoomDesign)
-            .filter(RoomDesign.room_design_id.in_(target_ids))
-            .all()
+            db.query(RoomDesign).filter(RoomDesign.room_design_id.in_(target_ids)).all()
         )
-        existing_by_id = {int(row.room_design_id): row for row in existing_rows if row.room_design_id is not None}
+        existing_by_id = {
+            int(row.room_design_id): row
+            for row in existing_rows
+            if row.room_design_id is not None
+        }
 
         updated = 0
         for item in designs:
@@ -2218,11 +2455,13 @@ class ApiFlowRepository:
             return 0
         target_ids = [int(item["crew_design_id"]) for item in designs]
         existing_rows = (
-            db.query(CrewDesign)
-            .filter(CrewDesign.crew_design_id.in_(target_ids))
-            .all()
+            db.query(CrewDesign).filter(CrewDesign.crew_design_id.in_(target_ids)).all()
         )
-        existing_by_id = {int(row.crew_design_id): row for row in existing_rows if row.crew_design_id is not None}
+        existing_by_id = {
+            int(row.crew_design_id): row
+            for row in existing_rows
+            if row.crew_design_id is not None
+        }
 
         updated = 0
         for item in designs:
@@ -2256,7 +2495,9 @@ class ApiFlowRepository:
         db.flush()
         return updated
 
-    def _pair_key(self, attacker_user_id: Any, defender_user_id: Any) -> tuple[int, int] | None:
+    def _pair_key(
+        self, attacker_user_id: Any, defender_user_id: Any
+    ) -> tuple[int, int] | None:
         attacker = self._as_int(attacker_user_id)
         defender = self._as_int(defender_user_id)
         if attacker is None or defender is None:
@@ -2277,7 +2518,9 @@ class ApiFlowRepository:
             return defender_id
         return None
 
-    def _record_matchup_log_for_rows(self, db, replay_rows: list[BattleReplayNormalized]) -> dict[str, Any]:
+    def _record_matchup_log_for_rows(
+        self, db, replay_rows: list[BattleReplayNormalized]
+    ) -> dict[str, Any]:
         candidates: list[tuple[tuple[int, int], int, BattleReplayNormalized]] = []
         affected_pairs: set[tuple[int, int]] = set()
         for row in replay_rows:
@@ -2348,7 +2591,9 @@ class ApiFlowRepository:
             )
         return {"inserted_logs": inserted_logs, "affected_pairs": affected_pairs}
 
-    def _recompute_matchup_stats_for_pairs(self, db, pairs: set[tuple[int, int]]) -> int:
+    def _recompute_matchup_stats_for_pairs(
+        self, db, pairs: set[tuple[int, int]]
+    ) -> int:
         if not pairs:
             return 0
 
@@ -2377,7 +2622,9 @@ class ApiFlowRepository:
                     PlayerMatchupLog.player_low_user_id == low_id,
                     PlayerMatchupLog.player_high_user_id == high_id,
                 )
-                .order_by(PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc())
+                .order_by(
+                    PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc()
+                )
                 .all()
             )
             existing_stat = stats_by_pair.get((low_id, high_id))
@@ -2413,11 +2660,18 @@ class ApiFlowRepository:
                         ),
                     )
                 )
-                .order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .order_by(
+                    BattleReplayNormalized.captured_at.desc(),
+                    BattleReplayNormalized.id.desc(),
+                )
                 .first()
             )
-            low_name = existing_stat.player_low_name if existing_stat is not None else None
-            high_name = existing_stat.player_high_name if existing_stat is not None else None
+            low_name = (
+                existing_stat.player_low_name if existing_stat is not None else None
+            )
+            high_name = (
+                existing_stat.player_high_name if existing_stat is not None else None
+            )
             if latest_replay is not None:
                 if self._as_int(latest_replay.attacker_user_id) == low_id:
                     low_name = latest_replay.attacker_name or low_name
@@ -2463,7 +2717,9 @@ class ApiFlowRepository:
             logger.info("event=matchup_stats_recomputed pairs=%s", recomputed)
         return recomputed
 
-    def _prune_obsolete_replays_for_pairs(self, db, pairs: set[tuple[int, int]], keep: int | None = None) -> int:
+    def _prune_obsolete_replays_for_pairs(
+        self, db, pairs: set[tuple[int, int]], keep: int | None = None
+    ) -> int:
         """Delete normalized replays beyond the newest `keep` per pair.
 
         `keep` counts DISTINCT battles: when the same battle was captured
@@ -2478,8 +2734,7 @@ class ApiFlowRepository:
             return 0
         if keep is None:
             keep = int(getattr(settings, "API_FLOW_REPLAYS_PER_PAIR", 1) or 1)
-        if keep < 1:
-            keep = 1
+        keep = max(keep, 1)
 
         obsolete_event_ids: set[int] = set()
         deleted_replay_count = 0
@@ -2502,7 +2757,10 @@ class ApiFlowRepository:
                         ),
                     )
                 )
-                .order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .order_by(
+                    BattleReplayNormalized.captured_at.desc(),
+                    BattleReplayNormalized.id.desc(),
+                )
                 .all()
             )
             if len(replay_rows) <= keep:
@@ -2527,7 +2785,9 @@ class ApiFlowRepository:
                 kept_battle_ids.add(battle_id)
                 survivor_ids.add(int(row.id))
 
-            obsolete_rows = [row for row in replay_rows if int(row.id) not in survivor_ids]
+            obsolete_rows = [
+                row for row in replay_rows if int(row.id) not in survivor_ids
+            ]
             if not obsolete_rows:
                 continue
             deleted_replay_count += len(obsolete_rows)
@@ -2580,10 +2840,14 @@ class ApiFlowRepository:
         )
         return int(deleted or 0)
 
-    def get_h2h_summary(self, low_user_id: int, high_user_id: int,
-                        date_from: datetime | None = None,
-                        date_to: datetime | None = None,
-                        outcome: str | None = None) -> dict[str, Any] | None:
+    def get_h2h_summary(
+        self,
+        low_user_id: int,
+        high_user_id: int,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        outcome: str | None = None,
+    ) -> dict[str, Any] | None:
         """Get H2H summary metrics for a player pair"""
         db = SessionLocal()
         try:
@@ -2602,7 +2866,9 @@ class ApiFlowRepository:
             if outcome:
                 query = query.filter(PlayerMatchupLog.outcome_type == outcome)
 
-            logs = query.order_by(PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc()).all()
+            logs = query.order_by(
+                PlayerMatchupLog.captured_at.desc(), PlayerMatchupLog.id.desc()
+            ).all()
 
             if not logs:
                 return None
@@ -2610,12 +2876,6 @@ class ApiFlowRepository:
             low_wins = 0
             high_wins = 0
             unknown_results = 0
-            total_loot_low = 0
-            total_loot_high = 0
-            trophy_sum_low = 0
-            trophy_sum_high = 0
-            trophy_count_low = 0
-            trophy_count_high = 0
 
             first_date = None
             last_date = None
@@ -2649,7 +2909,10 @@ class ApiFlowRepository:
                         ),
                     )
                 )
-                .order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                .order_by(
+                    BattleReplayNormalized.captured_at.desc(),
+                    BattleReplayNormalized.id.desc(),
+                )
                 .first()
             )
 
@@ -2678,11 +2941,15 @@ class ApiFlowRepository:
         finally:
             db.close()
 
-    def get_h2h_battles(self, low_user_id: int, high_user_id: int,
-                        date_from: datetime | None = None,
-                        date_to: datetime | None = None,
-                        outcome: str | None = None,
-                        limit: int = 1000) -> list[dict[str, Any]]:
+    def get_h2h_battles(
+        self,
+        low_user_id: int,
+        high_user_id: int,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        outcome: str | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
         """Get detailed battles for a player pair"""
         db = SessionLocal()
         try:
@@ -2706,31 +2973,48 @@ class ApiFlowRepository:
             if outcome:
                 query = query.filter(BattleReplayNormalized.outcome_type == outcome)
 
-            battles = query.order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc()).limit(limit).all()
+            battles = (
+                query.order_by(
+                    BattleReplayNormalized.captured_at.desc(),
+                    BattleReplayNormalized.id.desc(),
+                )
+                .limit(limit)
+                .all()
+            )
 
             result = []
             for b in battles:
                 is_low_attacker = self._as_int(b.attacker_user_id) == low_user_id
-                result.append({
-                    "captured_at": b.captured_at,
-                    "battle_id": b.battle_id,
-                    "attacker_name": b.attacker_name,
-                    "defender_name": b.defender_name,
-                    "outcome": b.outcome_type,
-                    "attacker_trophy_delta": b.win_trophy_result if is_low_attacker else b.lose_trophy_result,
-                    "defender_trophy_delta": b.lose_trophy_result if is_low_attacker else b.win_trophy_result,
-                    "loot_minerals": f"M {b.win_minerals_result or 0}/{b.lose_minerals_result or 0}",
-                    "loot_gas": f"G {b.win_gas_result or 0}/{b.lose_gas_result or 0}",
-                })
+                result.append(
+                    {
+                        "captured_at": b.captured_at,
+                        "battle_id": b.battle_id,
+                        "attacker_name": b.attacker_name,
+                        "defender_name": b.defender_name,
+                        "outcome": b.outcome_type,
+                        "attacker_trophy_delta": b.win_trophy_result
+                        if is_low_attacker
+                        else b.lose_trophy_result,
+                        "defender_trophy_delta": b.lose_trophy_result
+                        if is_low_attacker
+                        else b.win_trophy_result,
+                        "loot_minerals": f"M {b.win_minerals_result or 0}/{b.lose_minerals_result or 0}",
+                        "loot_gas": f"G {b.win_gas_result or 0}/{b.lose_gas_result or 0}",
+                    }
+                )
             return result
         finally:
             db.close()
 
-    def get_h2h_trends(self, low_user_id: int, high_user_id: int,
-                       date_from: datetime | None = None,
-                       date_to: datetime | None = None,
-                       outcome: str | None = None,
-                       bucket: str = "day") -> list[dict[str, Any]]:
+    def get_h2h_trends(
+        self,
+        low_user_id: int,
+        high_user_id: int,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        outcome: str | None = None,
+        bucket: str = "day",
+    ) -> list[dict[str, Any]]:
         """Get time-series trend data for H2H (bucketed by day/week)"""
         db = SessionLocal()
         try:
@@ -2761,8 +3045,15 @@ class ApiFlowRepository:
 
             from collections import defaultdict
 
-            buckets = defaultdict(lambda: {"battle_count": 0, "player_low_wins": 0, "player_high_wins": 0,
-                                           "player_low_trophies": [], "player_high_trophies": []})
+            buckets = defaultdict(
+                lambda: {
+                    "battle_count": 0,
+                    "player_low_wins": 0,
+                    "player_high_wins": 0,
+                    "player_low_trophies": [],
+                    "player_high_trophies": [],
+                }
+            )
 
             for log in logs:
                 dt = log.captured_at
@@ -2790,28 +3081,44 @@ class ApiFlowRepository:
                 if replay:
                     if self._as_int(replay.attacker_user_id) == low_user_id:
                         if replay.attacker_trophy is not None:
-                            buckets[period]["player_low_trophies"].append(replay.attacker_trophy)
+                            buckets[period]["player_low_trophies"].append(
+                                replay.attacker_trophy
+                            )
                         if replay.defender_trophy is not None:
-                            buckets[period]["player_high_trophies"].append(replay.defender_trophy)
+                            buckets[period]["player_high_trophies"].append(
+                                replay.defender_trophy
+                            )
                     else:
                         if replay.defender_trophy is not None:
-                            buckets[period]["player_low_trophies"].append(replay.defender_trophy)
+                            buckets[period]["player_low_trophies"].append(
+                                replay.defender_trophy
+                            )
                         if replay.attacker_trophy is not None:
-                            buckets[period]["player_high_trophies"].append(replay.attacker_trophy)
+                            buckets[period]["player_high_trophies"].append(
+                                replay.attacker_trophy
+                            )
 
             trends = []
             for period in sorted(buckets.keys()):
                 data = buckets[period]
                 low_trophies = data["player_low_trophies"]
                 high_trophies = data["player_high_trophies"]
-                trends.append({
-                    "period": period,
-                    "battle_count": data["battle_count"],
-                    "player_low_wins": data["player_low_wins"],
-                    "player_high_wins": data["player_high_wins"],
-                    "player_low_avg_trophies": sum(low_trophies) // len(low_trophies) if low_trophies else 0,
-                    "player_high_avg_trophies": sum(high_trophies) // len(high_trophies) if high_trophies else 0,
-                })
+                trends.append(
+                    {
+                        "period": period,
+                        "battle_count": data["battle_count"],
+                        "player_low_wins": data["player_low_wins"],
+                        "player_high_wins": data["player_high_wins"],
+                        "player_low_avg_trophies": sum(low_trophies)
+                        // len(low_trophies)
+                        if low_trophies
+                        else 0,
+                        "player_high_avg_trophies": sum(high_trophies)
+                        // len(high_trophies)
+                        if high_trophies
+                        else 0,
+                    }
+                )
 
             return trends
         finally:
@@ -2839,30 +3146,32 @@ class ApiFlowRepository:
         """
         db = SessionLocal()
         try:
-            replays = (
-                db.query(BattleReplayNormalized)
-                .filter(
-                    or_(
-                        and_(
-                            BattleReplayNormalized.attacker_user_id == low_user_id,
-                            BattleReplayNormalized.defender_user_id == high_user_id,
-                        ),
-                        and_(
-                            BattleReplayNormalized.attacker_user_id == high_user_id,
-                            BattleReplayNormalized.defender_user_id == low_user_id,
-                        ),
-                    )
+            replays = db.query(BattleReplayNormalized).filter(
+                or_(
+                    and_(
+                        BattleReplayNormalized.attacker_user_id == low_user_id,
+                        BattleReplayNormalized.defender_user_id == high_user_id,
+                    ),
+                    and_(
+                        BattleReplayNormalized.attacker_user_id == high_user_id,
+                        BattleReplayNormalized.defender_user_id == low_user_id,
+                    ),
                 )
             )
             if date_from is not None:
-                replays = replays.filter(BattleReplayNormalized.captured_at >= date_from)
+                replays = replays.filter(
+                    BattleReplayNormalized.captured_at >= date_from
+                )
             if date_to is not None:
                 replays = replays.filter(BattleReplayNormalized.captured_at <= date_to)
             if outcome:
                 replays = replays.filter(BattleReplayNormalized.outcome_type == outcome)
 
             replays = (
-                replays.order_by(BattleReplayNormalized.captured_at.desc(), BattleReplayNormalized.id.desc())
+                replays.order_by(
+                    BattleReplayNormalized.captured_at.desc(),
+                    BattleReplayNormalized.id.desc(),
+                )
                 .limit(limit)
                 .all()
             )
@@ -2899,21 +3208,32 @@ class ApiFlowRepository:
                 if defender_id is not None:
                     side_owner[(r.id, "defender")] = defender_id
 
-
             ship_map_es, ship_map_en = self._load_design_maps(
-                db, ShipDesign, ShipDesign.ship_design_id,
+                db,
+                ShipDesign,
+                ShipDesign.ship_design_id,
                 {int(s.ship_design_id) for s in ships if s.ship_design_id is not None},
             )
             room_map_es, room_map_en = self._load_design_maps(
-                db, RoomDesign, RoomDesign.room_design_id,
+                db,
+                RoomDesign,
+                RoomDesign.room_design_id,
                 {int(r.room_design_id) for r in rooms if r.room_design_id is not None},
             )
             crew_map_es, crew_map_en = self._load_design_maps(
-                db, CrewDesign, CrewDesign.crew_design_id,
-                {int(c.character_design_id) for c in characters if c.character_design_id is not None},
+                db,
+                CrewDesign,
+                CrewDesign.crew_design_id,
+                {
+                    int(c.character_design_id)
+                    for c in characters
+                    if c.character_design_id is not None
+                },
             )
 
-            def _owner_key_for(row_side: str, replay_row: BattleReplayNormalized) -> str | None:
+            def _owner_key_for(
+                row_side: str, replay_row: BattleReplayNormalized
+            ) -> str | None:
                 """Return 'player_low'/'player_high' for the fielding player, or None if unknown."""
                 owner_id = side_owner.get((replay_row.id, row_side))
                 if owner_id == low_user_id:
@@ -2921,7 +3241,6 @@ class ApiFlowRepository:
                 if owner_id == high_user_id:
                     return "player_high"
                 return None
-
 
             players = {
                 "player_low": self._init_breakdown_player(low_user_id),
@@ -2943,7 +3262,9 @@ class ApiFlowRepository:
                 bucket = players[key]["ships"][s.ship_id]
                 bucket["battles"] += 1
                 if s.ship_name:
-                    bucket["ship_name"] = self._normalize_text(s.ship_name) or bucket.get("ship_name")
+                    bucket["ship_name"] = self._normalize_text(
+                        s.ship_name
+                    ) or bucket.get("ship_name")
                 if s.ship_design_id is not None:
                     bucket["ship_design_id"] = int(s.ship_design_id)
                     bucket["ship_design_name"] = self._translate_design_name(
@@ -2989,20 +3310,31 @@ class ApiFlowRepository:
                 bucket = players[key]["crew"][c.character_id]
                 bucket["battles"] += 1
                 if c.character_name:
-                    bucket["character_name"] = self._normalize_text(c.character_name) or bucket.get("character_name")
+                    bucket["character_name"] = self._normalize_text(
+                        c.character_name
+                    ) or bucket.get("character_name")
                 if c.character_design_id is not None:
                     bucket["character_design_id"] = int(c.character_design_id)
                     bucket["character_design_name"] = self._translate_design_name(
-                        c.character_design_id, crew_map_es, crew_map_en, c.character_name
+                        c.character_design_id,
+                        crew_map_es,
+                        crew_map_en,
+                        c.character_name,
                     )
                 char_level = self._as_int(c.level)
                 if char_level is not None:
                     bucket["levels"].append(char_level)
 
             for key in ("player_low", "player_high"):
-                players[key]["ships"] = self._finalize_breakdown_buckets(players[key]["ships"])
-                players[key]["rooms"] = self._finalize_breakdown_buckets(players[key]["rooms"])
-                players[key]["crew"] = self._finalize_breakdown_buckets(players[key]["crew"])
+                players[key]["ships"] = self._finalize_breakdown_buckets(
+                    players[key]["ships"]
+                )
+                players[key]["rooms"] = self._finalize_breakdown_buckets(
+                    players[key]["rooms"]
+                )
+                players[key]["crew"] = self._finalize_breakdown_buckets(
+                    players[key]["crew"]
+                )
                 players[key]["total_battles_analyzed"] = len(replays)
 
             # Ship battle count is per-battle-per-side; ships fielded in more
@@ -3022,21 +3354,36 @@ class ApiFlowRepository:
     def _init_breakdown_player(user_id: int) -> dict[str, Any]:
         return {
             "user_id": user_id,
-            "ships": defaultdict(lambda: {
-                "battles": 0, "ship_name": None, "ship_design_id": None,
-                "ship_design_name": None, "levels": [], "power_scores": [],
-            }),
-            "rooms": defaultdict(lambda: {
-                "battles": 0, "room_design_id": None, "room_design_name": None,
-            }),
-            "crew": defaultdict(lambda: {
-                "battles": 0, "character_name": None, "character_design_id": None,
-                "character_design_name": None, "levels": [],
-            }),
+            "ships": defaultdict(
+                lambda: {
+                    "battles": 0,
+                    "ship_name": None,
+                    "ship_design_id": None,
+                    "ship_design_name": None,
+                    "levels": [],
+                    "power_scores": [],
+                }
+            ),
+            "rooms": defaultdict(
+                lambda: {
+                    "battles": 0,
+                    "room_design_id": None,
+                    "room_design_name": None,
+                }
+            ),
+            "crew": defaultdict(
+                lambda: {
+                    "battles": 0,
+                    "character_name": None,
+                    "character_design_id": None,
+                    "character_design_name": None,
+                    "levels": [],
+                }
+            ),
         }
 
     @staticmethod
-    def _finalize_breakdown_buckets(buckets: "defaultdict") -> list[dict[str, Any]]:
+    def _finalize_breakdown_buckets(buckets: defaultdict) -> list[dict[str, Any]]:
         rows = []
         for _id, data in buckets.items():
             levels = [lv for lv in data.pop("levels", []) if lv is not None]
@@ -3047,7 +3394,17 @@ class ApiFlowRepository:
             data["avg_power_score"] = round(avg_power, 1)
             data["id"] = _id
             rows.append(dict(data))
-        rows.sort(key=lambda r: (-int(r.get("battles", 0)), str(r.get("ship_design_name") or r.get("room_design_name") or r.get("character_design_name") or "")))
+        rows.sort(
+            key=lambda r: (
+                -int(r.get("battles", 0)),
+                str(
+                    r.get("ship_design_name")
+                    or r.get("room_design_name")
+                    or r.get("character_design_name")
+                    or ""
+                ),
+            )
+        )
         return rows
 
     def get_unique_player_pairs(self) -> list[dict[str, Any]]:
@@ -3061,8 +3418,10 @@ class ApiFlowRepository:
                 )
                 for low_id, high_id in db.query(
                     PlayerMatchupStat.player_low_user_id,
-                    PlayerMatchupStat.player_high_user_id
-                ).distinct().all()
+                    PlayerMatchupStat.player_high_user_id,
+                )
+                .distinct()
+                .all()
             ]
 
             if not pair_filters:
@@ -3072,15 +3431,17 @@ class ApiFlowRepository:
 
             result = []
             for s in stats:
-                result.append({
-                    "low_user_id": int(s.player_low_user_id),
-                    "high_user_id": int(s.player_high_user_id),
-                    "low_name": s.player_low_name,
-                    "high_name": s.player_high_name,
-                    "total_battles": int(s.total_battles or 0),
-                    "low_wins": int(s.player_low_wins or 0),
-                    "high_wins": int(s.player_high_wins or 0),
-                })
+                result.append(
+                    {
+                        "low_user_id": int(s.player_low_user_id),
+                        "high_user_id": int(s.player_high_user_id),
+                        "low_name": s.player_low_name,
+                        "high_name": s.player_high_name,
+                        "total_battles": int(s.total_battles or 0),
+                        "low_wins": int(s.player_low_wins or 0),
+                        "high_wins": int(s.player_high_wins or 0),
+                    }
+                )
             return result
         finally:
             db.close()
@@ -3090,26 +3451,34 @@ class ApiFlowRepository:
         db = SessionLocal()
         try:
             token = f"%{search.strip()}%"
-            stats = db.query(PlayerMatchupStat).filter(
-                or_(
-                    PlayerMatchupStat.player_low_name.ilike(token),
-                    PlayerMatchupStat.player_high_name.ilike(token),
-                    cast(PlayerMatchupStat.player_low_user_id, String).ilike(token),
-                    cast(PlayerMatchupStat.player_high_user_id, String).ilike(token),
+            stats = (
+                db.query(PlayerMatchupStat)
+                .filter(
+                    or_(
+                        PlayerMatchupStat.player_low_name.ilike(token),
+                        PlayerMatchupStat.player_high_name.ilike(token),
+                        cast(PlayerMatchupStat.player_low_user_id, String).ilike(token),
+                        cast(PlayerMatchupStat.player_high_user_id, String).ilike(
+                            token
+                        ),
+                    )
                 )
-            ).all()
+                .all()
+            )
 
             result = []
             for s in stats:
-                result.append({
-                    "low_user_id": int(s.player_low_user_id),
-                    "high_user_id": int(s.player_high_user_id),
-                    "low_name": s.player_low_name,
-                    "high_name": s.player_high_name,
-                    "total_battles": int(s.total_battles or 0),
-                    "low_wins": int(s.player_low_wins or 0),
-                    "high_wins": int(s.player_high_wins or 0),
-                })
+                result.append(
+                    {
+                        "low_user_id": int(s.player_low_user_id),
+                        "high_user_id": int(s.player_high_user_id),
+                        "low_name": s.player_low_name,
+                        "high_name": s.player_high_name,
+                        "total_battles": int(s.total_battles or 0),
+                        "low_wins": int(s.player_low_wins or 0),
+                        "high_wins": int(s.player_high_wins or 0),
+                    }
+                )
             return result
         finally:
             db.close()

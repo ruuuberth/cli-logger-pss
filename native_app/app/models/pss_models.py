@@ -1,10 +1,22 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.sql import func
+
 from app.models.database import Base
+
 
 class ItemDesign(Base):
     __tablename__ = "item_designs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     item_design_id = Column(Integer, unique=True, index=True)
     name = Column(String(255))
@@ -74,7 +86,11 @@ class ItemDesign(Base):
 class ItemIngredient(Base):
     __tablename__ = "item_ingredients"
     __table_args__ = (
-        UniqueConstraint("item_design_id", "ingredient_item_design_id", name="ux_item_ingredients_item_ing"),
+        UniqueConstraint(
+            "item_design_id",
+            "ingredient_item_design_id",
+            name="ux_item_ingredients_item_ing",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -93,9 +109,10 @@ class ItemTag(Base):
     item_design_id = Column(Integer, index=True, nullable=False)
     tag = Column(String(100), index=True, nullable=False)
 
+
 class ShipDesign(Base):
     __tablename__ = "ship_designs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     ship_design_id = Column(Integer, unique=True, index=True)
     name = Column(String(255))
@@ -107,9 +124,10 @@ class ShipDesign(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+
 class CrewDesign(Base):
     __tablename__ = "crew_designs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     crew_design_id = Column(Integer, unique=True, index=True)
     name = Column(String(255))
@@ -125,7 +143,7 @@ class CrewDesign(Base):
 
 class RoomDesign(Base):
     __tablename__ = "room_designs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     room_design_id = Column(Integer, unique=True, index=True)
     name = Column(String(255))

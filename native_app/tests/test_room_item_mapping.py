@@ -53,18 +53,26 @@ def test_resolve_action_label_uses_item_catalog(tmp_path) -> None:
     mapping_path = tmp_path / "room_item_slot_mappings.json"
     mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
     item_xml = (
-        '<ItemDesigns>'
+        "<ItemDesigns>"
         '<ItemDesign ItemDesignId="2236" ItemDesignName="Dron ECM de misiles Nivel 2" ItemDesignNameEN="Missile ECM Drone Lv2"/>'
         "</ItemDesigns>"
     )
     (tmp_path / "ItemDesigns.txt").write_text(item_xml, encoding="utf-8")
     catalogo = CatalogoResolver(tmp_path)
     resolver = RoomItemMappingResolver(mapping_path=mapping_path, catalogo=catalogo)
-    assert resolver.resolve_action_label(825, 74, "Elegir objeto {4}") == "Elegir objeto Dron ECM de misiles"
+    assert (
+        resolver.resolve_action_label(825, 74, "Elegir objeto {4}")
+        == "Elegir objeto Dron ECM de misiles"
+    )
 
 
 def test_resolve_action_label_falls_back_when_room_missing(tmp_path) -> None:
     mapping_path = tmp_path / "room_item_slot_mappings.json"
     mapping_path.write_text(json.dumps({"version": 1, "rooms": {}}), encoding="utf-8")
-    resolver = RoomItemMappingResolver(mapping_path=mapping_path, catalogo=CatalogoResolver(tmp_path))
-    assert resolver.resolve_action_label(999, 74, "Elegir objeto {4}") == "Elegir objeto {4}"
+    resolver = RoomItemMappingResolver(
+        mapping_path=mapping_path, catalogo=CatalogoResolver(tmp_path)
+    )
+    assert (
+        resolver.resolve_action_label(999, 74, "Elegir objeto {4}")
+        == "Elegir objeto {4}"
+    )

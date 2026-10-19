@@ -21,7 +21,8 @@ class ProcessResourceMonitor:
     def _check_psutil_available(self) -> bool:
         """Verificar si psutil está disponible para Windows/Linux alternativo"""
         try:
-            import psutil
+            import psutil  # noqa: F401  # intentionally unused; runtime availability check
+
             return True
         except ImportError:
             return False
@@ -29,15 +30,15 @@ class ProcessResourceMonitor:
     def read_usage(self, pid: int | None) -> ProcessUsage | None:
         if not pid:
             return None
-        
+
         # Usar psutil si está disponible (preferido para Windows)
         if self._use_psutil:
             return self._read_usage_psutil(pid)
-        
+
         # Fallback a /proc para Linux
         if sys.platform == "linux":
             return self._read_usage_proc(pid)
-        
+
         # Windows sin psutil - retornar None (no soportado)
         return None
 
@@ -45,6 +46,7 @@ class ProcessResourceMonitor:
         """Leer uso de recursos usando psutil (funciona en Windows y Linux)"""
         try:
             import psutil
+
             try:
                 process = psutil.Process(pid)
                 cpu_percent = process.cpu_percent(interval=None)
@@ -77,7 +79,7 @@ class ProcessResourceMonitor:
             rss_mb = (rss_pages * os.sysconf("SC_PAGE_SIZE")) / (1024 * 1024)
         except (ValueError, OSError):
             rss_mb = 0.0
-        
+
         sample_time = time.monotonic()
         previous = self._sample_cache.get(pid)
         self._sample_cache[pid] = (sample_time, int(total_jiffies))
@@ -92,18 +94,25 @@ class ProcessResourceMonitor:
                     cpu_count = float(os.cpu_count() or 1)
                     cpu_percent = max(
                         0.0,
-                        ((total_jiffies - prev_jiffies) / ticks_per_second) / elapsed * 100.0 / cpu_count,
+                        ((total_jiffies - prev_jiffies) / ticks_per_second)
+                        / elapsed
+                        * 100.0
+                        / cpu_count,
                     )
                 except (ValueError, OSError):
                     cpu_percent = 0.0
 
         try:
             total_mem_pages = os.sysconf("SC_PHYS_PAGES")
-            total_mem_mb = (total_mem_pages * os.sysconf("SC_PAGE_SIZE")) / (1024 * 1024)
+            total_mem_mb = (total_mem_pages * os.sysconf("SC_PAGE_SIZE")) / (
+                1024 * 1024
+            )
             mem_percent = (rss_mb / total_mem_mb) * 100.0 if total_mem_mb > 0 else 0.0
         except (ValueError, OSError):
             mem_percent = 0.0
-        return ProcessUsage(cpu_percent=cpu_percent, rss_mb=rss_mb, mem_percent=mem_percent)
+        return ProcessUsage(
+            cpu_percent=cpu_percent, rss_mb=rss_mb, mem_percent=mem_percent
+        )
 
     def format_usage(self, label: str, stats: ProcessUsage | None) -> str:
         if not stats:

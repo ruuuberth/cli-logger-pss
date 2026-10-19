@@ -92,7 +92,9 @@ def test_list_page_formats_labels() -> None:
 
 def test_h2h_fallback_when_ids_missing() -> None:
     class _RepoMissingIds(_Repo):
-        def list_battle_replay_rows(self, search: str, page: int, page_size: int, **kwargs):
+        def list_battle_replay_rows(
+            self, search: str, page: int, page_size: int, **kwargs
+        ):
             self.last_args = (search, page, page_size)
             return 1, [
                 BattleReplayListRow(
@@ -129,7 +131,9 @@ def test_h2h_fallback_when_ids_missing() -> None:
 
 def test_h2h_reorients_when_attacker_is_high_player() -> None:
     class _RepoSwapped(_Repo):
-        def list_battle_replay_rows(self, search: str, page: int, page_size: int, **kwargs):
+        def list_battle_replay_rows(
+            self, search: str, page: int, page_size: int, **kwargs
+        ):
             self.last_args = (search, page, page_size)
             return 1, [
                 BattleReplayListRow(
@@ -179,7 +183,14 @@ def test_get_battle_detail_delegates() -> None:
 
 def test_get_h2h_report_data_delegates() -> None:
     class _RepoH2H(_Repo):
-        def get_h2h_summary(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None):
+        def get_h2h_summary(
+            self,
+            low_user_id: int,
+            high_user_id: int,
+            date_from=None,
+            date_to=None,
+            outcome=None,
+        ):
             assert low_user_id == 10
             assert high_user_id == 20
             return {
@@ -195,24 +206,77 @@ def test_get_h2h_report_data_delegates() -> None:
                 "last_battle_date": datetime.fromisoformat("2026-01-05T10:00:00"),
             }
 
-        def get_h2h_battles(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None, limit=1000):
+        def get_h2h_battles(
+            self,
+            low_user_id: int,
+            high_user_id: int,
+            date_from=None,
+            date_to=None,
+            outcome=None,
+            limit=1000,
+        ):
             return [
-                {"captured_at": datetime.fromisoformat("2026-01-05T10:00:00"), "battle_id": 100, "attacker_name": "A", "defender_name": "B", "outcome": "Attacker Won", "attacker_trophy_delta": 10, "defender_trophy_delta": -5, "loot_minerals": "M 100/0", "loot_gas": "G 50/0"},
+                {
+                    "captured_at": datetime.fromisoformat("2026-01-05T10:00:00"),
+                    "battle_id": 100,
+                    "attacker_name": "A",
+                    "defender_name": "B",
+                    "outcome": "Attacker Won",
+                    "attacker_trophy_delta": 10,
+                    "defender_trophy_delta": -5,
+                    "loot_minerals": "M 100/0",
+                    "loot_gas": "G 50/0",
+                },
             ]
 
-        def get_h2h_trends(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None, bucket="day"):
+        def get_h2h_trends(
+            self,
+            low_user_id: int,
+            high_user_id: int,
+            date_from=None,
+            date_to=None,
+            outcome=None,
+            bucket="day",
+        ):
             return [
-                {"period": "2026-01-01", "battle_count": 2, "player_low_wins": 1, "player_high_wins": 1, "player_low_avg_trophies": 5000, "player_high_avg_trophies": 4800},
+                {
+                    "period": "2026-01-01",
+                    "battle_count": 2,
+                    "player_low_wins": 1,
+                    "player_high_wins": 1,
+                    "player_low_avg_trophies": 5000,
+                    "player_high_avg_trophies": 4800,
+                },
             ]
 
-        def get_h2h_fleet_breakdown(self, low_user_id: int, high_user_id: int, date_from=None, date_to=None, outcome=None, limit=1000):
+        def get_h2h_fleet_breakdown(
+            self,
+            low_user_id: int,
+            high_user_id: int,
+            date_from=None,
+            date_to=None,
+            outcome=None,
+            limit=1000,
+        ):
             return {
                 "player_low_user_id": low_user_id,
                 "player_high_user_id": high_user_id,
                 "battles_analyzed": 5,
                 "battle_ids": [100],
-                "player_low": {"user_id": 10, "ships": [], "rooms": [], "crew": [], "total_battles_analyzed": 5},
-                "player_high": {"user_id": 20, "ships": [], "rooms": [], "crew": [], "total_battles_analyzed": 5},
+                "player_low": {
+                    "user_id": 10,
+                    "ships": [],
+                    "rooms": [],
+                    "crew": [],
+                    "total_battles_analyzed": 5,
+                },
+                "player_high": {
+                    "user_id": 20,
+                    "ships": [],
+                    "rooms": [],
+                    "crew": [],
+                    "total_battles_analyzed": 5,
+                },
             }
 
     service = ApiFlowListService(repository=_RepoH2H())
@@ -229,7 +293,17 @@ def test_get_h2h_report_data_delegates() -> None:
 def test_get_unique_player_pairs_delegates() -> None:
     class _RepoPairs(_Repo):
         def get_unique_player_pairs(self):
-            return [{"low_user_id": 1, "high_user_id": 2, "low_name": "A", "high_name": "B", "total_battles": 3, "low_wins": 2, "high_wins": 1}]
+            return [
+                {
+                    "low_user_id": 1,
+                    "high_user_id": 2,
+                    "low_name": "A",
+                    "high_name": "B",
+                    "total_battles": 3,
+                    "low_wins": 2,
+                    "high_wins": 1,
+                }
+            ]
 
     service = ApiFlowListService(repository=_RepoPairs())
     pairs = service.get_unique_player_pairs()
@@ -241,7 +315,17 @@ def test_search_player_pairs_delegates() -> None:
     class _RepoSearch(_Repo):
         def search_player_pairs(self, search: str):
             assert search == "player"
-            return [{"low_user_id": 1, "high_user_id": 2, "low_name": "PlayerA", "high_name": "PlayerB", "total_battles": 3, "low_wins": 2, "high_wins": 1}]
+            return [
+                {
+                    "low_user_id": 1,
+                    "high_user_id": 2,
+                    "low_name": "PlayerA",
+                    "high_name": "PlayerB",
+                    "total_battles": 3,
+                    "low_wins": 2,
+                    "high_wins": 1,
+                }
+            ]
 
     service = ApiFlowListService(repository=_RepoSearch())
     pairs = service.search_player_pairs("player")

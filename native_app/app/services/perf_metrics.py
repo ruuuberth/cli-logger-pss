@@ -3,8 +3,9 @@ from __future__ import annotations
 import functools
 import logging
 import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator
+from typing import Any
 
 
 def profile_method(threshold_ms: int = 50):
@@ -19,8 +20,14 @@ def profile_method(threshold_ms: int = 50):
             finally:
                 elapsed_ms = (time.perf_counter() - started) * 1000.0
                 if elapsed_ms >= float(threshold_ms):
-                    logger.info("event=perf_metric func=%s elapsed_ms=%.2f", func.__name__, elapsed_ms)
+                    logger.info(
+                        "event=perf_metric func=%s elapsed_ms=%.2f",
+                        func.__name__,
+                        elapsed_ms,
+                    )
+
         return wrapper
+
     return decorator
 
 

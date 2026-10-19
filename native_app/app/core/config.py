@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 # only accept JSON from .env/env vars — list fields take a JSON array, and
 # a bare empty value (`FIELD=`) is invalid and fails at startup.
 _JSON_FORMAT_HINT = (
-    'Use valid JSON in .env (list fields take an array, e.g. '
+    "Use valid JSON in .env (list fields take an array, e.g. "
     'API_FLOW_IGNORE_HOSTS=["api.pixelstarships.com"]; for an empty list '
-    'use FIELD=[], e.g. API_FLOW_IGNORE_HOSTS=[]).'
+    "use FIELD=[], e.g. API_FLOW_IGNORE_HOSTS=[])."
 )
 
 

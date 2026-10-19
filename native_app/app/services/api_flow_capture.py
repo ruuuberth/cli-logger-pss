@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import json
-import pkgutil
 import logging
 import os
+import pkgutil
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from uuid import uuid4
 
 from app.core.config import settings
@@ -22,49 +23,53 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _EVENT_PREFIX = "API_FLOW_EVENT "
-EXPECTED_MITM_ADDON_SHA256 = "5b91509219cd4cfde2170a4c34c9c1d4756157fb92401407980d4378e04359f9"
+EXPECTED_MITM_ADDON_SHA256 = (
+    "10fd8fd818df752705031344c199d6617adc435d503bca5064034a691f630851"
+)
 
 # Allowlist of trusted mitmdump binary paths for security hardening
-_ALLOWED_MITMPROXY_PATHS = frozenset({
-    "/usr/bin/mitmdump",
-    "/usr/local/bin/mitmdump",
-    "/opt/homebrew/bin/mitmdump",  # macOS ARM
-    "C:\\Program Files\\mitmproxy\\mitmdump.exe",
-    "C:\\Program Files (x86)\\mitmproxy\\mitmdump.exe",
-    # Bare command names that resolve via shutil.which to trusted paths
-    "mitmdump",
-    "mitmdump.exe",
-})
+_ALLOWED_MITMPROXY_PATHS = frozenset(
+    {
+        "/usr/bin/mitmdump",
+        "/usr/local/bin/mitmdump",
+        "/opt/homebrew/bin/mitmdump",  # macOS ARM
+        "C:\\Program Files\\mitmproxy\\mitmdump.exe",
+        "C:\\Program Files (x86)\\mitmproxy\\mitmdump.exe",
+        # Bare command names that resolve via shutil.which to trusted paths
+        "mitmdump",
+        "mitmdump.exe",
+    }
+)
 
 
 def _is_trusted_mitmproxy_path(path: Path | str) -> bool:
     """Validate that a mitmdump binary path is in the trusted allowlist.
-    
+
     This prevents execution of arbitrary binaries if MITMPROXY_BINARY
     is compromised via environment variable or config manipulation.
-    
+
     Virtual environment paths are trusted when running inside a venv,
     as they are considered part of the application's trusted environment.
-    
+
     Bare command names (e.g., "mitmdump") are resolved via shutil.which
     and the resolved path is checked against the allowlist.
     """
     path_str = str(Path(path).resolve())
-    
+
     # Check against static allowlist (includes bare command names)
     if str(path) in _ALLOWED_MITMPROXY_PATHS:
         return True
-    
+
     # For bare command names without path separators, resolve via shutil.which
     if os.path.basename(str(path)) == str(path):
         resolved = shutil.which(str(path))
         if resolved and _is_trusted_mitmproxy_path(Path(resolved)):
             return True
-    
+
     # Check against static allowlist (full paths)
     if path_str in _ALLOWED_MITMPROXY_PATHS:
         return True
-    
+
     # Trust venv binaries when running inside a virtual environment
     if sys.prefix != sys.base_prefix:
         venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
@@ -74,13 +79,13 @@ def _is_trusted_mitmproxy_path(path: Path | str) -> bool:
                 return True
         except (OSError, RuntimeError):
             pass
-    
+
     return False
 
 
 def _hash_path(path: str) -> str:
     """Generate a short hash of a filesystem path for safe logging.
-    
+
     Prevents exposure of internal filesystem structure in logs.
     """
     return hashlib.sha256(path.encode()).hexdigest()[:12]
@@ -118,14 +123,20 @@ class ApiFlowCaptureManager:
                 return self._current_session
 
             if not settings.API_FLOW_ENABLED:
-                raise RuntimeError("API Flow está deshabilitado por configuración (.env).")
+                raise RuntimeError(
+                    "API Flow está deshabilitado por configuración (.env)."
+                )
 
             addon_path = self._resolve_addon_path()
             mitmproxy_binary = self._resolve_mitmproxy_binary_path()
             frozen = bool(getattr(sys, "frozen", False))
 
             if frozen and "_MEI" in str(addon_path):
-                logger.error("event=addon_invalid_runtime_path frozen=%s addon_path=%s", frozen, addon_path)
+                logger.error(
+                    "event=addon_invalid_runtime_path frozen=%s addon_path=%s",
+                    frozen,
+                    addon_path,
+                )
                 self._cleanup_temp_addon_path()
                 raise RuntimeError(
                     "[capture_addon_unresolvable] resolved addon path points to _MEI internal bundle."
@@ -158,7 +169,9 @@ class ApiFlowCaptureManager:
                 "--set",
                 f"api_flow_capture_paths={','.join(settings.API_FLOW_CAPTURE_PATH_ALLOWLIST)}",
             ]
-            ignore_regex = self._build_ignore_hosts_regex(settings.API_FLOW_IGNORE_HOSTS)
+            ignore_regex = self._build_ignore_hosts_regex(
+                settings.API_FLOW_IGNORE_HOSTS
+            )
             if ignore_regex:
                 cmd.extend(["--ignore-hosts", ignore_regex])
 
@@ -193,12 +206,14 @@ class ApiFlowCaptureManager:
 
             self._current_session = CaptureSession(
                 session_id=session_id,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
                 listen_host=settings.MITMPROXY_LISTEN_HOST,
                 listen_port=int(settings.MITMPROXY_LISTEN_PORT),
                 pid=self._process.pid,
             )
-            self._reader_thread = threading.Thread(target=self._read_stdout, daemon=True)
+            self._reader_thread = threading.Thread(
+                target=self._read_stdout, daemon=True
+            )
             self._reader_thread.start()
             self._emit_status(
                 f"Captura activa en {settings.MITMPROXY_LISTEN_HOST}:{settings.MITMPROXY_LISTEN_PORT}"
@@ -322,7 +337,9 @@ class ApiFlowCaptureManager:
         frozen = bool(getattr(sys, "frozen", False))
         source_path = Path(__file__).resolve().parent / "mitm_api_flow_addon.py"
         if source_path.exists() and not frozen:
-            logger.info("event=addon_source_resolved path=%s frozen=%s", source_path, frozen)
+            logger.info(
+                "event=addon_source_resolved path=%s frozen=%s", source_path, frozen
+            )
             return source_path
 
         addon_bytes = self._load_addon_bytes(source_path, frozen)
@@ -340,17 +357,25 @@ class ApiFlowCaptureManager:
         try:
             return self._write_temp_addon(addon_bytes)
         except Exception as exc:
-            raise RuntimeError(f"Fallo al extraer addon mitmproxy a temporal: {exc}") from exc
+            raise RuntimeError(
+                f"Fallo al extraer addon mitmproxy a temporal: {exc}"
+            ) from exc
 
     def _load_addon_bytes(self, source_path: Path, frozen: bool) -> bytes | None:
         if source_path.exists() and not frozen:
             try:
                 return source_path.read_bytes()
             except Exception as exc:
-                raise RuntimeError(f"No se pudo leer el addon mitmproxy desde source: {exc}") from exc
+                raise RuntimeError(
+                    f"No se pudo leer el addon mitmproxy desde source: {exc}"
+                ) from exc
         addon_bytes = pkgutil.get_data("app.services", "mitm_api_flow_addon.py")
         if addon_bytes:
-            logger.info("event=addon_embedded_loaded frozen=%s bytes=%s", frozen, len(addon_bytes))
+            logger.info(
+                "event=addon_embedded_loaded frozen=%s bytes=%s",
+                frozen,
+                len(addon_bytes),
+            )
         return addon_bytes
 
     def _validate_addon_integrity(self, addon_bytes: bytes) -> None:
@@ -362,12 +387,14 @@ class ApiFlowCaptureManager:
                 EXPECTED_MITM_ADDON_SHA256,
                 digest,
             )
-            raise RuntimeError("[capture_addon_integrity_mismatch] Integridad de addon inválida (SHA256 mismatch)")
+            raise RuntimeError(
+                "[capture_addon_integrity_mismatch] Integridad de addon inválida (SHA256 mismatch)"
+            )
         logger.info("event=addon_integrity_ok sha256=%s", digest)
 
     def _normalize_addon_bytes(self, addon_bytes: bytes) -> bytes:
         # Normalize line endings to LF by removing all CR characters
-        return addon_bytes.replace(b'\r', b'')
+        return addon_bytes.replace(b"\r", b"")
 
     def _resolve_mitmproxy_binary_path(self) -> Path | str:
         configured = str(settings.MITMPROXY_BINARY or "").strip()
@@ -386,17 +413,28 @@ class ApiFlowCaptureManager:
             venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
             candidate = venv_bin / ("mitmdump.exe" if os.name == "nt" else "mitmdump")
             if self._is_executable_available(candidate):
-                logger.info("event=venv_mitmproxy_resolved path_hash=%s", _hash_path(str(candidate)))
+                logger.info(
+                    "event=venv_mitmproxy_resolved path_hash=%s",
+                    _hash_path(str(candidate)),
+                )
                 return candidate
-            logger.debug("event=venv_detected_no_binary venv_path_hash=%s candidate_hash=%s",
-                         _hash_path(sys.prefix), _hash_path(str(candidate)))
+            logger.debug(
+                "event=venv_detected_no_binary venv_path_hash=%s candidate_hash=%s",
+                _hash_path(sys.prefix),
+                _hash_path(str(candidate)),
+            )
 
         packaged = self._resolve_packaged_mitmproxy_path()
         if packaged is not None:
-            logger.info("event=packaged_mitmproxy_resolved path_hash=%s", _hash_path(str(packaged)))
+            logger.info(
+                "event=packaged_mitmproxy_resolved path_hash=%s",
+                _hash_path(str(packaged)),
+            )
             return packaged
 
-        if self._is_executable_available(configured) and _is_trusted_mitmproxy_path(configured):
+        if self._is_executable_available(configured) and _is_trusted_mitmproxy_path(
+            configured
+        ):
             return configured
 
         raise RuntimeError(

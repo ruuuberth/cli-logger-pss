@@ -1,4 +1,5 @@
 """Tests for ExcelReportGenerator multi-sheet support (H2H single workbook)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -77,7 +78,12 @@ def test_multi_sheet_column_widths(tmp_path) -> None:
 def test_add_rows_routes_to_default_data_sheet(tmp_path) -> None:
     """Battle-report path: add_rows() produces exactly one 'Data' sheet."""
     gen = _generator(tmp_path)
-    gen.add_rows([{"Battle ID": "b1", "Resultado": "VICTORY"}, {"Battle ID": "b2", "Resultado": "DEFEAT"}])
+    gen.add_rows(
+        [
+            {"Battle ID": "b1", "Resultado": "VICTORY"},
+            {"Battle ID": "b2", "Resultado": "DEFEAT"},
+        ]
+    )
     output_file = gen.generate()
 
     wb = load_workbook(output_file)
@@ -148,7 +154,15 @@ def test_too_long_sheet_name_raises(tmp_path) -> None:
 
 def test_invalid_sheet_name_characters_raise(tmp_path) -> None:
     gen = _generator(tmp_path)
-    for bad in ["My[Sheet]", "My]Sheet", "My:Sheet", "My*Sheet", "My?Sheet", "My/Sheet", "My\\Sheet"]:
+    for bad in [
+        "My[Sheet]",
+        "My]Sheet",
+        "My:Sheet",
+        "My*Sheet",
+        "My?Sheet",
+        "My/Sheet",
+        "My\\Sheet",
+    ]:
         with pytest.raises(ValueError, match="no válidos"):
             gen.add_sheet(bad, [{"A": 1}])
 
@@ -194,13 +208,27 @@ def _h2h_data(with_fleet: bool) -> dict:
             "total_battles": 3,
         },
         "battles": [
-            {"battle_id": "b1", "captured_at": "2024-01-01T10:00:00", "attacker_name": "Alice",
-             "defender_name": "Bob", "outcome": "VICTORY", "attacker_trophy_delta": 10,
-             "defender_trophy_delta": -10, "loot_minerals": 100, "loot_gas": 50},
+            {
+                "battle_id": "b1",
+                "captured_at": "2024-01-01T10:00:00",
+                "attacker_name": "Alice",
+                "defender_name": "Bob",
+                "outcome": "VICTORY",
+                "attacker_trophy_delta": 10,
+                "defender_trophy_delta": -10,
+                "loot_minerals": 100,
+                "loot_gas": 50,
+            },
         ],
         "trends": [
-            {"period": "2024-01", "battle_count": 3, "player_low_wins": 2,
-             "player_high_wins": 1, "player_low_avg_trophies": 4000, "player_high_avg_trophies": 3900},
+            {
+                "period": "2024-01",
+                "battle_count": 3,
+                "player_low_wins": 2,
+                "player_high_wins": 1,
+                "player_low_avg_trophies": 4000,
+                "player_high_avg_trophies": 3900,
+            },
         ],
     }
     if with_fleet:
@@ -209,12 +237,26 @@ def _h2h_data(with_fleet: bool) -> dict:
             "player_low": {
                 "user_id": 10,
                 "total_battles_analyzed": 3,
-                "ships": [{"id": 11, "battles": 3, "ship_name": "ShipA", "ship_design_name": "Acorazado",
-                           "avg_level": 8, "avg_power_score": 4000.0}],
+                "ships": [
+                    {
+                        "id": 11,
+                        "battles": 3,
+                        "ship_name": "ShipA",
+                        "ship_design_name": "Acorazado",
+                        "avg_level": 8,
+                        "avg_power_score": 4000.0,
+                    }
+                ],
                 "rooms": [],
                 "crew": [],
             },
-            "player_high": {"user_id": 20, "total_battles_analyzed": 3, "ships": [], "rooms": [], "crew": []},
+            "player_high": {
+                "user_id": 20,
+                "total_battles_analyzed": 3,
+                "ships": [],
+                "rooms": [],
+                "crew": [],
+            },
         }
     else:
         data["fleet_breakdown"] = {"player_low": {}, "player_high": {}}
@@ -250,22 +292,32 @@ def _run_h2h_excel(tmp_path, monkeypatch, h2h_data: dict) -> tuple[int, Path]:
             return default
 
     monkeypatch.setattr(cc, "prompt_input", _fake_prompt)
-    monkeypatch.setattr(cc.ApiFlowCliService, "get_unique_player_pairs", _FakeService().get_unique_player_pairs)
-    monkeypatch.setattr(cc.ApiFlowCliService, "get_h2h_report_data", _FakeService().get_h2h_report_data)
+    monkeypatch.setattr(
+        cc.ApiFlowCliService,
+        "get_unique_player_pairs",
+        _FakeService().get_unique_player_pairs,
+    )
+    monkeypatch.setattr(
+        cc.ApiFlowCliService, "get_h2h_report_data", _FakeService().get_h2h_report_data
+    )
 
     cmd = cc.GenerateH2HReportCommand(runtime=None)
     out_dir = tmp_path / "reports"
-    rc = cmd.execute([
-        "--non-interactive",
-        "--format=excel",
-        f"--output-dir={out_dir}",
-        "--filename=H2H_Alice_vs_Bob",
-        "--no-timestamp",
-    ])
+    rc = cmd.execute(
+        [
+            "--non-interactive",
+            "--format=excel",
+            f"--output-dir={out_dir}",
+            "--filename=H2H_Alice_vs_Bob",
+            "--no-timestamp",
+        ]
+    )
     return rc, out_dir
 
 
-def test_h2h_command_generates_single_multi_sheet_workbook(tmp_path, monkeypatch) -> None:
+def test_h2h_command_generates_single_multi_sheet_workbook(
+    tmp_path, monkeypatch
+) -> None:
     rc, out_dir = _run_h2h_excel(tmp_path, monkeypatch, _h2h_data(with_fleet=True))
 
     assert rc == 0
@@ -273,6 +325,7 @@ def test_h2h_command_generates_single_multi_sheet_workbook(tmp_path, monkeypatch
     assert len(files) == 1, f"expected exactly one workbook, got {files}"
 
     from openpyxl import load_workbook
+
     wb = load_workbook(files[0])
     assert wb.sheetnames == ["Resumen", "Batallas", "Tendencias", "Flota"]
     assert wb["Resumen"].cell(row=2, column=1).value == "Jugador 1"
@@ -281,7 +334,9 @@ def test_h2h_command_generates_single_multi_sheet_workbook(tmp_path, monkeypatch
     assert wb["Flota"].cell(row=2, column=3).value == "Acorazado"
 
 
-def test_h2h_command_omits_flota_sheet_when_no_fleet_rows(tmp_path, monkeypatch) -> None:
+def test_h2h_command_omits_flota_sheet_when_no_fleet_rows(
+    tmp_path, monkeypatch
+) -> None:
     rc, out_dir = _run_h2h_excel(tmp_path, monkeypatch, _h2h_data(with_fleet=False))
 
     assert rc == 0
@@ -289,6 +344,7 @@ def test_h2h_command_omits_flota_sheet_when_no_fleet_rows(tmp_path, monkeypatch)
     assert len(files) == 1
 
     from openpyxl import load_workbook
+
     wb = load_workbook(files[0])
     assert wb.sheetnames == ["Resumen", "Batallas", "Tendencias"]
 

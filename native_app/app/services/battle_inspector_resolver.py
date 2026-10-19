@@ -1,12 +1,15 @@
 from __future__ import annotations
+
 import json
 import logging
 from typing import Any
+
 from app.services.api_flow_storage import ApiFlowRepository
 from app.services.catalogo import CatalogoResolver
 from app.services.perf_metrics import profile_method
 
 logger = logging.getLogger(__name__)
+
 
 class BattleInspectorResolver:
     def __init__(self, catalogo: CatalogoResolver) -> None:
@@ -19,7 +22,9 @@ class BattleInspectorResolver:
         return detail
 
     @profile_method(threshold_ms=20)
-    def get_room_actions(self, room: dict[str, Any], detail: dict[str, Any]) -> list[dict[str, str]]:
+    def get_room_actions(
+        self, room: dict[str, Any], detail: dict[str, Any]
+    ) -> list[dict[str, str]]:
         attrs = room.get("room_attributes_json")
         if not isinstance(attrs, dict):
             attrs = {}
@@ -35,7 +40,11 @@ class BattleInspectorResolver:
                     {
                         "id": str(entry.get("index") or "-"),
                         "condition_id": str(entry.get("condition_type_id") or "-"),
-                        "action_id": str(entry.get("action_type_id") or entry.get("room_action_id") or "-"),
+                        "action_id": str(
+                            entry.get("action_type_id")
+                            or entry.get("room_action_id")
+                            or "-"
+                        ),
                     }
                 )
             if out:
@@ -49,7 +58,9 @@ class BattleInspectorResolver:
 
         return []
 
-    def _room_actions_from_cleaned(self, detail: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
+    def _room_actions_from_cleaned(
+        self, detail: dict[str, Any]
+    ) -> dict[str, list[dict[str, str]]]:
         api_flow = detail.get("api_flow_event") or {}
         event_id = str(api_flow.get("event_id") or api_flow.get("battle_id") or "")
         full_body = api_flow.get("response_body_full")
@@ -77,15 +88,23 @@ class BattleInspectorResolver:
             if room_id is None:
                 continue
             actions = []
-            for action_node in self._extract_children_by_path(node, ["RoomActions", "RoomAction"]):
+            for action_node in self._extract_children_by_path(
+                node, ["RoomActions", "RoomAction"]
+            ):
                 action_attrs = action_node.get("attributes")
                 if not isinstance(action_attrs, dict):
                     continue
                 actions.append(
                     {
-                        "id": str(action_attrs.get("RoomActionIndex") or len(actions) + 1),
+                        "id": str(
+                            action_attrs.get("RoomActionIndex") or len(actions) + 1
+                        ),
                         "condition_id": str(action_attrs.get("ConditionTypeId") or "-"),
-                        "action_id": str(action_attrs.get("ActionTypeId") or action_attrs.get("RoomActionId") or "-"),
+                        "action_id": str(
+                            action_attrs.get("ActionTypeId")
+                            or action_attrs.get("RoomActionId")
+                            or "-"
+                        ),
                     }
                 )
             if actions:

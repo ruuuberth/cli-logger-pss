@@ -1,18 +1,25 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models.database import Base
-from app.models.pss_models import ApiFlowEvent, BattleReplayNormalized, PlayerMatchupLog, PlayerMatchupStat
 import app.services.api_flow_storage as storage_module
+from app.models.database import Base
+from app.models.pss_models import (
+    ApiFlowEvent,
+    BattleReplayNormalized,
+    PlayerMatchupLog,
+    PlayerMatchupStat,
+)
 
 
 def _build_repo(monkeypatch):
     test_engine = create_engine("sqlite:///:memory:")
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    TestingSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=test_engine
+    )
     Base.metadata.create_all(test_engine)
     monkeypatch.setattr(storage_module, "SessionLocal", TestingSessionLocal)
     monkeypatch.setattr(storage_module, "engine", test_engine)
@@ -56,7 +63,7 @@ def _insert_replay(
 
 def test_backfill_prunes_and_builds_stats(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     _insert_replay(
@@ -104,7 +111,7 @@ def test_backfill_prunes_and_builds_stats(monkeypatch) -> None:
 
 def test_backfill_treats_swapped_roles_as_same_pair(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     _insert_replay(
@@ -151,8 +158,10 @@ def test_backfill_treats_swapped_roles_as_same_pair(monkeypatch) -> None:
 def test_backfill_keeps_n_replays_per_pair_when_configured(monkeypatch) -> None:
     """API_FLOW_REPLAYS_PER_PAIR > 1 retains history for the fleet breakdown."""
     repo, SessionLocal = _build_repo(monkeypatch)
-    monkeypatch.setattr(storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False)
-    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(
+        storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False
+    )
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     for i, minutes in enumerate((10, 6, 2, 1), start=1):
@@ -173,7 +182,11 @@ def test_backfill_keeps_n_replays_per_pair_when_configured(monkeypatch) -> None:
     metrics = repo.backfill_matchup_history_and_prune()
 
     db = SessionLocal()
-    replays = db.query(BattleReplayNormalized).order_by(BattleReplayNormalized.battle_id).all()
+    replays = (
+        db.query(BattleReplayNormalized)
+        .order_by(BattleReplayNormalized.battle_id)
+        .all()
+    )
     assert len(replays) == 3  # keep=3 of 4
     assert [r.battle_id for r in replays] == [302, 303, 304]  # newest 3 kept
     assert metrics["deleted_obsolete_replays"] == 1
@@ -185,8 +198,10 @@ def test_backfill_keeps_n_replays_per_pair_when_configured(monkeypatch) -> None:
 def test_backfill_explicit_keep_overrides_settings(monkeypatch) -> None:
     """Explicit keep parameter wins over the configured setting."""
     repo, SessionLocal = _build_repo(monkeypatch)
-    monkeypatch.setattr(storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 5, raising=False)
-    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(
+        storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 5, raising=False
+    )
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     for i, minutes in enumerate((10, 6, 2), start=1):
@@ -204,9 +219,7 @@ def test_backfill_explicit_keep_overrides_settings(monkeypatch) -> None:
     db.commit()
     db.close()
 
-    repo._prune_obsolete_replays_for_pairs(
-        SessionLocal(), {(10, 20)}, keep=1
-    )
+    repo._prune_obsolete_replays_for_pairs(SessionLocal(), {(10, 20)}, keep=1)
 
     db = SessionLocal()
     replays = db.query(BattleReplayNormalized).all()
@@ -223,23 +236,57 @@ def test_prune_counts_distinct_battles_not_rows(monkeypatch) -> None:
     retention window and double-counted in the fleet breakdown.
     """
     repo, SessionLocal = _build_repo(monkeypatch)
-    monkeypatch.setattr(storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False)
-    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(
+        storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False
+    )
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     # Battle 300 captured twice (re-capture), then two distinct battles
-    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=10),
-                   battle_id=300, attacker_user_id=10, attacker_name="Alice",
-                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
-    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=9),
-                   battle_id=300, attacker_user_id=10, attacker_name="Alice",
-                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
-    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=8),
-                   battle_id=400, attacker_user_id=10, attacker_name="Alice",
-                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
-    _insert_replay(db, session_id="sX", captured_at=now - timedelta(minutes=7),
-                   battle_id=500, attacker_user_id=10, attacker_name="Alice",
-                   defender_user_id=20, defender_name="Bob", outcome_type="Attacker Won")
+    _insert_replay(
+        db,
+        session_id="sX",
+        captured_at=now - timedelta(minutes=10),
+        battle_id=300,
+        attacker_user_id=10,
+        attacker_name="Alice",
+        defender_user_id=20,
+        defender_name="Bob",
+        outcome_type="Attacker Won",
+    )
+    _insert_replay(
+        db,
+        session_id="sX",
+        captured_at=now - timedelta(minutes=9),
+        battle_id=300,
+        attacker_user_id=10,
+        attacker_name="Alice",
+        defender_user_id=20,
+        defender_name="Bob",
+        outcome_type="Attacker Won",
+    )
+    _insert_replay(
+        db,
+        session_id="sX",
+        captured_at=now - timedelta(minutes=8),
+        battle_id=400,
+        attacker_user_id=10,
+        attacker_name="Alice",
+        defender_user_id=20,
+        defender_name="Bob",
+        outcome_type="Attacker Won",
+    )
+    _insert_replay(
+        db,
+        session_id="sX",
+        captured_at=now - timedelta(minutes=7),
+        battle_id=500,
+        attacker_user_id=10,
+        attacker_name="Alice",
+        defender_user_id=20,
+        defender_name="Bob",
+        outcome_type="Attacker Won",
+    )
     db.commit()
     db.close()
 
@@ -250,7 +297,9 @@ def test_prune_counts_distinct_battles_not_rows(monkeypatch) -> None:
     battle_ids = sorted({r.battle_id for r in replays})
     # keep=3 DISTINCT battles: 300 (newest row only), 400, 500 — not [300, 300, 400]
     assert battle_ids == [300, 400, 500], f"got {battle_ids}"
-    assert len(replays) == 3, f"duplicate must not waste a slot, got {len(replays)} rows"
+    assert len(replays) == 3, (
+        f"duplicate must not waste a slot, got {len(replays)} rows"
+    )
     newest_300 = [r for r in replays if r.battle_id == 300]
     assert len(newest_300) == 1  # only the newest capture of battle 300 survives
     # 4 rows -> 3 survivors = 1 deleted (the older duplicate of 300)
@@ -264,8 +313,10 @@ def test_prune_counts_distinct_battles_not_rows(monkeypatch) -> None:
 def test_backfill_default_keep_is_one(monkeypatch) -> None:
     """Without configuration the legacy behavior (keep newest 1) is preserved."""
     repo, SessionLocal = _build_repo(monkeypatch)
-    monkeypatch.delattr(storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", raising=False)
-    now = datetime.now(timezone.utc)
+    monkeypatch.delattr(
+        storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", raising=False
+    )
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     for i, minutes in enumerate((10, 5), start=1):
@@ -294,7 +345,7 @@ def test_backfill_default_keep_is_one(monkeypatch) -> None:
 
 def test_duplicate_battle_id_does_not_duplicate_log(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     _insert_replay(
@@ -335,7 +386,7 @@ def test_duplicate_battle_id_does_not_duplicate_log(monkeypatch) -> None:
 
 def test_delete_event_updates_matchup_stats(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     _insert_replay(
@@ -384,7 +435,7 @@ def test_delete_event_updates_matchup_stats(monkeypatch) -> None:
 
 def test_clear_battle_replays_clears_matchup_tables(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     _insert_replay(
@@ -413,7 +464,7 @@ def test_clear_battle_replays_clears_matchup_tables(monkeypatch) -> None:
 
 def test_battle_detail_includes_matchup_summary_and_recent_log(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     _insert_replay(

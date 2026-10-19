@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from app.cli.cli_services import CharacterCliService, RoomCliService
 
 
@@ -26,7 +24,12 @@ _CHAR_ROW = {
     "xp": 345,
     "character_attributes_json": {
         "CharacterActionsNormalized": [
-            {"index": "0", "condition_type_id": "405", "action_type_id": "34", "character_action_id": "1"}
+            {
+                "index": "0",
+                "condition_type_id": "405",
+                "action_type_id": "34",
+                "character_action_id": "1",
+            }
         ],
         "CharacterItemsNormalized": [
             {
@@ -68,7 +71,12 @@ _ROOM_ROW = {
     "room_status": "active",
     "room_attributes_json": {
         "RoomActionsNormalized": [
-            {"index": "0", "condition_type_id": "405", "action_type_id": "70", "room_action_id": "1"}
+            {
+                "index": "0",
+                "condition_type_id": "405",
+                "action_type_id": "70",
+                "room_action_id": "1",
+            }
         ]
     },
 }
@@ -100,8 +108,11 @@ def test_character_list_empty_when_no_detail() -> None:
 
 def test_character_inspect_resolves_stats_actions_items(tmp_path) -> None:
     from app.services.catalogo import CatalogoResolver
+
     catalogo = CatalogoResolver(tmp_path)
-    service = CharacterCliService(list_service=_FakeListService(_DETAIL), catalogo=catalogo)
+    service = CharacterCliService(
+        list_service=_FakeListService(_DETAIL), catalogo=catalogo
+    )
     detail = service.inspect_character(9001, 1, "attacker")
     assert "error" not in detail
     assert detail["name"] == "Lara"
@@ -148,6 +159,7 @@ def test_room_list_empty_when_no_detail() -> None:
 
 def test_room_inspect_resolves_actions(tmp_path) -> None:
     from app.services.catalogo import CatalogoResolver
+
     catalogo = CatalogoResolver(tmp_path)
     service = RoomCliService(list_service=_FakeListService(_DETAIL), catalogo=catalogo)
     detail = service.inspect_room(1234, 1, "attacker")

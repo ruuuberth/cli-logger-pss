@@ -39,7 +39,7 @@ def test_extracts_normalized_attacker_name_from_battle_xml() -> None:
     event = {
         "path": "/BattleService/GetBattle3?battleId=1",
         "response_body_preview": (
-            '<BattleService><GetBattle><Battle '
+            "<BattleService><GetBattle><Battle "
             'AttackingShipXml="&lt;Ship ShipName=&quot;  Ruuuberth4  &quot; /&gt;" /></GetBattle></BattleService>'
         ),
     }
@@ -65,7 +65,7 @@ def test_persists_only_whitelisted_battle_paths() -> None:
 def test_generates_cleaned_response_body_for_developer_readability() -> None:
     repo = ApiFlowRepository()
     raw_xml = (
-        '<BattleService><GetBattle><Battle '
+        "<BattleService><GetBattle><Battle "
         'AttackingShipXml="&lt;Ship ShipName=&quot;Ruuuberth4&quot; /&gt;" '
         'BattleId="123" /></GetBattle></BattleService>'
     )
@@ -78,7 +78,10 @@ def test_generates_cleaned_response_body_for_developer_readability() -> None:
     assert cleaned["tag"] == "BattleService"
     battle_node = cleaned["children"][0]["children"][0]
     assert battle_node["attributes"]["BattleId"] == "123"
-    assert battle_node["attributes"]["AttackingShipXml"]["attributes"]["ShipName"] == "Ruuuberth4"
+    assert (
+        battle_node["attributes"]["AttackingShipXml"]["attributes"]["ShipName"]
+        == "Ruuuberth4"
+    )
 
 
 def test_normalize_text_repairs_common_mojibake() -> None:
@@ -114,16 +117,24 @@ def test_extracts_normalized_battle_payload_from_cleaned() -> None:
                                 "ClientEndFrame": "1215",
                                 "AttackingUserXml": {
                                     "tag": "User",
-                                    "attributes": {"Id": "11342404", "Name": "lord stella", "Trophy": "5327"},
+                                    "attributes": {
+                                        "Id": "11342404",
+                                        "Name": "lord stella",
+                                        "Trophy": "5327",
+                                    },
                                 },
                                 "DefendingUserXml": {
                                     "tag": "User",
-                                    "attributes": {"Id": "11483762", "Name": "Ruuuberth4", "Trophy": "5023"},
+                                    "attributes": {
+                                        "Id": "11483762",
+                                        "Name": "Ruuuberth4",
+                                        "Trophy": "5023",
+                                    },
                                 },
                                 "AttackingShipXml": {
                                     "tag": "Ship",
                                     "attributes": {"ShipName": " 2Trick "},
-                                }
+                                },
                             },
                         }
                     ],
@@ -268,7 +279,12 @@ def test_room_attributes_include_nested_child_nodes() -> None:
                     "children": [
                         {
                             "tag": "Room",
-                            "attributes": {"RoomId": "1", "RoomDesignId": "2", "Row": "3", "Column": "4"},
+                            "attributes": {
+                                "RoomId": "1",
+                                "RoomDesignId": "2",
+                                "Row": "3",
+                                "Column": "4",
+                            },
                             "children": [
                                 {"tag": "Upgrade", "attributes": {"Level": "5"}},
                             ],
@@ -297,7 +313,10 @@ def test_character_attributes_include_nested_child_nodes() -> None:
                     "children": [
                         {
                             "tag": "Character",
-                            "attributes": {"CharacterId": "9", "CharacterDesignId": "11"},
+                            "attributes": {
+                                "CharacterId": "9",
+                                "CharacterDesignId": "11",
+                            },
                             "children": [
                                 {"tag": "Equipment", "attributes": {"Slot": "Helmet"}},
                             ],
@@ -403,7 +422,7 @@ def test_extracts_es_design_name_when_present() -> None:
     repo = ApiFlowRepository()
     xml = (
         "<DesignService>"
-        "<ShipDesign ShipDesignId=\"1\" ShipDesignName=\"Ship EN\" ShipDesignName_ES=\"Nave ES\" />"
+        '<ShipDesign ShipDesignId="1" ShipDesignName="Ship EN" ShipDesignName_ES="Nave ES" />'
         "</DesignService>"
     )
     designs = repo._extract_ship_designs_from_payload(xml)

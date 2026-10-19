@@ -1,4 +1,5 @@
 """Tests for DaemonManager (issue #31: zero test coverage)."""
+
 from __future__ import annotations
 
 import os
@@ -164,7 +165,9 @@ def test_is_running_win32_tasklist_exact_pid(tmp_path, monkeypatch) -> None:
     assert dm._is_running() is True
 
 
-def test_is_running_win32_tasklist_pid_prefix_does_not_match(tmp_path, monkeypatch) -> None:
+def test_is_running_win32_tasklist_pid_prefix_does_not_match(
+    tmp_path, monkeypatch
+) -> None:
     """Regression: PID 12 must NOT match tasklist lines containing 123 or 1200."""
     dm = _make_manager(tmp_path)
     dm.daemon_dir.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,5 @@
 """Tests for H2HReportTemplate.fleet_breakdown_rows."""
+
 from __future__ import annotations
 
 from app.reporting.report_templates import H2HReportTemplate
@@ -21,11 +22,26 @@ def test_fleet_breakdown_rows_structure() -> None:
             "player_low": {
                 "user_id": 10,
                 "total_battles_analyzed": 3,
-                "ships": [{"id": 11, "battles": 3, "ship_name": "ShipA", "ship_design_name": "Acorazado",
-                           "avg_level": 8.5, "avg_power_score": 4200.0}],
+                "ships": [
+                    {
+                        "id": 11,
+                        "battles": 3,
+                        "ship_name": "ShipA",
+                        "ship_design_name": "Acorazado",
+                        "avg_level": 8.5,
+                        "avg_power_score": 4200.0,
+                    }
+                ],
                 "rooms": [{"id": 111, "battles": 2, "room_design_name": "Escudo"}],
-                "crew": [{"id": 112, "battles": 1, "character_name": "PilotoX", "character_design_name": "Piloto",
-                          "avg_level": 12.0}],
+                "crew": [
+                    {
+                        "id": 112,
+                        "battles": 1,
+                        "character_name": "PilotoX",
+                        "character_design_name": "Piloto",
+                        "avg_level": 12.0,
+                    }
+                ],
             },
             "player_high": {
                 "user_id": 20,
@@ -68,11 +84,26 @@ def test_fleet_breakdown_rows_falls_back_to_raw_names() -> None:
             "player_low": {
                 "user_id": 10,
                 "total_battles_analyzed": 2,
-                "ships": [{"id": 5, "battles": 2, "ship_name": "RawShip", "ship_design_name": None,
-                           "avg_level": 0, "avg_power_score": 0}],
+                "ships": [
+                    {
+                        "id": 5,
+                        "battles": 2,
+                        "ship_name": "RawShip",
+                        "ship_design_name": None,
+                        "avg_level": 0,
+                        "avg_power_score": 0,
+                    }
+                ],
                 "rooms": [{"id": 7, "battles": 2, "room_design_name": None}],
-                "crew": [{"id": 9, "battles": 1, "character_name": None, "character_design_name": None,
-                          "avg_level": 0}],
+                "crew": [
+                    {
+                        "id": 9,
+                        "battles": 1,
+                        "character_name": None,
+                        "character_design_name": None,
+                        "avg_level": 0,
+                    }
+                ],
             },
             "player_high": {
                 "user_id": 20,

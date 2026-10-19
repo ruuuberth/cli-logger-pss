@@ -1,23 +1,25 @@
 """Main CLI Manager - Orchestrates the interactive console interface"""
+
 from __future__ import annotations
 
 import logging
+
 from rich.console import Console
 
-from app.core.config import settings
-from app.cli.menu import Menu
-from app.cli.utils import print_info, print_success, print_error, _safe_print
 from app.cli.concrete_commands import (
-    QueryEventsCommand,
+    CaptureTrafficCommand,
     GenerateBattleReportCommand,
     GenerateH2HReportCommand,
+    InspectBattleCommand,
     InspectCharacterCommand,
     InspectRoomCommand,
-    InspectBattleCommand,
-    CaptureTrafficCommand,
-    SystemMonitorCommand,
+    QueryEventsCommand,
     SettingsCommand,
+    SystemMonitorCommand,
 )
+from app.cli.menu import Menu
+from app.cli.utils import _safe_print, print_error, print_info, print_success
+from app.core.config import settings
 
 
 def _create_console(force_ascii: bool = False) -> Console:
@@ -34,7 +36,7 @@ class CliManager:
         self.console = _create_console(force_ascii=settings.CLI_FORCE_ASCII)
         self.logger = logging.getLogger(__name__)
         self.capture_runtime = capture_runtime
-        
+
         # Initialize commands
         self.query_cmd = QueryEventsCommand(runtime=capture_runtime)
         self.report_cmd = GenerateBattleReportCommand(runtime=capture_runtime)
@@ -45,18 +47,20 @@ class CliManager:
         self.capture_cmd = CaptureTrafficCommand(runtime=capture_runtime)
         self.monitor_cmd = SystemMonitorCommand()
         self.settings_cmd = SettingsCommand()
-        
+
         self._setup_menus()
 
     def _setup_menus(self) -> None:
         """Setup the menu structure"""
         self.main_menu = Menu("📊 Logger-PSS - Consola", console=self.console)
-        
+
         # Main menu items
         self.main_menu.add_item("1", "🔍 Consultar Eventos", self.cmd_query_events)
         self.main_menu.add_item("2", "📋 Generar Reportes", self.cmd_reports)
         self.main_menu.add_item("3", "📊 Generar Reporte H2H", self.cmd_h2h_report)
-        self.main_menu.add_item("4", "👤 Inspector de Tripulante", self.cmd_inspect_character)
+        self.main_menu.add_item(
+            "4", "👤 Inspector de Tripulante", self.cmd_inspect_character
+        )
         self.main_menu.add_item("5", "🏠 Inspector de Salas", self.cmd_inspect_rooms)
         self.main_menu.add_item("6", "🎖️ Inspector de Batalla", self.cmd_inspect_battle)
         self.main_menu.add_item("7", "📡 Captura de Tráfico", self.cmd_capture_traffic)
@@ -67,8 +71,11 @@ class CliManager:
         """Run the CLI manager"""
         try:
             print_info("Iniciando Logger-PSS Console...", console=self.console)
-            _safe_print(self.console, "[bold cyan]✨ Bienvenido a Logger-PSS - Versión Consola[/bold cyan]\n")
-            
+            _safe_print(
+                self.console,
+                "[bold cyan]✨ Bienvenido a Logger-PSS - Versión Consola[/bold cyan]\n",
+            )
+
             self.main_menu.run()
             print_success("¡Hasta luego!", console=self.console)
             return 0

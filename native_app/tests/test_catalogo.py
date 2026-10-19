@@ -44,4 +44,7 @@ def test_resolve_item_name_from_base_ignores_level(tmp_path) -> None:
     )
     (tmp_path / "ItemDesigns.txt").write_text(xml, encoding="utf-8")
     resolver = CatalogoResolver(tmp_path)
-    assert resolver.resolve_item_name_from_base("Missile ECM Drone") == "Dron ECM de misiles"
+    assert (
+        resolver.resolve_item_name_from_base("Missile ECM Drone")
+        == "Dron ECM de misiles"
+    )

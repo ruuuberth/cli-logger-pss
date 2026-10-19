@@ -7,7 +7,6 @@ from typing import Any
 
 from app.services.catalogo import CatalogoResolver
 
-
 _SET_ITEM_ACTION_TO_SLOT = {
     "70": 0,
     "71": 1,
@@ -26,7 +25,9 @@ class RoomItemMappingResolver:
         logger: logging.Logger | None = None,
     ) -> None:
         self.mapping_path = mapping_path or (
-            Path(__file__).resolve().parent.parent / "resources" / "room_item_slot_mappings.json"
+            Path(__file__).resolve().parent.parent
+            / "resources"
+            / "room_item_slot_mappings.json"
         )
         self.catalogo = catalogo
         self.logger = logger or logging.getLogger(__name__)
@@ -36,12 +37,16 @@ class RoomItemMappingResolver:
     def reload(self) -> None:
         self._mapping = None
 
-    def get_slot_index_for_action_type(self, action_type_id: int | str | None) -> int | None:
+    def get_slot_index_for_action_type(
+        self, action_type_id: int | str | None
+    ) -> int | None:
         if action_type_id is None:
             return None
         return _SET_ITEM_ACTION_TO_SLOT.get(str(action_type_id))
 
-    def get_item_name_base(self, room_design_id: int | str | None, slot_index: int | None) -> str | None:
+    def get_item_name_base(
+        self, room_design_id: int | str | None, slot_index: int | None
+    ) -> str | None:
         if room_design_id is None or slot_index is None:
             return None
         mapping = self._load_mapping()

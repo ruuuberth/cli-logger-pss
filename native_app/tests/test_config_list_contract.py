@@ -9,9 +9,7 @@ from pydantic_settings import SettingsError
 from app.core.config import Settings
 
 
-def test_settings_json_arrays_work_with_dotenv(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_settings_json_arrays_work_with_dotenv(tmp_path: Path, monkeypatch) -> None:
     """JSON array format in .env is parsed correctly (post-fix behavior)."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("API_FLOW_IGNORE_HOSTS", raising=False)
@@ -23,7 +21,7 @@ def test_settings_json_arrays_work_with_dotenv(
         "DATABASE_URL=sqlite:///./custom.db\n"
         'API_FLOW_IGNORE_HOSTS=["one.test","two.test"]\n'
         'API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"]\n'
-        'API_FLOW_CAPTURE_PATH_ALLOWLIST='
+        "API_FLOW_CAPTURE_PATH_ALLOWLIST="
         '["/BattleService/GetBattle3","/BattleService/GetBattle3/"]\n',
         encoding="utf-8",
     )
@@ -39,9 +37,7 @@ def test_settings_json_arrays_work_with_dotenv(
     ]
 
 
-def test_settings_csv_raises_validation_error(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_settings_csv_raises_validation_error(tmp_path: Path, monkeypatch) -> None:
     """CSV list syntax in .env raises SettingsError instead of being parsed."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("API_FLOW_IGNORE_HOSTS", raising=False)
@@ -110,7 +106,8 @@ def test_settings_empty_string_list_field_raises_settings_error(
             Settings()
 
     error_records = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.ERROR
         and "event=config_invalid" in r.getMessage()
         and "field=API_FLOW_IGNORE_HOSTS" in r.getMessage()

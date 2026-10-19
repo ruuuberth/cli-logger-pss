@@ -22,7 +22,11 @@ def sqlite_db_path_from_url(database_url: str) -> Path | None:
     except Exception:
         return None
 
-    if url.get_backend_name() != "sqlite" or not url.database or url.database == ":memory:":
+    if (
+        url.get_backend_name() != "sqlite"
+        or not url.database
+        or url.database == ":memory:"
+    ):
         return None
 
     db_path = Path(url.database)
@@ -71,32 +75,36 @@ def _configure_streams() -> None:
     use the default encoding in that case.
     """
     for stream_name, stream in (("stdout", sys.stdout), ("stderr", sys.stderr)):
-        if hasattr(stream, 'reconfigure'):
+        if hasattr(stream, "reconfigure"):
             try:
-                stream.reconfigure(encoding='utf-8', errors='replace')
+                stream.reconfigure(encoding="utf-8", errors="replace")
             except (OSError, ValueError) as e:
                 # Fallback: logging not yet configured, write directly to stderr
-                print(f"Warning: Failed to reconfigure {stream_name}: {e}", file=sys.__stderr__)
+                print(
+                    f"Warning: Failed to reconfigure {stream_name}: {e}",
+                    file=sys.__stderr__,
+                )
 
 
 def _run_daemon() -> int:
     """Run daemon mode - background capture only"""
     _configure_streams()
     from app.daemon_manager import DaemonManager
-    
+
     # Initialize DB first
     from app.models.database import (
         Base,
         engine,
-        ensure_sqlite_schema,
         ensure_sqlite_indexes,
+        ensure_sqlite_schema,
         log_schema_health,
     )
+
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_schema()
     ensure_sqlite_indexes()
     log_schema_health()
-    
+
     # Run daemon
     daemon = DaemonManager()
     return daemon.run()
@@ -105,6 +113,7 @@ def _run_daemon() -> int:
 def _run_daemon_stop() -> int:
     """Stop daemon"""
     from app.daemon_manager import DaemonManager
+
     daemon = DaemonManager()
     return daemon.stop()
 
@@ -112,6 +121,7 @@ def _run_daemon_stop() -> int:
 def _run_daemon_status() -> int:
     """Show daemon status"""
     from app.daemon_manager import DaemonManager
+
     daemon = DaemonManager()
     return daemon.status()
 
@@ -153,15 +163,15 @@ def main() -> int:
         build_info.source,
     )
 
+    from app.cli.cli_manager import CliManager
     from app.models.database import (
         Base,
         engine,
-        ensure_sqlite_schema,
         ensure_sqlite_indexes,
+        ensure_sqlite_schema,
         log_schema_health,
     )
     from app.services.api_flow_runtime import ApiFlowRuntime
-    from app.cli.cli_manager import CliManager
 
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_schema()
@@ -176,7 +186,7 @@ def main() -> int:
     except Exception as e:
         logging.getLogger(__name__).warning(
             "event=capture_auto_start_failed error=%s message=CLI_will_continue_without_capture",
-            e
+            e,
         )
 
     # CLI runs regardless of capture initialization outcome

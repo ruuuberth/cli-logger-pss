@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.services.api_flow_storage as storage_module
 from app.models.database import Base
 from app.models.pss_models import PlayerMatchupLog, PlayerMatchupStat
-import app.services.api_flow_storage as storage_module
 
 
 def _build_repo(monkeypatch):
     test_engine = create_engine("sqlite:///:memory:")
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    TestingSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=test_engine
+    )
     Base.metadata.create_all(test_engine)
     monkeypatch.setattr(storage_module, "SessionLocal", TestingSessionLocal)
     monkeypatch.setattr(storage_module, "engine", test_engine)
@@ -21,7 +23,7 @@ def _build_repo(monkeypatch):
 
 def test_get_matchup_summaries_for_pairs_returns_stats_and_recent(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     db.add(
@@ -84,7 +86,7 @@ def test_get_matchup_summaries_for_pairs_returns_stats_and_recent(monkeypatch) -
 
 def test_get_matchup_summaries_for_pairs_derives_when_stat_missing(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     db.add_all(

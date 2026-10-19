@@ -1,8 +1,9 @@
 """Report templates for common report types"""
+
 from __future__ import annotations
 
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 
 class ReportTemplate:
@@ -29,7 +30,9 @@ class BattleReplayTemplate(ReportTemplate):
             "Resultado": battle_data.get("outcome", "-"),
             "Botín": battle_data.get("loot", "-"),
             "Copas": battle_data.get("trophy_delta", "-"),
-            "Fecha Captura": ReportTemplate.format_datetime(battle_data.get("captured_at")),
+            "Fecha Captura": ReportTemplate.format_datetime(
+                battle_data.get("captured_at")
+            ),
         }
 
 
@@ -92,7 +95,9 @@ class CaptureStatsTemplate(ReportTemplate):
             "Total Eventos": stats.get("total_events", 0),
             "Eventos/seg": f"{stats.get('events_per_second', 0):.2f}",
             "Uptime (seg)": stats.get("uptime_seconds", 0),
-            "Estado Proxy": "Activo" if stats.get("proxy_running", False) else "Inactivo",
+            "Estado Proxy": "Activo"
+            if stats.get("proxy_running", False)
+            else "Inactivo",
             "Capturando": "Sí" if stats.get("is_capturing", False) else "No",
         }
 
@@ -122,14 +127,30 @@ class H2HReportTemplate(ReportTemplate):
             {"Métrica": f"Victorias {player_low}", "Valor": low_wins},
             {"Métrica": f"Victorias {player_high}", "Valor": high_wins},
             {"Métrica": "Empates", "Valor": draws},
-            {"Métrica": f"Win Rate {player_low}", "Valor": f"{(low_wins/total*100):.1f}%" if total > 0 else "0%"},
-            {"Métrica": f"Win Rate {player_high}", "Valor": f"{(high_wins/total*100):.1f}%" if total > 0 else "0%"},
+            {
+                "Métrica": f"Win Rate {player_low}",
+                "Valor": f"{(low_wins / total * 100):.1f}%" if total > 0 else "0%",
+            },
+            {
+                "Métrica": f"Win Rate {player_high}",
+                "Valor": f"{(high_wins / total * 100):.1f}%" if total > 0 else "0%",
+            },
             {"Métrica": f"Promedio Trofeos {player_low}", "Valor": low_avg_trophies},
             {"Métrica": f"Promedio Trofeos {player_high}", "Valor": high_avg_trophies},
             {"Métrica": f"Total Botín {player_low}", "Valor": low_total_loot},
             {"Métrica": f"Total Botín {player_high}", "Valor": high_total_loot},
-            {"Métrica": "Fecha Primera Batalla", "Valor": ReportTemplate.format_datetime(summary.get("first_battle_date"))},
-            {"Métrica": "Fecha Última Batalla", "Valor": ReportTemplate.format_datetime(summary.get("last_battle_date"))},
+            {
+                "Métrica": "Fecha Primera Batalla",
+                "Valor": ReportTemplate.format_datetime(
+                    summary.get("first_battle_date")
+                ),
+            },
+            {
+                "Métrica": "Fecha Última Batalla",
+                "Valor": ReportTemplate.format_datetime(
+                    summary.get("last_battle_date")
+                ),
+            },
         ]
 
     @staticmethod
@@ -138,17 +159,19 @@ class H2HReportTemplate(ReportTemplate):
         battles = h2h_data.get("battles", [])
         rows = []
         for b in battles:
-            rows.append({
-                "Fecha": ReportTemplate.format_datetime(b.get("captured_at")),
-                "Battle ID": b.get("battle_id", "-"),
-                "Atacante": b.get("attacker_name", "-"),
-                "Defensor": b.get("defender_name", "-"),
-                "Resultado": b.get("outcome", "-"),
-                "Trofeos Atacante": b.get("attacker_trophy_delta", 0),
-                "Trofeos Defensor": b.get("defender_trophy_delta", 0),
-                "Botín Minerales": b.get("loot_minerals", "-"),
-                "Botín Gas": b.get("loot_gas", "-"),
-            })
+            rows.append(
+                {
+                    "Fecha": ReportTemplate.format_datetime(b.get("captured_at")),
+                    "Battle ID": b.get("battle_id", "-"),
+                    "Atacante": b.get("attacker_name", "-"),
+                    "Defensor": b.get("defender_name", "-"),
+                    "Resultado": b.get("outcome", "-"),
+                    "Trofeos Atacante": b.get("attacker_trophy_delta", 0),
+                    "Trofeos Defensor": b.get("defender_trophy_delta", 0),
+                    "Botín Minerales": b.get("loot_minerals", "-"),
+                    "Botín Gas": b.get("loot_gas", "-"),
+                }
+            )
         return rows
 
     @staticmethod
@@ -157,14 +180,24 @@ class H2HReportTemplate(ReportTemplate):
         trends = h2h_data.get("trends", [])
         rows = []
         for t in trends:
-            rows.append({
-                "Periodo": t.get("period", "-"),
-                "Batallas": t.get("battle_count", 0),
-                f"Win Rate {h2h_data.get('summary', {}).get('player_low_name', 'Player A')}": f"{(t.get('player_low_wins', 0)/t.get('battle_count', 1)*100):.1f}%" if t.get('battle_count', 0) > 0 else "0%",
-                f"Win Rate {h2h_data.get('summary', {}).get('player_high_name', 'Player B')}": f"{(t.get('player_high_wins', 0)/t.get('battle_count', 1)*100):.1f}%" if t.get('battle_count', 0) > 0 else "0%",
-                f"Promedio Trofeos {h2h_data.get('summary', {}).get('player_low_name', 'Player A')}": t.get("player_low_avg_trophies", 0),
-                f"Promedio Trofeos {h2h_data.get('summary', {}).get('player_high_name', 'Player B')}": t.get("player_high_avg_trophies", 0),
-            })
+            rows.append(
+                {
+                    "Periodo": t.get("period", "-"),
+                    "Batallas": t.get("battle_count", 0),
+                    f"Win Rate {h2h_data.get('summary', {}).get('player_low_name', 'Player A')}": f"{(t.get('player_low_wins', 0) / t.get('battle_count', 1) * 100):.1f}%"
+                    if t.get("battle_count", 0) > 0
+                    else "0%",
+                    f"Win Rate {h2h_data.get('summary', {}).get('player_high_name', 'Player B')}": f"{(t.get('player_high_wins', 0) / t.get('battle_count', 1) * 100):.1f}%"
+                    if t.get("battle_count", 0) > 0
+                    else "0%",
+                    f"Promedio Trofeos {h2h_data.get('summary', {}).get('player_low_name', 'Player A')}": t.get(
+                        "player_low_avg_trophies", 0
+                    ),
+                    f"Promedio Trofeos {h2h_data.get('summary', {}).get('player_high_name', 'Player B')}": t.get(
+                        "player_high_avg_trophies", 0
+                    ),
+                }
+            )
         return rows
 
     @staticmethod
@@ -177,39 +210,55 @@ class H2HReportTemplate(ReportTemplate):
         """
         breakdown = h2h_data.get("fleet_breakdown") or {}
         rows: list[dict[str, Any]] = []
-        for player_key, label_key in (("player_low", "player_low_name"), ("player_high", "player_high_name")):
+        for player_key, label_key in (
+            ("player_low", "player_low_name"),
+            ("player_high", "player_high_name"),
+        ):
             player = breakdown.get(player_key) or {}
-            player_name = (h2h_data.get("summary", {}) or {}).get(label_key) or player_key
+            player_name = (h2h_data.get("summary", {}) or {}).get(
+                label_key
+            ) or player_key
             battles = player.get("total_battles_analyzed", 0)
 
             for s in player.get("ships", []):
-                rows.append({
-                    "Jugador": player_name,
-                    "Tipo": "Nave",
-                    "Nombre": s.get("ship_design_name") or s.get("ship_name") or f"Ship {s.get('id', '-')}",
-                    "Ship ID": s.get("id", "-"),
-                    "Nivel Promedio": s.get("avg_level", 0),
-                    "Power Score Promedio": s.get("avg_power_score", 0),
-                    "Batallas Usado": f"{s.get('battles', 0)}/{battles}",
-                })
+                rows.append(
+                    {
+                        "Jugador": player_name,
+                        "Tipo": "Nave",
+                        "Nombre": s.get("ship_design_name")
+                        or s.get("ship_name")
+                        or f"Ship {s.get('id', '-')}",
+                        "Ship ID": s.get("id", "-"),
+                        "Nivel Promedio": s.get("avg_level", 0),
+                        "Power Score Promedio": s.get("avg_power_score", 0),
+                        "Batallas Usado": f"{s.get('battles', 0)}/{battles}",
+                    }
+                )
             for rm in player.get("rooms", []):
-                rows.append({
-                    "Jugador": player_name,
-                    "Tipo": "Sala",
-                    "Nombre": rm.get("room_design_name") or f"Room {rm.get('id', '-')}",
-                    "Ship ID": "-",
-                    "Nivel Promedio": "-",
-                    "Power Score Promedio": "-",
-                    "Batallas Usado": f"{rm.get('battles', 0)}/{battles}",
-                })
+                rows.append(
+                    {
+                        "Jugador": player_name,
+                        "Tipo": "Sala",
+                        "Nombre": rm.get("room_design_name")
+                        or f"Room {rm.get('id', '-')}",
+                        "Ship ID": "-",
+                        "Nivel Promedio": "-",
+                        "Power Score Promedio": "-",
+                        "Batallas Usado": f"{rm.get('battles', 0)}/{battles}",
+                    }
+                )
             for c in player.get("crew", []):
-                rows.append({
-                    "Jugador": player_name,
-                    "Tipo": "Tripulacion",
-                    "Nombre": c.get("character_design_name") or c.get("character_name") or f"Crew {c.get('id', '-')}",
-                    "Ship ID": "-",
-                    "Nivel Promedio": c.get("avg_level", 0),
-                    "Power Score Promedio": "-",
-                    "Batallas Usado": f"{c.get('battles', 0)}/{battles}",
-                })
+                rows.append(
+                    {
+                        "Jugador": player_name,
+                        "Tipo": "Tripulacion",
+                        "Nombre": c.get("character_design_name")
+                        or c.get("character_name")
+                        or f"Crew {c.get('id', '-')}",
+                        "Ship ID": "-",
+                        "Nivel Promedio": c.get("avg_level", 0),
+                        "Power Score Promedio": "-",
+                        "Batallas Usado": f"{c.get('battles', 0)}/{battles}",
+                    }
+                )
         return rows

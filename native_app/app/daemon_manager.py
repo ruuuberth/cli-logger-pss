@@ -1,4 +1,5 @@
 """Daemon Manager - Handles background capture without UI"""
+
 from __future__ import annotations
 
 import logging
@@ -7,12 +8,11 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 
-from app.services.api_flow_runtime import ApiFlowRuntime
 from app.core.config import settings
+from app.services.api_flow_runtime import ApiFlowRuntime
 
 
 def _create_daemon_console() -> Console:
@@ -28,24 +28,28 @@ class DaemonManager:
         self.logger = logging.getLogger(__name__)
         self.daemon_dir = Path.home() / ".logger-pss"
         self.pid_file = self.daemon_dir / "daemon.pid"
-        self.runtime: Optional[ApiFlowRuntime] = None
+        self.runtime: ApiFlowRuntime | None = None
         self._shutdown_requested = False
 
     def run(self) -> int:
         """Run daemon mode - starts capture and blocks until shutdown"""
         try:
             self._setup_signal_handlers()
-            
+
             # Check if already running
             if self._is_running():
                 pid = self._read_pid()
-                self.console.print(f"[yellow]⚠️ Daemon ya está ejecutándose (PID: {pid})[/yellow]")
+                self.console.print(
+                    f"[yellow]⚠️ Daemon ya está ejecutándose (PID: {pid})[/yellow]"
+                )
                 return 1
 
             # Create PID file
             self._write_pid()
 
-            self.console.print("[bold cyan]📡 Iniciando Logger-PSS en modo Daemon[/bold cyan]")
+            self.console.print(
+                "[bold cyan]📡 Iniciando Logger-PSS en modo Daemon[/bold cyan]"
+            )
             self.console.print(f"[cyan]ℹ️ PID: {os.getpid()}[/cyan]")
             self.console.print(f"[cyan]ℹ️ Directorio PID: {self.daemon_dir}[/cyan]")
             self.console.print("[cyan]ℹ️ Presione Ctrl+C para detener[/cyan]")
@@ -87,7 +91,9 @@ class DaemonManager:
             self.console.print("[green]✅ Señal de parada enviada[/green]")
             return 0
         except ProcessLookupError:
-            self.console.print("[yellow]⚠️ Proceso no encontrado, limpiando PID[/yellow]")
+            self.console.print(
+                "[yellow]⚠️ Proceso no encontrado, limpiando PID[/yellow]"
+            )
             self._cleanup_pid()
             return 0
         except Exception as e:
@@ -106,18 +112,21 @@ class DaemonManager:
         else:
             self.console.print("[red]❌ Daemon no está corriendo[/red]")
             if self.pid_file.exists():
-                self.console.print("[yellow]⚠️ Archivo PID existe pero proceso no encontrado[/yellow]")
+                self.console.print(
+                    "[yellow]⚠️ Archivo PID existe pero proceso no encontrado[/yellow]"
+                )
             return 1
 
     def _setup_signal_handlers(self) -> None:
         """Setup signal handlers for graceful shutdown"""
+
         def signal_handler(signum, frame):
             self.logger.info("Received signal %s, initiating shutdown", signum)
             self._shutdown_requested = True
 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
-        if hasattr(signal, 'SIGHUP'):
+        if hasattr(signal, "SIGHUP"):
             signal.signal(signal.SIGHUP, signal_handler)
 
     def _is_running(self) -> bool:
@@ -133,9 +142,9 @@ class DaemonManager:
                 # check also survives image names with spaces ("My App.exe"),
                 # which shift tasklist's fixed-width columns.
                 import subprocess
+
                 result = subprocess.run(
-                    ["tasklist", "/FI", f"PID eq {pid}"],
-                    capture_output=True, text=True
+                    ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True
                 )
                 for line in result.stdout.splitlines():
                     parts = line.split()
@@ -175,7 +184,7 @@ class DaemonManager:
         """Graceful shutdown"""
         self.logger.info("Shutting down daemon...")
         self.console.print("\n[cyan]🛑 Deteniendo daemon...[/cyan]")
-        
+
         if self.runtime:
             try:
                 self.runtime.stop_capture()

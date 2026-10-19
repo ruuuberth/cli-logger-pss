@@ -6,7 +6,9 @@ from typing import Any
 
 from app.services.catalogo import CatalogoResolver
 
-_CHARACTER_ACTION_PATTERN = re.compile(r"^CharacterActions\.CharacterAction\[(\d+)\]\.(.+)$")
+_CHARACTER_ACTION_PATTERN = re.compile(
+    r"^CharacterActions\.CharacterAction\[(\d+)\]\.(.+)$"
+)
 _CHARACTER_ITEM_PATTERN = re.compile(r"^Items\.Item\[(\d+)\]\.(.+)$")
 
 
@@ -38,7 +40,9 @@ class CharacterInspectorResolver:
         for idx, entry in enumerate(rows, start=1):
             action_id = entry.get("action_type_id")
             condition_id = entry.get("condition_type_id")
-            action_label, condition_label = self._resolve_action_condition(action_id, condition_id)
+            action_label, condition_label = self._resolve_action_condition(
+                action_id, condition_id
+            )
             action_index = entry.get("index")
             try:
                 action_index_text = str(int(str(action_index)) + 1)
@@ -51,7 +55,9 @@ class CharacterInspectorResolver:
                     "condition_label": condition_label,
                     "action_id": self._as_text(action_id),
                     "action_label": action_label,
-                    "character_action_id": self._as_text(entry.get("character_action_id")),
+                    "character_action_id": self._as_text(
+                        entry.get("character_action_id")
+                    ),
                 }
             )
         return out
@@ -76,8 +82,12 @@ class CharacterInspectorResolver:
                     "item_design_id": self._as_text(item_design_id),
                     "item_name": item_name,
                     "quantity": self._as_text(entry.get("quantity"), "-"),
-                    "bonus_type": self._as_text(entry.get("bonus_enhancement_type"), "-"),
-                    "bonus_value": self._as_text(entry.get("bonus_enhancement_value"), "-"),
+                    "bonus_type": self._as_text(
+                        entry.get("bonus_enhancement_type"), "-"
+                    ),
+                    "bonus_value": self._as_text(
+                        entry.get("bonus_enhancement_value"), "-"
+                    ),
                 }
             )
         return out
@@ -86,7 +96,9 @@ class CharacterInspectorResolver:
         attrs = self._attrs(character)
         training_design_id = self._as_text(attrs.get("TrainingDesignId"), "-")
         training_end_date = self._as_text(attrs.get("TrainingEndDate"), "-")
-        training_value = training_end_date if training_end_date not in {"", "-", "None"} else "-"
+        training_value = (
+            training_end_date if training_end_date not in {"", "-", "None"} else "-"
+        )
         if training_value == "-" and training_design_id not in {"", "-", "0"}:
             training_value = training_design_id
         return {
@@ -151,7 +163,9 @@ class CharacterInspectorResolver:
             for idx, payload in sorted(items.items())
         ]
 
-    def _resolve_action_condition(self, action_id: Any, condition_id: Any) -> tuple[str, str]:
+    def _resolve_action_condition(
+        self, action_id: Any, condition_id: Any
+    ) -> tuple[str, str]:
         if self.catalogo is not None:
             return self.catalogo.resolve_action_condition(action_id, condition_id)
         action_text = self._as_text(action_id, "Sin traduccion")

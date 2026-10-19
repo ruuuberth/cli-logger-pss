@@ -1,8 +1,9 @@
 """Command base class and decorator for CLI commands"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 
 
 class CliCommand(ABC):
@@ -15,7 +16,6 @@ class CliCommand(ABC):
     @abstractmethod
     def execute(self, args: list[str] = None) -> int:
         """Execute the command. Return 0 for success, non-zero for error."""
-        pass
 
 
 class CommandRegistry:
@@ -29,7 +29,7 @@ class CommandRegistry:
         cls._commands[command.name] = command
 
     @classmethod
-    def get(cls, name: str) -> Optional[CliCommand]:
+    def get(cls, name: str) -> CliCommand | None:
         """Get a command by name"""
         return cls._commands.get(name)
 
@@ -41,8 +41,10 @@ class CommandRegistry:
 
 def command(name: str, description: str) -> Callable:
     """Decorator for registering commands"""
+
     def decorator(cls: type[CliCommand]) -> type[CliCommand]:
         instance = cls(name, description)
         CommandRegistry.register(instance)
         return cls
+
     return decorator

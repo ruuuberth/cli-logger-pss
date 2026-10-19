@@ -1,4 +1,5 @@
 """Tests for CsvReportGenerator (regression for #29: heterogeneous rows)."""
+
 from __future__ import annotations
 
 import csv

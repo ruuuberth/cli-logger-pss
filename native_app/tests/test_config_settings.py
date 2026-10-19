@@ -19,7 +19,7 @@ def test_settings_loads_from_env_file(tmp_path: Path, monkeypatch) -> None:
         "DATABASE_URL=sqlite:///./custom.db\n"
         'API_FLOW_IGNORE_HOSTS=["one.test","two.test"]\n'
         'API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"]\n'
-        'API_FLOW_CAPTURE_PATH_ALLOWLIST='
+        "API_FLOW_CAPTURE_PATH_ALLOWLIST="
         '["/BattleService/GetBattle3","/BattleService/GetBattle3/"]\n',
         encoding="utf-8",
     )
@@ -49,9 +49,7 @@ def test_settings_empty_json_array_list_field_returns_empty_list(
     assert loaded.API_FLOW_IGNORE_HOSTS == []
 
 
-def test_settings_allowed_hosts_env_json_override(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_settings_allowed_hosts_env_json_override(monkeypatch, tmp_path: Path) -> None:
     """ALLOWED_HOSTS accepts only a JSON array from OS env vars (no CSV fallback)."""
     monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
     monkeypatch.chdir(tmp_path)

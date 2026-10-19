@@ -1,9 +1,10 @@
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker
+
 from app.core.config import settings
 
 _is_sqlite_url = str(settings.DATABASE_URL).startswith("sqlite")
@@ -21,8 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 if engine.dialect.name == "sqlite":
+
     @event.listens_for(engine, "connect")
-    def _set_sqlite_pragmas(dbapi_connection, connection_record) -> None:  # pragma: no cover
+    def _set_sqlite_pragmas(
+        dbapi_connection, connection_record
+    ) -> None:  # pragma: no cover
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
@@ -164,15 +168,24 @@ def ensure_sqlite_schema() -> None:
         return
 
     with engine.begin() as conn:
-        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
         if "item_designs" in tables:
-            table_info = conn.exec_driver_sql("PRAGMA table_info(item_designs)").fetchall()
+            table_info = conn.exec_driver_sql(
+                "PRAGMA table_info(item_designs)"
+            ).fetchall()
             existing_columns = {row[1] for row in table_info}
 
             for column_name, column_type in ITEM_DESIGNS_SQLITE_COLUMNS.items():
                 if column_name in existing_columns:
                     continue
-                conn.exec_driver_sql(f"ALTER TABLE item_designs ADD COLUMN {column_name} {column_type}")
+                conn.exec_driver_sql(
+                    f"ALTER TABLE item_designs ADD COLUMN {column_name} {column_type}"
+                )
 
             conn.exec_driver_sql(
                 """
@@ -227,20 +240,32 @@ def ensure_sqlite_schema() -> None:
             """
         )
         if "ship_designs" in tables:
-            ship_info = conn.exec_driver_sql("PRAGMA table_info(ship_designs)").fetchall()
+            ship_info = conn.exec_driver_sql(
+                "PRAGMA table_info(ship_designs)"
+            ).fetchall()
             ship_columns = {row[1] for row in ship_info}
             if "name_es" not in ship_columns:
-                conn.exec_driver_sql("ALTER TABLE ship_designs ADD COLUMN name_es VARCHAR(255)")
+                conn.exec_driver_sql(
+                    "ALTER TABLE ship_designs ADD COLUMN name_es VARCHAR(255)"
+                )
         if "crew_designs" in tables:
-            crew_info = conn.exec_driver_sql("PRAGMA table_info(crew_designs)").fetchall()
+            crew_info = conn.exec_driver_sql(
+                "PRAGMA table_info(crew_designs)"
+            ).fetchall()
             crew_columns = {row[1] for row in crew_info}
             if "name_es" not in crew_columns:
-                conn.exec_driver_sql("ALTER TABLE crew_designs ADD COLUMN name_es VARCHAR(255)")
+                conn.exec_driver_sql(
+                    "ALTER TABLE crew_designs ADD COLUMN name_es VARCHAR(255)"
+                )
         if "room_designs" in tables:
-            room_info = conn.exec_driver_sql("PRAGMA table_info(room_designs)").fetchall()
+            room_info = conn.exec_driver_sql(
+                "PRAGMA table_info(room_designs)"
+            ).fetchall()
             room_columns = {row[1] for row in room_info}
             if "name_es" not in room_columns:
-                conn.exec_driver_sql("ALTER TABLE room_designs ADD COLUMN name_es VARCHAR(255)")
+                conn.exec_driver_sql(
+                    "ALTER TABLE room_designs ADD COLUMN name_es VARCHAR(255)"
+                )
         conn.exec_driver_sql(
             """
             CREATE TABLE IF NOT EXISTS api_flow_events (
@@ -274,15 +299,24 @@ def ensure_sqlite_schema() -> None:
             """
         )
         if "api_flow_events" in tables:
-            api_flow_table_info = conn.exec_driver_sql("PRAGMA table_info(api_flow_events)").fetchall()
+            api_flow_table_info = conn.exec_driver_sql(
+                "PRAGMA table_info(api_flow_events)"
+            ).fetchall()
             existing_api_flow_columns = {row[1] for row in api_flow_table_info}
             for column_name, column_type in API_FLOW_EVENTS_SQLITE_COLUMNS.items():
                 if column_name in existing_api_flow_columns:
                     continue
-                conn.exec_driver_sql(f"ALTER TABLE api_flow_events ADD COLUMN {column_name} {column_type}")
+                conn.exec_driver_sql(
+                    f"ALTER TABLE api_flow_events ADD COLUMN {column_name} {column_type}"
+                )
             if "attacker_name" in existing_api_flow_columns:
                 _drop_api_flow_events_attacker_name(conn)
-                tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+                tables = {
+                    row[0]
+                    for row in conn.exec_driver_sql(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }
 
         conn.exec_driver_sql(
             """
@@ -423,11 +457,22 @@ def ensure_sqlite_indexes() -> None:
         return
 
     with engine.begin() as conn:
-        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
         if "item_designs" in tables:
-            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_item_type ON item_designs (item_type)")
-            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_rarity ON item_designs (rarity)")
-            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_level ON item_designs (level)")
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_designs_item_type ON item_designs (item_type)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_designs_rarity ON item_designs (rarity)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_designs_level ON item_designs (level)"
+            )
             conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_item_designs_min_ship_level ON item_designs (min_ship_level)"
             )
@@ -461,7 +506,9 @@ def ensure_sqlite_indexes() -> None:
                 "CREATE INDEX IF NOT EXISTS ix_item_tags_item_design_id "
                 "ON item_tags (item_design_id)"
             )
-            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_tags_tag ON item_tags (tag)")
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_item_tags_tag ON item_tags (tag)"
+            )
 
         if "crew_designs" in tables:
             conn.exec_driver_sql(
@@ -598,7 +645,9 @@ def _drop_api_flow_events_attacker_name(conn) -> None:
 
     try:
         try:
-            conn.exec_driver_sql("ALTER TABLE api_flow_events DROP COLUMN attacker_name")
+            conn.exec_driver_sql(
+                "ALTER TABLE api_flow_events DROP COLUMN attacker_name"
+            )
             return
         except Exception:
             pass
@@ -618,19 +667,25 @@ def _drop_api_flow_events_attacker_name(conn) -> None:
                 definition += " PRIMARY KEY"
             keep_defs.append(definition)
 
-        conn.exec_driver_sql(f"CREATE TABLE api_flow_events_new ({', '.join(keep_defs)})")
+        conn.exec_driver_sql(
+            f"CREATE TABLE api_flow_events_new ({', '.join(keep_defs)})"
+        )
         keep_names_csv = ", ".join(keep_names)
         conn.exec_driver_sql(
             f"INSERT INTO api_flow_events_new ({keep_names_csv}) "
             f"SELECT {keep_names_csv} FROM api_flow_events"
         )
         conn.exec_driver_sql("DROP TABLE api_flow_events")
-        conn.exec_driver_sql("ALTER TABLE api_flow_events_new RENAME TO api_flow_events")
+        conn.exec_driver_sql(
+            "ALTER TABLE api_flow_events_new RENAME TO api_flow_events"
+        )
     except Exception:
-        logger.warning("event=schema_drop_attacker_name_skipped reason=database_locked_or_sqlite_limits")
+        logger.warning(
+            "event=schema_drop_attacker_name_skipped reason=database_locked_or_sqlite_limits"
+        )
 
 
-def _safe_int(value: Any) -> Optional[int]:
+def _safe_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
     if isinstance(value, bool):
@@ -645,7 +700,7 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
-def _safe_float(value: Any) -> Optional[float]:
+def _safe_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
     if isinstance(value, bool):
@@ -658,7 +713,7 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
-def _json_or_none(value: Any) -> Optional[str]:
+def _json_or_none(value: Any) -> str | None:
     if value is None:
         return None
     return json.dumps(value)
@@ -717,7 +772,12 @@ def repair_item_designs_json_columns() -> None:
         return
 
     with engine.begin() as conn:
-        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
         if "item_designs" not in tables:
             return
 
@@ -770,8 +830,17 @@ def backfill_item_relations() -> None:
         return
 
     with engine.begin() as conn:
-        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "item_designs" not in tables or "item_ingredients" not in tables or "item_tags" not in tables:
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if (
+            "item_designs" not in tables
+            or "item_ingredients" not in tables
+            or "item_tags" not in tables
+        ):
             return
 
         rows = conn.exec_driver_sql(
@@ -799,7 +868,9 @@ def backfill_item_relations() -> None:
 
         if tag_rows:
             conn.execute(
-                text("INSERT OR IGNORE INTO item_tags (item_design_id, tag) VALUES (:item_design_id, :tag)"),
+                text(
+                    "INSERT OR IGNORE INTO item_tags (item_design_id, tag) VALUES (:item_design_id, :tag)"
+                ),
                 tag_rows,
             )
         if ingredient_rows:
@@ -820,7 +891,12 @@ def migrate_item_designs_drop_raw_data() -> None:
         return
 
     with engine.begin() as conn:
-        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
         if "item_designs" not in tables:
             return
 
@@ -843,7 +919,9 @@ def migrate_item_designs_drop_raw_data() -> None:
                 definition += " PRIMARY KEY"
             column_defs.append(definition)
 
-        conn.exec_driver_sql(f"CREATE TABLE item_designs_new ({', '.join(column_defs)})")
+        conn.exec_driver_sql(
+            f"CREATE TABLE item_designs_new ({', '.join(column_defs)})"
+        )
         conn.exec_driver_sql(
             f"INSERT INTO item_designs_new ({', '.join(column_names)}) "
             f"SELECT {', '.join(column_names)} FROM item_designs"
@@ -852,7 +930,9 @@ def migrate_item_designs_drop_raw_data() -> None:
         conn.exec_driver_sql("ALTER TABLE item_designs_new RENAME TO item_designs")
 
         # Recreate indexes used by the app.
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_item_designs_id ON item_designs (id)")
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_item_designs_id ON item_designs (id)"
+        )
         conn.exec_driver_sql(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_item_designs_item_design_id "
             "ON item_designs (item_design_id)"
@@ -864,15 +944,28 @@ def log_schema_health() -> None:
         return
 
     with engine.begin() as conn:
-        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
-        missing_tables = [name for name in ("item_designs", "item_ingredients", "item_tags") if name not in tables]
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        missing_tables = [
+            name
+            for name in ("item_designs", "item_ingredients", "item_tags")
+            if name not in tables
+        ]
         if missing_tables:
-            logger.warning("event=schema_missing_tables tables=%s", ",".join(missing_tables))
+            logger.warning(
+                "event=schema_missing_tables tables=%s", ",".join(missing_tables)
+            )
             return
 
         table_info = conn.exec_driver_sql("PRAGMA table_info(item_designs)").fetchall()
         existing_columns = {row[1] for row in table_info}
-        missing_columns = [name for name in ITEM_DESIGNS_SQLITE_COLUMNS.keys() if name not in existing_columns]
+        missing_columns = [
+            name for name in ITEM_DESIGNS_SQLITE_COLUMNS if name not in existing_columns
+        ]
         if missing_columns:
             logger.warning(
                 "event=schema_missing_columns table=item_designs columns=%s",
@@ -885,7 +978,12 @@ def backfill_item_designs_columns() -> None:
         return
 
     with engine.begin() as conn:
-        tables = {row[0] for row in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
         if "item_designs" not in tables:
             return
 
@@ -895,7 +993,9 @@ def backfill_item_designs_columns() -> None:
             return
 
         tracked_columns = list(ITEM_DESIGNS_RAW_MAP.keys())
-        needs_backfill_predicate = " OR ".join([f"{column} IS NULL" for column in tracked_columns])
+        needs_backfill_predicate = " OR ".join(
+            [f"{column} IS NULL" for column in tracked_columns]
+        )
         select_sql = (
             "SELECT id, raw_data FROM item_designs "
             "WHERE raw_data IS NOT NULL AND (" + needs_backfill_predicate + ")"
@@ -959,12 +1059,19 @@ def backfill_item_designs_columns() -> None:
                     "required_research_design_id",
                 }:
                     update_values[column_name] = _safe_int(value)
-                elif column_name in {"enhancement_value", "drop_chance", "reload_modifier", "reload_time"}:
+                elif column_name in {
+                    "enhancement_value",
+                    "drop_chance",
+                    "reload_modifier",
+                    "reload_time",
+                }:
                     update_values[column_name] = _safe_float(value)
                 elif column_name in {"ingredients", "metadata_json"}:
                     update_values[column_name] = _json_or_none(value)
                 else:
-                    update_values[column_name] = str(value) if value is not None else None
+                    update_values[column_name] = (
+                        str(value) if value is not None else None
+                    )
 
             update_values["row_id"] = row_id
             set_sql = ", ".join([f"{column} = :{column}" for column in tracked_columns])

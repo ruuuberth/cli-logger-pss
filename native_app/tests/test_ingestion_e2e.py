@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.services.api_flow_storage as storage_module
 from app.models.database import Base
 from app.models.pss_models import (
     ApiFlowEvent,
@@ -18,12 +19,13 @@ from app.models.pss_models import (
     PlayerMatchupLog,
     PlayerMatchupStat,
 )
-import app.services.api_flow_storage as storage_module
 
 
 def _build_repo(monkeypatch):
     test_engine = create_engine("sqlite:///:memory:")
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    TestingSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=test_engine
+    )
     Base.metadata.create_all(test_engine)
     monkeypatch.setattr(storage_module, "SessionLocal", TestingSessionLocal)
     monkeypatch.setattr(storage_module, "engine", test_engine)
@@ -78,7 +80,7 @@ def _battle_xml(
         quote=True,
     )
     return (
-        '<BattleService><GetBattle><Battle '
+        "<BattleService><GetBattle><Battle "
         f'BattleId="{battle_id}" '
         f'OutcomeType="{outcome}" '
         f'AttackingUserXml="{attacker_user}" '
@@ -120,9 +122,11 @@ def test_happy_path_keep_n_retains_newest_battles(monkeypatch) -> None:
     """keep=3 over 4 distinct battles: 3 newest replays retained, oldest pruned,
     all 4 matchup logs kept, stats recompute to 4 battles, child rows exist."""
     repo, SessionLocal = _build_repo(monkeypatch)
-    monkeypatch.setattr(storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False)
+    monkeypatch.setattr(
+        storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False
+    )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     events = [
         _make_event(301, now - timedelta(minutes=40)),
         _make_event(302, now - timedelta(minutes=30)),
@@ -136,7 +140,11 @@ def test_happy_path_keep_n_retains_newest_battles(monkeypatch) -> None:
     db = SessionLocal()
     try:
         # 3 newest distinct battles survive pruning; the oldest (301) is gone.
-        replays = db.query(BattleReplayNormalized).order_by(BattleReplayNormalized.battle_id).all()
+        replays = (
+            db.query(BattleReplayNormalized)
+            .order_by(BattleReplayNormalized.battle_id)
+            .all()
+        )
         assert [r.battle_id for r in replays] == [302, 303, 304]
         assert db.query(ApiFlowEvent).count() == 3
 
@@ -163,9 +171,11 @@ def test_duplicate_capture_dedupes_battles_and_logs(monkeypatch) -> None:
     """Same battleId captured twice plus two more: 3 distinct replay slots,
     no duplicate matchup log, battles_analyzed == 3."""
     repo, SessionLocal = _build_repo(monkeypatch)
-    monkeypatch.setattr(storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False)
+    monkeypatch.setattr(
+        storage_module.settings, "API_FLOW_REPLAYS_PER_PAIR", 3, raising=False
+    )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     events = [
         _make_event(101, now - timedelta(minutes=40)),
         _make_event(101, now - timedelta(minutes=30)),  # re-capture of same battle
@@ -178,7 +188,11 @@ def test_duplicate_capture_dedupes_battles_and_logs(monkeypatch) -> None:
 
     db = SessionLocal()
     try:
-        replays = db.query(BattleReplayNormalized).order_by(BattleReplayNormalized.battle_id).all()
+        replays = (
+            db.query(BattleReplayNormalized)
+            .order_by(BattleReplayNormalized.battle_id)
+            .all()
+        )
         assert [r.battle_id for r in replays] == [101, 102, 103]
         assert len(replays) == 3  # duplicate never wastes a retention slot
 
@@ -198,7 +212,7 @@ def test_html_escaped_xml_cleaning_survives_ingestion(monkeypatch) -> None:
     normalized row derives from it."""
     repo, SessionLocal = _build_repo(monkeypatch)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     event = _make_event(501, now - timedelta(minutes=5))
 
     saved = repo.save_events([event])
@@ -240,7 +254,7 @@ def test_non_whitelisted_path_and_empty_batch_persist_nothing(monkeypatch) -> No
     """/UserService/SearchUsers persists nothing; an empty batch returns zero."""
     repo, SessionLocal = _build_repo(monkeypatch)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     non_whitelisted = dict(
         session_id="sx",
         captured_at=now,

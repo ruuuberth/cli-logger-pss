@@ -4,6 +4,7 @@ Property under test: a failed save leaves the destination absent-or-byte-identic
 and never leaves temp leftovers. Mirrors the plan's 10-test suite; imports point at
 the scratch copy of report_generator.py.
 """
+
 from __future__ import annotations
 
 import csv
@@ -37,7 +38,9 @@ def _generator(tmp_path, cls=ExcelReportGenerator, title="test report"):
 
 
 def _assert_no_temp_leftovers(d: Path) -> None:
-    leftovers = [p.name for p in d.iterdir() if p.name.startswith(".") or ".tmp-" in p.name]
+    leftovers = [
+        p.name for p in d.iterdir() if p.name.startswith(".") or ".tmp-" in p.name
+    ]
     assert leftovers == [], f"temp leftovers in {d}: {leftovers}"
 
 
@@ -78,7 +81,9 @@ def test_save_failure_midwrite_preserves_previous_report(tmp_path, monkeypatch):
 def test_workbook_save_raises_propagates_after_cleanup(tmp_path, monkeypatch):
     gen = _generator(tmp_path)
     gen.add_sheet("Resumen", [ROW])
-    monkeypatch.setattr("openpyxl.workbook.workbook.Workbook.save", lambda self, fn: _boom_oserror())
+    monkeypatch.setattr(
+        "openpyxl.workbook.workbook.Workbook.save", lambda self, fn: _boom_oserror()
+    )
     with pytest.raises(OSError):
         gen.generate()
     assert not (tmp_path / "test_report.xlsx").exists()
@@ -214,8 +219,8 @@ def test_unique_temp_names_no_collision(tmp_path, monkeypatch):
 
 
 def test_h2h_command_failing_save_returns_rc1_and_no_partial(tmp_path, monkeypatch):
-    from test_excel_report_generator import _h2h_data, _run_h2h_excel
     from openpyxl.writer.excel import ExcelWriter
+    from test_excel_report_generator import _h2h_data, _run_h2h_excel
 
     monkeypatch.setattr(
         ExcelWriter,

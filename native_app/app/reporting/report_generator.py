@@ -1,4 +1,5 @@
 """Report Generator base class and interfaces"""
+
 from __future__ import annotations
 
 import csv
@@ -6,10 +7,11 @@ import json
 import os
 import uuid
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 def _atomic_write(target: Path, write_fn: Callable[[Path], None]) -> Path:
@@ -72,6 +74,7 @@ def _union_headers(rows: list[dict[str, Any]]) -> list[str]:
 @dataclass
 class ReportConfig:
     """Configuration for report generation"""
+
     title: str
     output_path: Path
     include_timestamp: bool = True
@@ -91,18 +94,21 @@ class ReportGenerator(ABC):
     @abstractmethod
     def generate(self) -> Path:
         """Generate and save the report. Return the file path."""
-        pass
 
     def _get_output_filename(self, extension: str) -> Path:
         """Generate output filename with optional timestamp"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") if self.config.include_timestamp else ""
+        timestamp = (
+            datetime.now().strftime("%Y%m%d_%H%M%S")
+            if self.config.include_timestamp
+            else ""
+        )
         base_name = self.config.title.replace(" ", "_").lower()
-        
+
         if timestamp:
             filename = f"{base_name}_{timestamp}.{extension}"
         else:
             filename = f"{base_name}.{extension}"
-        
+
         return self.config.output_path / filename
 
 
@@ -110,7 +116,7 @@ class ExcelReportGenerator(ReportGenerator):
     """Generate reports in Excel format (.xlsx)"""
 
     DEFAULT_SHEET = "Data"
-    _INVALID_SHEET_CHARS = set('[]:*?/\\')
+    _INVALID_SHEET_CHARS = set("[]:*?/\\")
     _MAX_SHEET_NAME_LENGTH = 31
 
     def __init__(self, config: ReportConfig):
@@ -133,7 +139,9 @@ class ExcelReportGenerator(ReportGenerator):
             )
         invalid = sorted(set(name) & self._INVALID_SHEET_CHARS)
         if invalid:
-            raise ValueError(f"Nombre de hoja contiene caracteres no válidos ({''.join(invalid)}): {name!r}")
+            raise ValueError(
+                f"Nombre de hoja contiene caracteres no válidos ({''.join(invalid)}): {name!r}"
+            )
         self._sheets[name] = list(rows)
 
     def add_rows(self, rows: list[dict[str, Any]]) -> None:
@@ -142,7 +150,7 @@ class ExcelReportGenerator(ReportGenerator):
 
     def _write_sheet(self, ws, rows: list[dict[str, Any]]) -> None:
         """Write headers and rows with styling into a worksheet."""
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles import Alignment, Font, PatternFill
         from openpyxl.utils import get_column_letter
 
         if not rows:
@@ -151,7 +159,9 @@ class ExcelReportGenerator(ReportGenerator):
         headers = _union_headers(rows)
 
         # Write headers
-        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_fill = PatternFill(
+            start_color="4472C4", end_color="4472C4", fill_type="solid"
+        )
         header_font = Font(bold=True, color="FFFFFF")
 
         for col_idx, header in enumerate(headers, 1):
@@ -171,14 +181,18 @@ class ExcelReportGenerator(ReportGenerator):
             max_length = len(str(header))
             for row_data in rows:
                 max_length = max(max_length, len(str(row_data.get(header, ""))))
-            ws.column_dimensions[get_column_letter(col_idx)].width = min(max_length + 2, 50)
+            ws.column_dimensions[get_column_letter(col_idx)].width = min(
+                max_length + 2, 50
+            )
 
     def generate(self) -> Path:
         """Generate Excel report (one workbook, one sheet per added dataset)"""
         try:
             from openpyxl import Workbook
         except ImportError:
-            raise ImportError("openpyxl no está instalado. Instala con: pip install openpyxl")
+            raise ImportError(
+                "openpyxl no está instalado. Instala con: pip install openpyxl"
+            )
 
         if not any(self._sheets.values()):
             raise ValueError("No hay datos para reportar")
@@ -213,7 +227,6 @@ class CsvReportGenerator(ReportGenerator):
 
     def generate(self) -> Path:
         """Generate CSV report"""
-        import csv
 
         if not self.data:
             raise ValueError("No hay datos para reportar")
@@ -225,7 +238,9 @@ class CsvReportGenerator(ReportGenerator):
         headers = _union_headers(self.data)
 
         # Write CSV (to temp, then publish atomically)
-        return _atomic_write(output_file, lambda p: _write_csv_rows(p, self.data, headers))
+        return _atomic_write(
+            output_file, lambda p: _write_csv_rows(p, self.data, headers)
+        )
 
 
 class JsonReportGenerator(ReportGenerator):
@@ -233,7 +248,6 @@ class JsonReportGenerator(ReportGenerator):
 
     def generate(self) -> Path:
         """Generate JSON report"""
-        import json
 
         if not self.data:
             raise ValueError("No hay datos para reportar")

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-import logging
 
+from app.services.api_flow_storage import ApiFlowRepository, BattleReplayListRow
 from app.services.battle_detail_cache import BattleDetailCache
 from app.services.perf_metrics import measure_perf
-from app.services.api_flow_storage import ApiFlowRepository, BattleReplayListRow
 
 
 @dataclass(frozen=True)
@@ -140,7 +140,9 @@ class ApiFlowListService:
             h2h_tooltip=h2h_tooltip,
         )
 
-    def _pair_key(self, attacker_user_id: int | None, defender_user_id: int | None) -> tuple[int, int] | None:
+    def _pair_key(
+        self, attacker_user_id: int | None, defender_user_id: int | None
+    ) -> tuple[int, int] | None:
         if attacker_user_id is None or defender_user_id is None:
             return None
         if attacker_user_id == defender_user_id:
@@ -166,8 +168,16 @@ class ApiFlowListService:
 
         low_id = summary.get("player_low_user_id")
         high_id = summary.get("player_high_user_id")
-        low_name = str(summary.get("player_low_name") or row.attacker_name or f"User {low_id or '-'}")
-        high_name = str(summary.get("player_high_name") or row.defender_name or f"User {high_id or '-'}")
+        low_name = str(
+            summary.get("player_low_name")
+            or row.attacker_name
+            or f"User {low_id or '-'}"
+        )
+        high_name = str(
+            summary.get("player_high_name")
+            or row.defender_name
+            or f"User {high_id or '-'}"
+        )
         low_wins = int(summary.get("player_low_wins") or 0)
         high_wins = int(summary.get("player_high_wins") or 0)
         unknown = int(summary.get("unknown_results") or 0)

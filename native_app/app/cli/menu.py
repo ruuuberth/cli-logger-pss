@@ -1,13 +1,16 @@
 """CLI Menu system with Rich terminal UI"""
+
 from __future__ import annotations
 
-from typing import Callable, Optional, Any
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
+from collections.abc import Callable
+from typing import Any
 
-from app.cli.utils import clear_console, _safe_print
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from app.cli.utils import _safe_print, clear_console
 
 
 class MenuItem:
@@ -17,8 +20,8 @@ class MenuItem:
         self,
         key: str,
         label: str,
-        handler: Optional[Callable[[], Any]] = None,
-        submenu: Optional["Menu"] = None,
+        handler: Callable[[], Any] | None = None,
+        submenu: Menu | None = None,
     ):
         self.key = key
         self.label = label
@@ -32,7 +35,7 @@ class Menu:
     def __init__(
         self,
         title: str,
-        console: Optional[Console] = None,
+        console: Console | None = None,
     ):
         self.title = title
         self.items: list[MenuItem] = []
@@ -42,39 +45,42 @@ class Menu:
         self,
         key: str,
         label: str,
-        handler: Optional[Callable[[], Any]] = None,
-        submenu: Optional[Menu] = None,
+        handler: Callable[[], Any] | None = None,
+        submenu: Menu | None = None,
     ) -> None:
         """Add an item to the menu"""
         if handler and submenu:
             raise ValueError("Cannot set both handler and submenu")
         self.items.append(MenuItem(key, label, handler, submenu))
 
-    def show(self) -> Optional[str]:
+    def show(self) -> str | None:
         """Display menu and return selected key, or None if exit"""
         clear_console()
-        
+
         # Render title
         self.console.print(Panel(self.title, style="bold cyan", expand=True))
-        
+
         # Render menu items
         for item in self.items:
             self.console.print(f"  [{item.key}] {item.label}")
-        
-        self.console.print(f"  [q] Salir")
+
+        self.console.print("  [q] Salir")
         self.console.print()
-        
+
         # Get user input
         from rich.prompt import Prompt
-        choice = Prompt.ask("Selecciona una opción", console=self.console).strip().lower()
-        
+
+        choice = (
+            Prompt.ask("Selecciona una opción", console=self.console).strip().lower()
+        )
+
         if choice == "q":
             return None
-        
+
         for item in self.items:
             if item.key.lower() == choice:
                 return item.key
-        
+
         _safe_print(self.console, "[red]❌ Opción no válida[/red]")
         self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")
         self.console.input()
@@ -84,10 +90,10 @@ class Menu:
         """Run the menu loop"""
         while True:
             selected = self.show()
-            
+
             if selected is None:
                 break
-            
+
             for item in self.items:
                 if item.key == selected:
                     try:
@@ -101,18 +107,22 @@ class Menu:
                         _safe_print(self.console, f"[red]❌ Error: {e}[/red]")
                     finally:
                         if not item.submenu:
-                            self.console.print("\n[dim]Presiona Enter para continuar...[/dim]")
+                            self.console.print(
+                                "\n[dim]Presiona Enter para continuar...[/dim]"
+                            )
                             self.console.input()
                     break
 
 
-class Table:
+class MenuTable:
     """Simple table for displaying data"""
-    
+
     @staticmethod
-    def create(title: str, columns: list[str]) -> "Table":
+    def create(title: str, columns: list[str]) -> MenuTable:
         """Create a table with Rich"""
-        table = Table(title=title, box=box.ROUNDED, show_header=True, header_style="bold cyan")
+        table = Table(
+            title=title, box=box.ROUNDED, show_header=True, header_style="bold cyan"
+        )
         for col in columns:
             table.add_column(col)
         return table

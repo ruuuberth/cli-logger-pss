@@ -1,38 +1,37 @@
 """Concrete CLI Commands for Logger-PSS"""
+
 from __future__ import annotations
 
 import json
-import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from rich.table import Table
-from rich.console import Console
-from rich.prompt import Prompt, Confirm
 from typing import Any
 
+from rich.console import Console
+from rich.table import Table
+
+from app.cli.cli_services import ApiFlowCliService, CharacterCliService, RoomCliService
 from app.cli.commands import CliCommand
-from app.cli.menu import Menu
 from app.cli.utils import (
+    clear_console,
+    confirm_action,
+    print_error,
     print_info,
     print_success,
-    print_error,
     print_warning,
-    confirm_action,
     prompt_input,
-    clear_console,
 )
-from app.cli.cli_services import ApiFlowCliService, CharacterCliService, RoomCliService
+from app.core.config import settings
 from app.reporting.report_generator import (
-    ReportConfig,
-    ExcelReportGenerator,
     CsvReportGenerator,
+    ExcelReportGenerator,
     JsonReportGenerator,
+    ReportConfig,
 )
 from app.reporting.report_templates import BattleReplayTemplate, H2HReportTemplate
-from app.services.process_resource_monitor import ProcessResourceMonitor
 from app.services.api_flow_runtime import ApiFlowRuntime
-from app.core.config import settings
+from app.services.process_resource_monitor import ProcessResourceMonitor
 
 
 class QueryEventsCommand(CliCommand):
@@ -48,7 +47,7 @@ class QueryEventsCommand(CliCommand):
         """Execute query command"""
         try:
             clear_console()
-            
+
             saved_count = 0
             if self.runtime:
                 print_info("💾 Sincronizando eventos pendientes...")
@@ -57,34 +56,50 @@ class QueryEventsCommand(CliCommand):
                     saved_count = result.get("saved_count", 0)
                     print_success(f"✅ {saved_count} eventos sincronizados")
                 elif result and not result.get("ok"):
-                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
-                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+                    print_warning(
+                        f"⚠️ Flush falló: {result.get('message', 'error desconocido')}"
+                    )
+                    print_info(
+                        "⚠️ Continuando con datos locales - resultados pueden estar desactualizados"
+                    )
 
             print_info("🔍 Consultar Eventos API")
-            
+
             # Get search filter
-            search = prompt_input("Filtro (atacante/defensor/battle_id) [Enter = sin filtro]", default="")
-            
+            search = prompt_input(
+                "Filtro (atacante/defensor/battle_id) [Enter = sin filtro]", default=""
+            )
+
             # Date range filters
             print_info("Filtros opcionales (Enter para omitir):")
-            date_from_str = prompt_input("Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default="")
-            date_to_str = prompt_input("Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default="")
-            
+            date_from_str = prompt_input(
+                "Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default=""
+            )
+            date_to_str = prompt_input(
+                "Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default=""
+            )
+
             # Outcome filter
-            outcome = prompt_input("Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default="")
+            outcome = prompt_input(
+                "Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default=""
+            )
             outcome = outcome.upper() if outcome else None
             if outcome and outcome not in ("VICTORY", "DEFEAT", "DRAW"):
                 outcome = None
-            
+
             # Trophy range filters
-            trophy_min_str = prompt_input("Trofeos mínimos [Enter = sin filtro]", default="")
-            trophy_max_str = prompt_input("Trofeos máximos [Enter = sin filtro]", default="")
-            
+            trophy_min_str = prompt_input(
+                "Trofeos mínimos [Enter = sin filtro]", default=""
+            )
+            trophy_max_str = prompt_input(
+                "Trofeos máximos [Enter = sin filtro]", default=""
+            )
+
             time_from = None
             time_to = None
             trophy_min = None
             trophy_max = None
-            
+
             try:
                 if date_from_str:
                     time_from = datetime.strptime(date_from_str, "%Y-%m-%d")
@@ -109,11 +124,11 @@ class QueryEventsCommand(CliCommand):
                 trophy_min=trophy_min,
                 trophy_max=trophy_max,
             )
-            
+
             if not page.rows:
                 print_warning("No se encontraron eventos")
                 return 0
-            
+
             # Display table
             table = Table(title=f"📋 Eventos - Total: {page.total}", show_header=True)
             table.add_column("Hora", style="cyan")
@@ -123,7 +138,7 @@ class QueryEventsCommand(CliCommand):
             table.add_column("Botín", style="yellow")
             table.add_column("Copas", style="blue")
             table.add_column("Battle ID", style="white")
-            
+
             for row in page.rows:
                 table.add_row(
                     row.captured_at_label,
@@ -134,10 +149,10 @@ class QueryEventsCommand(CliCommand):
                     row.trophy_delta_label,
                     row.battle_id_label,
                 )
-            
+
             self.console.print(table)
             print_info(f"Mostrando página {page.page + 1} de {page.max_page + 1}")
-            
+
             return 0
         except Exception as e:
             print_error(f"Error consultando eventos: {e}")
@@ -157,7 +172,7 @@ class GenerateBattleReportCommand(CliCommand):
         """Execute report generation"""
         try:
             clear_console()
-            
+
             saved_count = 0
             if self.runtime:
                 print_info("💾 Sincronizando eventos pendientes...")
@@ -166,8 +181,12 @@ class GenerateBattleReportCommand(CliCommand):
                     saved_count = result.get("saved_count", 0)
                     print_success(f"✅ {saved_count} eventos sincronizados")
                 elif result and not result.get("ok"):
-                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
-                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+                    print_warning(
+                        f"⚠️ Flush falló: {result.get('message', 'error desconocido')}"
+                    )
+                    print_info(
+                        "⚠️ Continuando con datos locales - resultados pueden estar desactualizados"
+                    )
 
             print_info("📋 Generando reporte de batallas...")
 
@@ -183,28 +202,60 @@ class GenerateBattleReportCommand(CliCommand):
                             opts[a[2:]] = "true"
 
             # Parameters: allow override via args or prompt
-            search = opts.get("search") or (prompt_input("Filtro (atacante/defensor/battle_id) [Enter = todos]", default="") if opts.get("non-interactive") is None else "")
+            search = opts.get("search") or (
+                prompt_input(
+                    "Filtro (atacante/defensor/battle_id) [Enter = todos]", default=""
+                )
+                if opts.get("non-interactive") is None
+                else ""
+            )
 
             # Date range filters
             print_info("Filtros opcionales (Enter para omitir):")
-            date_from_str = opts.get("date-from") or (prompt_input("Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
-            date_to_str = opts.get("date-to") or (prompt_input("Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
-            
+            date_from_str = opts.get("date-from") or (
+                prompt_input(
+                    "Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default=""
+                )
+                if opts.get("non-interactive") is None
+                else ""
+            )
+            date_to_str = opts.get("date-to") or (
+                prompt_input(
+                    "Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default=""
+                )
+                if opts.get("non-interactive") is None
+                else ""
+            )
+
             # Outcome filter
-            outcome = opts.get("outcome") or (prompt_input("Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default="") if opts.get("non-interactive") is None else "")
+            outcome = opts.get("outcome") or (
+                prompt_input(
+                    "Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default=""
+                )
+                if opts.get("non-interactive") is None
+                else ""
+            )
             outcome = outcome.upper() if outcome else None
             if outcome and outcome not in ("VICTORY", "DEFEAT", "DRAW"):
                 outcome = None
-            
+
             # Trophy range filters
-            trophy_min_str = opts.get("trophy-min") or (prompt_input("Trofeos mínimos [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
-            trophy_max_str = opts.get("trophy-max") or (prompt_input("Trofeos máximos [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
-            
+            trophy_min_str = opts.get("trophy-min") or (
+                prompt_input("Trofeos mínimos [Enter = sin filtro]", default="")
+                if opts.get("non-interactive") is None
+                else ""
+            )
+            trophy_max_str = opts.get("trophy-max") or (
+                prompt_input("Trofeos máximos [Enter = sin filtro]", default="")
+                if opts.get("non-interactive") is None
+                else ""
+            )
+
             time_from = None
             time_to = None
             trophy_min = None
             trophy_max = None
-            
+
             try:
                 if date_from_str:
                     time_from = datetime.strptime(date_from_str, "%Y-%m-%d")
@@ -219,7 +270,9 @@ class GenerateBattleReportCommand(CliCommand):
                 return 1
 
             # Format choice
-            format_choice = opts.get("format") or prompt_input("Formato (excel/csv/json) [excel]", default="excel")
+            format_choice = opts.get("format") or prompt_input(
+                "Formato (excel/csv/json) [excel]", default="excel"
+            )
             if format_choice not in ["excel", "csv", "json"]:
                 print_error("Formato no válido")
                 return 1
@@ -237,36 +290,47 @@ class GenerateBattleReportCommand(CliCommand):
                 trophy_min=trophy_min,
                 trophy_max=trophy_max,
             )
-            
+
             if not page.rows:
                 print_warning("No hay datos para reportar")
                 return 0
-            
+
             # Convert to report format
             rows = [
-                BattleReplayTemplate.row_from_battle({
-                    "battle_id": row.battle_id_label,
-                    "attacker_name": row.attacker_label,
-                    "defender_name": row.defender_label,
-                    "outcome": row.outcome_label,
-                    "loot": row.loot_label,
-                    "trophy_delta": row.trophy_delta_label,
-                    "captured_at": row.captured_at_label,
-                })
+                BattleReplayTemplate.row_from_battle(
+                    {
+                        "battle_id": row.battle_id_label,
+                        "attacker_name": row.attacker_label,
+                        "defender_name": row.defender_label,
+                        "outcome": row.outcome_label,
+                        "loot": row.loot_label,
+                        "trophy_delta": row.trophy_delta_label,
+                        "captured_at": row.captured_at_label,
+                    }
+                )
                 for row in page.rows
             ]
-            
+
             # Output options (args override prompts)
-            default_output = Path(opts.get("output-dir") or Path.home() / "Desktop" / "Logger-PSS Reports")
+            default_output = Path(
+                opts.get("output-dir") or Path.home() / "Desktop" / "Logger-PSS Reports"
+            )
             if opts.get("non-interactive"):
                 output_path = Path(default_output).expanduser()
                 filename_input = opts.get("filename") or "Reporte Batallas"
-                include_ts = not (opts.get("no-timestamp") in ("true", "1", "yes"))
+                include_ts = opts.get("no-timestamp") not in ("true", "1", "yes")
             else:
-                out_input = prompt_input(f"Carpeta de salida [{default_output}]", default=str(default_output))
+                out_input = prompt_input(
+                    f"Carpeta de salida [{default_output}]", default=str(default_output)
+                )
                 output_path = Path(out_input).expanduser()
-                filename_input = prompt_input("Nombre base del archivo [Reporte Batallas]", default="Reporte Batallas")
-                include_ts_input = prompt_input("Incluir timestamp en nombre? (y/n) [y]", default="y")
+                filename_input = prompt_input(
+                    "Nombre base del archivo [Reporte Batallas]",
+                    default="Reporte Batallas",
+                )
+                include_ts_input = prompt_input(
+                    "Incluir timestamp en nombre? (y/n) [y]", default="y"
+                )
                 include_ts = include_ts_input.strip().lower() in ("y", "yes", "")
 
             config = ReportConfig(
@@ -281,10 +345,10 @@ class GenerateBattleReportCommand(CliCommand):
                 generator = CsvReportGenerator(config)
             else:
                 generator = JsonReportGenerator(config)
-            
+
             generator.add_rows(rows)
             output_file = generator.generate()
-            
+
             print_success(f"✅ Reporte generado: {output_file}")
             return 0
         except Exception as e:
@@ -314,8 +378,12 @@ class GenerateH2HReportCommand(CliCommand):
                     saved_count = result.get("saved_count", 0)
                     print_success(f"✅ {saved_count} eventos sincronizados")
                 elif result and not result.get("ok"):
-                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
-                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+                    print_warning(
+                        f"⚠️ Flush falló: {result.get('message', 'error desconocido')}"
+                    )
+                    print_info(
+                        "⚠️ Continuando con datos locales - resultados pueden estar desactualizados"
+                    )
 
             print_info("📊 Generar Reporte H2H (Comparativa de Jugadores)")
 
@@ -334,7 +402,9 @@ class GenerateH2HReportCommand(CliCommand):
             print_info("Selección de jugadores:")
             print("  1. Seleccionar de lista (pares con batallas)")
             print("  2. Buscar por nombre/ID")
-            selection_method = opts.get("method") or prompt_input("Método [1/2] [1]", default="1")
+            selection_method = opts.get("method") or prompt_input(
+                "Método [1/2] [1]", default="1"
+            )
             if selection_method not in ("1", "2"):
                 selection_method = "1"
 
@@ -356,17 +426,41 @@ class GenerateH2HReportCommand(CliCommand):
             # Filters
             print_info(f"\nGenerando reporte H2H: {low_name} vs {high_name}")
             print_info("Filtros opcionales (Enter para omitir):")
-            date_from_str = opts.get("date-from") or (prompt_input("Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
-            date_to_str = opts.get("date-to") or (prompt_input("Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default="") if opts.get("non-interactive") is None else "")
+            date_from_str = opts.get("date-from") or (
+                prompt_input(
+                    "Fecha desde (YYYY-MM-DD) [Enter = sin filtro]", default=""
+                )
+                if opts.get("non-interactive") is None
+                else ""
+            )
+            date_to_str = opts.get("date-to") or (
+                prompt_input(
+                    "Fecha hasta (YYYY-MM-DD) [Enter = sin filtro]", default=""
+                )
+                if opts.get("non-interactive") is None
+                else ""
+            )
 
-            outcome = opts.get("outcome") or (prompt_input("Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default="") if opts.get("non-interactive") is None else "")
+            outcome = opts.get("outcome") or (
+                prompt_input(
+                    "Resultado (VICTORY/DEFEAT/DRAW) [Enter = todos]", default=""
+                )
+                if opts.get("non-interactive") is None
+                else ""
+            )
             outcome = outcome.upper() if outcome else None
             if outcome and outcome not in ("VICTORY", "DEFEAT", "DRAW"):
                 outcome = None
 
-            trend_bucket_raw = opts.get("trend-bucket") or (prompt_input("Agrupar tendencias (dia/semana) [dia]", default="") if opts.get("non-interactive") is None else "")
+            trend_bucket_raw = opts.get("trend-bucket") or (
+                prompt_input("Agrupar tendencias (dia/semana) [dia]", default="")
+                if opts.get("non-interactive") is None
+                else ""
+            )
             trend_bucket_raw = trend_bucket_raw.strip().lower()
-            trend_bucket = "week" if trend_bucket_raw in ("semana", "week", "w") else "day"
+            trend_bucket = (
+                "week" if trend_bucket_raw in ("semana", "week", "w") else "day"
+            )
 
             time_from = None
             time_to = None
@@ -380,22 +474,35 @@ class GenerateH2HReportCommand(CliCommand):
                 return 1
 
             # Format choice
-            format_choice = opts.get("format") or prompt_input("Formato (excel/json) [excel]", default="excel")
+            format_choice = opts.get("format") or prompt_input(
+                "Formato (excel/json) [excel]", default="excel"
+            )
             if format_choice not in ("excel", "json"):
                 print_error("Formato no válido (excel/json)")
                 return 1
 
             # Output options
-            default_output = Path(opts.get("output-dir") or Path.home() / "Desktop" / "Logger-PSS Reports")
+            default_output = Path(
+                opts.get("output-dir") or Path.home() / "Desktop" / "Logger-PSS Reports"
+            )
             if opts.get("non-interactive"):
                 output_path = Path(default_output).expanduser()
-                filename_input = opts.get("filename") or f"H2H_{low_name}_vs_{high_name}"
-                include_ts = not (opts.get("no-timestamp") in ("true", "1", "yes"))
+                filename_input = (
+                    opts.get("filename") or f"H2H_{low_name}_vs_{high_name}"
+                )
+                include_ts = opts.get("no-timestamp") not in ("true", "1", "yes")
             else:
-                out_input = prompt_input(f"Carpeta de salida [{default_output}]", default=str(default_output))
+                out_input = prompt_input(
+                    f"Carpeta de salida [{default_output}]", default=str(default_output)
+                )
                 output_path = Path(out_input).expanduser()
-                filename_input = opts.get("filename") or prompt_input(f"Nombre base [H2H_{low_name}_vs_{high_name}]", default=f"H2H_{low_name}_vs_{high_name}")
-                include_ts_input = prompt_input("Incluir timestamp en nombre? (y/n) [y]", default="y")
+                filename_input = opts.get("filename") or prompt_input(
+                    f"Nombre base [H2H_{low_name}_vs_{high_name}]",
+                    default=f"H2H_{low_name}_vs_{high_name}",
+                )
+                include_ts_input = prompt_input(
+                    "Incluir timestamp en nombre? (y/n) [y]", default="y"
+                )
                 include_ts = include_ts_input.strip().lower() in ("y", "yes", "")
 
             # Query H2H data
@@ -426,7 +533,9 @@ class GenerateH2HReportCommand(CliCommand):
                 generator = ExcelReportGenerator(config)
                 generator.add_sheet("Resumen", H2HReportTemplate.summary_rows(h2h_data))
                 generator.add_sheet("Batallas", H2HReportTemplate.battle_rows(h2h_data))
-                generator.add_sheet("Tendencias", H2HReportTemplate.trend_rows(h2h_data))
+                generator.add_sheet(
+                    "Tendencias", H2HReportTemplate.trend_rows(h2h_data)
+                )
                 fleet_rows = H2HReportTemplate.fleet_breakdown_rows(h2h_data)
                 if fleet_rows:
                     generator.add_sheet("Flota", fleet_rows)
@@ -435,7 +544,6 @@ class GenerateH2HReportCommand(CliCommand):
             else:
                 generator = JsonReportGenerator(config)
                 # JSON combines all data
-                import json
                 json_data = {
                     "summary": h2h_data.get("summary"),
                     "battles": h2h_data.get("battles"),
@@ -460,7 +568,9 @@ class GenerateH2HReportCommand(CliCommand):
 
         print_info("\nPares de jugadores encontrados:")
         for i, p in enumerate(pairs):
-            print(f"  [{i}] {p.get('low_name', '?')} vs {p.get('high_name', '?')} — {p.get('total_battles', 0)} batallas ({p.get('low_wins', 0)}-{p.get('high_wins', 0)})")
+            print(
+                f"  [{i}] {p.get('low_name', '?')} vs {p.get('high_name', '?')} — {p.get('total_battles', 0)} batallas ({p.get('low_wins', 0)}-{p.get('high_wins', 0)})"
+            )
 
         selection = prompt_input("Seleccione índice (Enter para cancelar)", default="")
         if not selection:
@@ -488,7 +598,9 @@ class GenerateH2HReportCommand(CliCommand):
 
         print_info("\nResultados:")
         for i, p in enumerate(results):
-            print(f"  [{i}] {p.get('low_name', '?')} vs {p.get('high_name', '?')} — {p.get('total_battles', 0)} batallas ({p.get('low_wins', 0)}-{p.get('high_wins', 0)})")
+            print(
+                f"  [{i}] {p.get('low_name', '?')} vs {p.get('high_name', '?')} — {p.get('total_battles', 0)} batallas ({p.get('low_wins', 0)}-{p.get('high_wins', 0)})"
+            )
 
         selection = prompt_input("Seleccione índice (Enter para cancelar)", default="")
         if not selection:
@@ -518,7 +630,9 @@ class InspectCharacterCommand(CliCommand):
             clear_console()
             print_info("👤 Inspector de Tripulantes")
 
-            battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
+            battle_id = prompt_input(
+                "Ingrese battle_replay_id (o Enter para cancelar)", default=""
+            )
             if not battle_id:
                 print_info("Cancelado")
                 return 0
@@ -536,9 +650,13 @@ class InspectCharacterCommand(CliCommand):
             print_info("Tripulantes encontrados:")
             for i, c in enumerate(characters):
                 side = c.get("side", "?")
-                print(f"  [{i}] {side} — {c.get('name', '-')} (Design: {c.get('design_name', '-')}, Lv {c.get('level', '-')}, Ship: {c.get('ship_id', '-')})")
+                print(
+                    f"  [{i}] {side} — {c.get('name', '-')} (Design: {c.get('design_name', '-')}, Lv {c.get('level', '-')}, Ship: {c.get('ship_id', '-')})"
+                )
 
-            selection = prompt_input("Seleccione índice (o Enter para cancelar)", default="")
+            selection = prompt_input(
+                "Seleccione índice (o Enter para cancelar)", default=""
+            )
             if not selection:
                 print_info("Cancelado")
                 return 0
@@ -567,7 +685,11 @@ class InspectCharacterCommand(CliCommand):
     def _render_character_detail(self, detail: dict) -> None:
         """Render character details as Rich tables"""
         # Basic info
-        info = Table(title=f"Tripulante {detail.get('name', '-')} ({detail.get('design_name', '-')})", show_header=True, header_style="bold cyan")
+        info = Table(
+            title=f"Tripulante {detail.get('name', '-')} ({detail.get('design_name', '-')})",
+            show_header=True,
+            header_style="bold cyan",
+        )
         info.add_column("Campo", style="bold")
         info.add_column("Valor")
         info.add_row("ID", str(detail.get("character_id", "-")))
@@ -580,7 +702,9 @@ class InspectCharacterCommand(CliCommand):
         # Stats
         stats = detail.get("stats", {})
         if stats:
-            stats_table = Table(title="Estadísticas", show_header=True, header_style="bold cyan")
+            stats_table = Table(
+                title="Estadísticas", show_header=True, header_style="bold cyan"
+            )
             stats_table.add_column("Stat", style="bold")
             stats_table.add_column("Valor")
             for k, v in stats.items():
@@ -590,7 +714,9 @@ class InspectCharacterCommand(CliCommand):
         # Actions
         actions = detail.get("actions", [])
         if actions:
-            act_table = Table(title="Acciones", show_header=True, header_style="bold cyan")
+            act_table = Table(
+                title="Acciones", show_header=True, header_style="bold cyan"
+            )
             act_table.add_column("#", style="bold")
             act_table.add_column("Action ID")
             act_table.add_column("Acción")
@@ -611,7 +737,9 @@ class InspectCharacterCommand(CliCommand):
         # Items
         items = detail.get("items", [])
         if items:
-            item_table = Table(title="Items", show_header=True, header_style="bold cyan")
+            item_table = Table(
+                title="Items", show_header=True, header_style="bold cyan"
+            )
             item_table.add_column("#", style="bold")
             item_table.add_column("Item ID")
             item_table.add_column("Design ID")
@@ -646,7 +774,9 @@ class InspectRoomCommand(CliCommand):
             clear_console()
             print_info("🏠 Inspector de Salas")
 
-            battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
+            battle_id = prompt_input(
+                "Ingrese battle_replay_id (o Enter para cancelar)", default=""
+            )
             if not battle_id:
                 print_info("Cancelado")
                 return 0
@@ -664,9 +794,13 @@ class InspectRoomCommand(CliCommand):
             print_info("Salas encontradas:")
             for i, r in enumerate(rooms):
                 side = r.get("side", "?")
-                print(f"  [{i}] {side} — {r.get('design_name', '-')} (Room ID: {r.get('room_id', '-')}, Ship: {r.get('ship_id', '-')}, Row: {r.get('row', '-')}, Col: {r.get('column', '-')})")
+                print(
+                    f"  [{i}] {side} — {r.get('design_name', '-')} (Room ID: {r.get('room_id', '-')}, Ship: {r.get('ship_id', '-')}, Row: {r.get('row', '-')}, Col: {r.get('column', '-')})"
+                )
 
-            selection = prompt_input("Seleccione índice (o Enter para cancelar)", default="")
+            selection = prompt_input(
+                "Seleccione índice (o Enter para cancelar)", default=""
+            )
             if not selection:
                 print_info("Cancelado")
                 return 0
@@ -695,7 +829,11 @@ class InspectRoomCommand(CliCommand):
     def _render_room_detail(self, detail: dict) -> None:
         """Render room details as Rich tables"""
         # Basic info
-        info = Table(title=f"Sala {detail.get('design_name', '-')} (Room ID: {detail.get('room_id_num', '-')})", show_header=True, header_style="bold cyan")
+        info = Table(
+            title=f"Sala {detail.get('design_name', '-')} (Room ID: {detail.get('room_id_num', '-')})",
+            show_header=True,
+            header_style="bold cyan",
+        )
         info.add_column("Campo", style="bold")
         info.add_column("Valor")
         info.add_row("ID", str(detail.get("room_id", "-")))
@@ -709,7 +847,9 @@ class InspectRoomCommand(CliCommand):
         # Actions
         actions = detail.get("actions", [])
         if actions:
-            act_table = Table(title="Acciones de la Sala", show_header=True, header_style="bold cyan")
+            act_table = Table(
+                title="Acciones de la Sala", show_header=True, header_style="bold cyan"
+            )
             act_table.add_column("#", style="bold")
             act_table.add_column("Action Type ID")
             act_table.add_column("Acción")
@@ -742,7 +882,7 @@ class InspectBattleCommand(CliCommand):
     def execute(self, args: list[str] | None = None) -> int:
         try:
             clear_console()
-            
+
             saved_count = 0
             if self.runtime:
                 print_info("💾 Sincronizando eventos pendientes...")
@@ -751,11 +891,17 @@ class InspectBattleCommand(CliCommand):
                     saved_count = result.get("saved_count", 0)
                     print_success(f"✅ {saved_count} eventos sincronizados")
                 elif result and not result.get("ok"):
-                    print_warning(f"⚠️ Flush falló: {result.get('message', 'error desconocido')}")
-                    print_info("⚠️ Continuando con datos locales - resultados pueden estar desactualizados")
+                    print_warning(
+                        f"⚠️ Flush falló: {result.get('message', 'error desconocido')}"
+                    )
+                    print_info(
+                        "⚠️ Continuando con datos locales - resultados pueden estar desactualizados"
+                    )
 
             print_info("🎖️ Inspector de Batalla")
-            battle_id = prompt_input("Ingrese battle_replay_id (o Enter para cancelar)", default="")
+            battle_id = prompt_input(
+                "Ingrese battle_replay_id (o Enter para cancelar)", default=""
+            )
             if not battle_id:
                 print_info("Cancelado")
                 return 0
@@ -835,7 +981,9 @@ class SettingsCommand(CliCommand):
             clear_console()
             print_info("⚙️ Configuración de Logger-PSS")
             print_info(f"Archivo .env: {self.env_path}")
-            print_info(f"Existe: {'Sí' if self.env_path.exists() else 'No (usando defaults)'}")
+            print_info(
+                f"Existe: {'Sí' if self.env_path.exists() else 'No (usando defaults)'}"
+            )
 
             while True:
                 self._show_main_menu()
@@ -878,25 +1026,31 @@ class SettingsCommand(CliCommand):
     def _show_all_settings(self) -> None:
         print("\n[bold cyan]Configuración actual:[/bold cyan]")
         for category, keys in self.SETTINGS_CATEGORIES.items():
-            table = Table(title=f"📂 {category}", show_header=True, header_style="bold cyan")
+            table = Table(
+                title=f"📂 {category}", show_header=True, header_style="bold cyan"
+            )
             table.add_column("Clave", style="bold")
             table.add_column("Valor")
             table.add_column("Tipo")
-            
+
             for key in keys:
                 value = getattr(settings, key, "N/A")
                 if isinstance(value, list):
                     display_value = json.dumps(value, ensure_ascii=False)
                 else:
                     display_value = str(value)
-                
+
                 # Mask sensitive values
-                if "KEY" in key.upper() or "PASSWORD" in key.upper() or "SECRET" in key.upper():
+                if (
+                    "KEY" in key.upper()
+                    or "PASSWORD" in key.upper()
+                    or "SECRET" in key.upper()
+                ):
                     display_value = "***MASKED***" if display_value != "" else "(vacío)"
-                
+
                 value_type = type(value).__name__
                 table.add_row(key, display_value, value_type)
-            
+
             self.console.print(table)
 
     def _edit_setting(self) -> None:
@@ -904,21 +1058,25 @@ class SettingsCommand(CliCommand):
         all_keys = []
         for keys in self.SETTINGS_CATEGORIES.values():
             all_keys.extend(keys)
-        
+
         for i, key in enumerate(all_keys):
             value = getattr(settings, key, "N/A")
             if isinstance(value, list):
                 display = json.dumps(value, ensure_ascii=False)
             else:
                 display = str(value)
-            if "KEY" in key.upper() or "PASSWORD" in key.upper() or "SECRET" in key.upper():
+            if (
+                "KEY" in key.upper()
+                or "PASSWORD" in key.upper()
+                or "SECRET" in key.upper()
+            ):
                 display = "***MASKED***" if display != "" else "(vacío)"
             print(f"  [{i}] {key} = {display}")
-        
+
         selection = prompt_input("Seleccione índice (Enter para cancelar)", default="")
         if not selection:
             return
-        
+
         try:
             idx = int(selection)
             if idx < 0 or idx >= len(all_keys):
@@ -927,14 +1085,14 @@ class SettingsCommand(CliCommand):
         except ValueError:
             print_error("Entrada inválida")
             return
-        
+
         key = all_keys[idx]
         current = getattr(settings, key, None)
-        
+
         if isinstance(current, list):
             current_display = json.dumps(current, ensure_ascii=False)
             print_info(f"Valor actual (JSON array): {current_display}")
-            print_info("Ingrese nuevo valor como JSON array, ej: [\"host1\",\"host2\"]")
+            print_info('Ingrese nuevo valor como JSON array, ej: ["host1","host2"]')
             new_value = prompt_input("Nuevo valor", default=current_display)
             try:
                 parsed = json.loads(new_value)
@@ -946,7 +1104,9 @@ class SettingsCommand(CliCommand):
                 return
         elif isinstance(current, bool):
             print_info(f"Valor actual: {current}")
-            new_value = prompt_input("Nuevo valor (true/false)", default=str(current).lower())
+            new_value = prompt_input(
+                "Nuevo valor (true/false)", default=str(current).lower()
+            )
             if new_value.lower() not in ("true", "false"):
                 print_error("Debe ser true o false")
                 return
@@ -961,12 +1121,16 @@ class SettingsCommand(CliCommand):
                 return
         else:
             print_info(f"Valor actual: {current}")
-            new_value = prompt_input("Nuevo valor", default=str(current) if current is not None else "")
+            new_value = prompt_input(
+                "Nuevo valor", default=str(current) if current is not None else ""
+            )
             parsed = new_value
 
         if confirm_action(f"¿Guardar {key} = {parsed} en .env?"):
             self._write_env(key, parsed)
-            print_success(f"✅ {key} actualizado. Reinicie la app para aplicar cambios.")
+            print_success(
+                f"✅ {key} actualizado. Reinicie la app para aplicar cambios."
+            )
 
     def _write_env(self, key: str, value: Any) -> None:
         """Write a key-value pair to .env file"""
@@ -974,7 +1138,7 @@ class SettingsCommand(CliCommand):
         if self.env_path.exists():
             with open(self.env_path, "r", encoding="utf-8") as f:
                 env_lines = f.readlines()
-        
+
         # Format value for .env
         if isinstance(value, list):
             env_value = json.dumps(value, ensure_ascii=False)
@@ -982,7 +1146,7 @@ class SettingsCommand(CliCommand):
             env_value = str(value).lower()
         else:
             env_value = str(value)
-        
+
         # Check if key exists
         key_found = False
         new_lines = []
@@ -997,10 +1161,10 @@ class SettingsCommand(CliCommand):
                     new_lines.append(line)
             else:
                 new_lines.append(line)
-        
+
         if not key_found:
             new_lines.append(f"\n{key}={env_value}\n")
-        
+
         self.env_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.env_path, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
@@ -1009,7 +1173,7 @@ class SettingsCommand(CliCommand):
         if not self.env_path.exists():
             print_warning("No existe archivo .env")
             return
-        
+
         print(f"\n[bold]Contenido de {self.env_path}:[/bold]")
         with open(self.env_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -1020,18 +1184,20 @@ class SettingsCommand(CliCommand):
         if not example_path.exists():
             print_error("No se encuentra .env.dev.example")
             return
-        
+
         if self.env_path.exists():
-            if not confirm_action(f"El archivo {self.env_path} ya existe. ¿Sobrescribir?"):
+            if not confirm_action(
+                f"El archivo {self.env_path} ya existe. ¿Sobrescribir?"
+            ):
                 return
-        
+
         with open(example_path, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         self.env_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.env_path, "w", encoding="utf-8") as f:
             f.write(content)
-        
+
         print_success(f"✅ .env creado desde ejemplo en {self.env_path}")
 
     def _export_config(self) -> None:
@@ -1044,13 +1210,20 @@ class SettingsCommand(CliCommand):
             if format_choice not in ("1", "2"):
                 format_choice = "1"
 
-            default_path = self.env_path.parent / f"config_export.{ 'yaml' if format_choice == '1' else 'json' }"
-            output_path = Path(prompt_input(f"Ruta de salida [{default_path}]", default=str(default_path))).expanduser()
+            default_path = (
+                self.env_path.parent
+                / f"config_export.{'yaml' if format_choice == '1' else 'json'}"
+            )
+            output_path = Path(
+                prompt_input(
+                    f"Ruta de salida [{default_path}]", default=str(default_path)
+                )
+            ).expanduser()
 
             # Collect all settings from Pydantic Settings
             export_data = {}
             sensitive_keys = {"PSS_CHECKSUM_KEY", "DATABASE_URL"}
-            
+
             all_keys = []
             for keys in self.SETTINGS_CATEGORIES.values():
                 all_keys.extend(keys)
@@ -1059,11 +1232,11 @@ class SettingsCommand(CliCommand):
                 value = getattr(settings, key, None)
                 if key in sensitive_keys:
                     export_data[key] = "***MASKED***"
-                elif isinstance(value, list):
-                    export_data[key] = value
-                elif isinstance(value, bool):
-                    export_data[key] = value
-                elif isinstance(value, int):
+                elif (
+                    isinstance(value, list)
+                    or isinstance(value, bool)
+                    or isinstance(value, int)
+                ):
                     export_data[key] = value
                 else:
                     export_data[key] = str(value) if value is not None else ""
@@ -1074,6 +1247,7 @@ class SettingsCommand(CliCommand):
             if format_choice == "1":
                 # YAML with comments
                 import yaml
+
                 yaml_data = {}
                 for key, value in export_data.items():
                     yaml_data[key] = value
@@ -1093,6 +1267,7 @@ class SettingsCommand(CliCommand):
                     output += "\n"
             else:
                 import json
+
                 output = json.dumps(export_data, ensure_ascii=False, indent=2)
 
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1107,8 +1282,10 @@ class SettingsCommand(CliCommand):
         """Import configuration from YAML or JSON with auto-apply and backup"""
         try:
             print("\n[bold]Importar Configuración[/bold]")
-            input_path = Path(prompt_input("Ruta del archivo (YAML/JSON): ", default="")).expanduser()
-            
+            input_path = Path(
+                prompt_input("Ruta del archivo (YAML/JSON): ", default="")
+            ).expanduser()
+
             if not input_path.exists():
                 print_error("Archivo no encontrado")
                 return
@@ -1116,10 +1293,12 @@ class SettingsCommand(CliCommand):
             # Read and parse file
             if input_path.suffix.lower() in (".yaml", ".yml"):
                 import yaml
+
                 with open(input_path, "r", encoding="utf-8") as f:
                     import_data = yaml.safe_load(f)
             elif input_path.suffix.lower() == ".json":
                 import json
+
                 with open(input_path, "r", encoding="utf-8") as f:
                     import_data = json.load(f)
             else:
@@ -1140,14 +1319,20 @@ class SettingsCommand(CliCommand):
                 if key not in all_known_keys:
                     errors.append(f"Clave desconocida: {key}")
                     continue
-                
+
                 expected_type = type(getattr(settings, key, None))
-                if expected_type == list and not isinstance(value, list):
-                    errors.append(f"{key}: se esperaba lista, recibió {type(value).__name__}")
-                elif expected_type == bool and not isinstance(value, bool):
-                    errors.append(f"{key}: se esperaba booleano, recibió {type(value).__name__}")
-                elif expected_type == int and not isinstance(value, int):
-                    errors.append(f"{key}: se esperaba entero, recibió {type(value).__name__}")
+                if expected_type is list and not isinstance(value, list):
+                    errors.append(
+                        f"{key}: se esperaba lista, recibió {type(value).__name__}"
+                    )
+                elif expected_type is bool and not isinstance(value, bool):
+                    errors.append(
+                        f"{key}: se esperaba booleano, recibió {type(value).__name__}"
+                    )
+                elif expected_type is int and not isinstance(value, int):
+                    errors.append(
+                        f"{key}: se esperaba entero, recibió {type(value).__name__}"
+                    )
 
             if errors:
                 print_error("Errores de validación:")
@@ -1169,11 +1354,11 @@ class SettingsCommand(CliCommand):
 
     def _create_env_backup(self) -> Path:
         """Create timestamped backup of .env"""
-        import time
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = self.env_path.parent / f".env.backup.{timestamp}"
         if self.env_path.exists():
             import shutil
+
             shutil.copy2(self.env_path, backup_path)
         else:
             backup_path.write_text("", encoding="utf-8")
@@ -1189,7 +1374,7 @@ class SettingsCommand(CliCommand):
         # Track which keys we've updated
         updated_keys = set()
         new_lines = []
-        
+
         for line in env_lines:
             stripped = line.strip()
             if stripped and not stripped.startswith("#") and "=" in stripped:
@@ -1198,6 +1383,7 @@ class SettingsCommand(CliCommand):
                     value = config[existing_key]
                     if isinstance(value, list):
                         import json
+
                         env_value = json.dumps(value, ensure_ascii=False)
                     elif isinstance(value, bool):
                         env_value = str(value).lower()
@@ -1215,6 +1401,7 @@ class SettingsCommand(CliCommand):
             if key not in updated_keys:
                 if isinstance(value, list):
                     import json
+
                     env_value = json.dumps(value, ensure_ascii=False)
                 elif isinstance(value, bool):
                     env_value = str(value).lower()
@@ -1272,7 +1459,9 @@ class CaptureTrafficCommand(CliCommand):
         try:
             clear_console()
             print_info("📡 Control de Captura de Tráfico")
-            choice = prompt_input("Acción (start/stop/toggle/status) [status]", default="status")
+            choice = prompt_input(
+                "Acción (start/stop/toggle/status) [status]", default="status"
+            )
             choice = choice.strip().lower()
             if choice == "start":
                 self.runtime.start_capture()
@@ -1319,7 +1508,9 @@ class SystemMonitorCommand(CliCommand):
         try:
             clear_console()
             print_info("📊 Monitor de Sistema")
-            pid_input = prompt_input("PID a monitorear (\"self\" para proceso actual) [self]", default="self")
+            pid_input = prompt_input(
+                'PID a monitorear ("self" para proceso actual) [self]', default="self"
+            )
             if pid_input.strip().lower() in ("", "self"):
                 pid = None
             else:

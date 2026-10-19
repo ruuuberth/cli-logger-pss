@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from threading import Lock, Thread
 from time import monotonic
-from typing import Any, Callable
+from typing import Any
 
 from app.core.config import settings
 from app.services.api_flow_capture import ApiFlowCaptureManager
@@ -59,13 +60,19 @@ class ApiFlowRuntime:
     def subscribe_state(self, callback: Callable[[ApiFlowRuntimeState], None]) -> None:
         self._state_callbacks.append(callback)
 
-    def subscribe_startup_sync_finished(self, callback: Callable[[dict[str, Any]], None]) -> None:
+    def subscribe_startup_sync_finished(
+        self, callback: Callable[[dict[str, Any]], None]
+    ) -> None:
         self._startup_callbacks.append(callback)
 
-    def subscribe_stop_flush_finished(self, callback: Callable[[dict[str, Any]], None]) -> None:
+    def subscribe_stop_flush_finished(
+        self, callback: Callable[[dict[str, Any]], None]
+    ) -> None:
         self._stop_flush_callbacks.append(callback)
 
-    def subscribe_events_flushed(self, callback: Callable[[dict[str, Any]], None]) -> None:
+    def subscribe_events_flushed(
+        self, callback: Callable[[dict[str, Any]], None]
+    ) -> None:
         self._flush_callbacks.append(callback)
 
     def start_capture(self) -> None:
@@ -97,9 +104,7 @@ class ApiFlowRuntime:
             dropped = self._enforce_pending_limit_locked()
             if dropped:
                 self._dropped_pending_events += dropped
-                self._last_capture_status = (
-                    f"backlog limitado, descartados {self._dropped_pending_events} eventos"
-                )
+                self._last_capture_status = f"backlog limitado, descartados {self._dropped_pending_events} eventos"
             self._live_event_count += 1
         self._emit_state(force=False)
 
@@ -117,7 +122,9 @@ class ApiFlowRuntime:
             self._startup_sync_running = True
             self._startup_sync_status = "inicializando..."
         self._emit_state(force=True)
-        Thread(target=self._run_startup_sync_worker, daemon=True, name="startup-sync").start()
+        Thread(
+            target=self._run_startup_sync_worker, daemon=True, name="startup-sync"
+        ).start()
 
     def start_stop_flush(self) -> None:
         with self._lock:
@@ -126,7 +133,9 @@ class ApiFlowRuntime:
             self._stop_flush_running = True
             self._last_capture_status = "guardando eventos pendientes..."
         self._emit_state(force=True)
-        Thread(target=self._run_stop_flush_worker, daemon=True, name="stop-flush").start()
+        Thread(
+            target=self._run_stop_flush_worker, daemon=True, name="stop-flush"
+        ).start()
 
     def close(self) -> None:
         self.flush_pending()
@@ -162,22 +171,48 @@ class ApiFlowRuntime:
         try:
             snapshot = repo.get_startup_sync_snapshot()
             max_event_id = int(snapshot.get("max_event_id") or 0)
-            while repo.backfill_response_body_cleaned(batch_size=100, max_event_id=max_event_id) > 0:
+            while (
+                repo.backfill_response_body_cleaned(
+                    batch_size=100, max_event_id=max_event_id
+                )
+                > 0
+            ):
                 pass
-            while repo.sync_battle_replays_from_api_flow(batch_size=500, max_event_id=max_event_id) > 0:
+            while (
+                repo.sync_battle_replays_from_api_flow(
+                    batch_size=500, max_event_id=max_event_id
+                )
+                > 0
+            ):
                 pass
             post_sync_snapshot = repo.get_startup_sync_snapshot()
             max_replay_id = int(post_sync_snapshot.get("max_replay_id") or 0)
-            while repo.sync_battle_replay_children(batch_size=200, max_replay_id=max_replay_id) > 0:
+            while (
+                repo.sync_battle_replay_children(
+                    batch_size=200, max_replay_id=max_replay_id
+                )
+                > 0
+            ):
                 pass
-            while repo.backfill_room_attributes(batch_size=200, max_replay_id=max_replay_id) > 0:
+            while (
+                repo.backfill_room_attributes(
+                    batch_size=200, max_replay_id=max_replay_id
+                )
+                > 0
+            ):
                 pass
-            result["matchup_backfill"] = repo.backfill_matchup_history_and_prune(batch_size_pairs=200)
+            result["matchup_backfill"] = repo.backfill_matchup_history_and_prune(
+                batch_size_pairs=200
+            )
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
         with self._lock:
             self._startup_sync_running = False
-            self._startup_sync_status = "listo" if result.get("ok", True) else f"error ({result.get('error', 'desconocido')})"
+            self._startup_sync_status = (
+                "listo"
+                if result.get("ok", True)
+                else f"error ({result.get('error', 'desconocido')})"
+            )
         self._emit_state(force=True)
         for callback in self._startup_callbacks:
             callback(result)
@@ -188,13 +223,24 @@ class ApiFlowRuntime:
             self._stop_flush_running = False
         self._emit_state(force=True)
         for callback in self._stop_flush_callbacks:
-            callback(payload or {"ok": True, "message": f"Estado: {self.snapshot_state().capture_status}"})
+            callback(
+                payload
+                or {
+                    "ok": True,
+                    "message": f"Estado: {self.snapshot_state().capture_status}",
+                }
+            )
 
-    def _flush_pending_impl(self, *, final_flush: bool = False) -> dict[str, Any] | None:
+    def _flush_pending_impl(
+        self, *, final_flush: bool = False
+    ) -> dict[str, Any] | None:
         with self._lock:
             if not self._pending_events:
                 if final_flush:
-                    return {"ok": True, "message": f"Estado: {self._last_capture_status}"}
+                    return {
+                        "ok": True,
+                        "message": f"Estado: {self._last_capture_status}",
+                    }
                 return None
             pending = list(self._pending_events)
             self._pending_events.clear()
@@ -213,7 +259,10 @@ class ApiFlowRuntime:
                         "error de persistencia, reintentos="
                         f"{self._flush_failures}, pendientes={len(self._pending_events)}"
                     )
-                return {"ok": False, "message": f"Estado: {self.snapshot_state().capture_status}"}
+                return {
+                    "ok": False,
+                    "message": f"Estado: {self.snapshot_state().capture_status}",
+                }
 
             self.repository.purge(
                 retention_days=self.settings.API_FLOW_RETENTION_DAYS,
@@ -235,7 +284,10 @@ class ApiFlowRuntime:
                     self._dropped_pending_events += dropped
                 self._flush_failures += 1
                 self._last_capture_status = f"error de persistencia ({exc})"
-            return {"ok": False, "message": f"Estado: {self.snapshot_state().capture_status}"}
+            return {
+                "ok": False,
+                "message": f"Estado: {self.snapshot_state().capture_status}",
+            }
 
     def _enforce_pending_limit_locked(self) -> int:
         if len(self._pending_events) <= self.pending_max_events:

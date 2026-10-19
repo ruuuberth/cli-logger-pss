@@ -1,12 +1,18 @@
 """Tests for encoding and ASCII fallback in CLI."""
 
 import io
+
 from rich.console import Console
 
-from app.cli.utils import (
-    print_info, print_success, print_error, print_warning, _to_ascii, _safe_print
-)
 from app.cli.cli_manager import _create_console
+from app.cli.utils import (
+    _safe_print,
+    _to_ascii,
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 
 
 class TestCliEncoding:
@@ -51,17 +57,19 @@ class TestCliEncoding:
     def test_safe_print_uses_ascii_fallback_when_needed(self) -> None:
         """_safe_print should fall back to ASCII when Unicode fails."""
         console = Console(file=io.StringIO(), force_terminal=True, legacy_windows=True)
-        
+
         # Mock console.print to raise UnicodeEncodeError on first call, succeed on second
         original_print = console.print
         call_count = [0]
-        
+
         def mock_print(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                raise UnicodeEncodeError("ascii", "✅", 0, 1, "ordinal not in range(128)")
+                raise UnicodeEncodeError(
+                    "ascii", "✅", 0, 1, "ordinal not in range(128)"
+                )
             return original_print(*args, **kwargs)
-        
+
         console.print = mock_print
         _safe_print(console, "✅ Test message")
         # If we get here without exception, fallback worked
@@ -77,7 +85,7 @@ class TestCliEncoding:
         """_create_console should return a Console instance."""
         console = _create_console(force_ascii=True)
         assert isinstance(console, Console)
-        
+
         console = _create_console(force_ascii=False)
         assert isinstance(console, Console)
 
@@ -88,7 +96,7 @@ class TestCliEncoding:
         # force_terminal is a private attribute, test behavior instead
         assert isinstance(console, Console)
         assert console.is_terminal or console._force_terminal is True
-        
+
         console = _create_console(force_ascii=False)
         assert isinstance(console, Console)
         assert console.is_terminal or console._force_terminal is True

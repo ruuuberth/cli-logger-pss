@@ -9,7 +9,12 @@ def test_has_actions_detects_normalized_payload(tmp_path) -> None:
     character = {
         "character_attributes_json": {
             "CharacterActionsNormalized": [
-                {"index": "0", "condition_type_id": "405", "action_type_id": "34", "character_action_id": "1"}
+                {
+                    "index": "0",
+                    "condition_type_id": "405",
+                    "action_type_id": "34",
+                    "character_action_id": "1",
+                }
             ]
         }
     }
@@ -41,7 +46,12 @@ def test_get_character_actions_translates_types(tmp_path) -> None:
     character = {
         "character_attributes_json": {
             "CharacterActionsNormalized": [
-                {"index": "0", "condition_type_id": "405", "action_type_id": "34", "character_action_id": "1"}
+                {
+                    "index": "0",
+                    "condition_type_id": "405",
+                    "action_type_id": "34",
+                    "character_action_id": "1",
+                }
             ]
         }
     }

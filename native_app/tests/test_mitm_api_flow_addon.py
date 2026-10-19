@@ -16,7 +16,14 @@ class _Headers(dict):
 
 
 class _Message:
-    def __init__(self, *, text: str, headers: dict[str, str], raw_content: bytes, status_code: int | None = None):
+    def __init__(
+        self,
+        *,
+        text: str,
+        headers: dict[str, str],
+        raw_content: bytes,
+        status_code: int | None = None,
+    ):
         self._text = text
         self.headers = _Headers(headers)
         self.raw_content = raw_content
@@ -41,7 +48,11 @@ class _Request(_Message):
         headers: dict[str, str] | None = None,
         raw_content: bytes = b"request",
     ):
-        super().__init__(text=text, headers=headers or {"content-type": "application/json"}, raw_content=raw_content)
+        super().__init__(
+            text=text,
+            headers=headers or {"content-type": "application/json"},
+            raw_content=raw_content,
+        )
         self.method = method
         self.scheme = scheme
         self.host = host
@@ -53,7 +64,14 @@ class _Request(_Message):
 
 
 class _Response(_Message):
-    def __init__(self, *, text: str, status_code: int = 200, headers: dict[str, str] | None = None, raw_content: bytes = b"response"):
+    def __init__(
+        self,
+        *,
+        text: str,
+        status_code: int = 200,
+        headers: dict[str, str] | None = None,
+        raw_content: bytes = b"response",
+    ):
         super().__init__(
             text=text,
             headers=headers or {"content-type": "application/json"},
@@ -124,7 +142,9 @@ def test_error_truncates_request_body(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["request_body_preview"] == "abcde..."
 
 
-def test_response_and_error_emit_expected_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_response_and_error_emit_expected_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _set_options(monkeypatch, body_max_chars=100)
     out = _capture_payload(monkeypatch)
 
@@ -171,7 +191,9 @@ def test_allows_path_with_querystring(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_options(monkeypatch, body_max_chars=100)
     out = _capture_payload(monkeypatch)
 
-    flow = _Flow(req_text="req", res_text="res", path="/BattleService/GetBattle3?battleId=121")
+    flow = _Flow(
+        req_text="req", res_text="res", path="/BattleService/GetBattle3?battleId=121"
+    )
     addon.ApiFlowAddon().response(flow)
 
     assert len(out) == 1
@@ -182,7 +204,11 @@ def test_response_body_is_not_truncated(monkeypatch: pytest.MonkeyPatch) -> None
     out = _capture_payload(monkeypatch)
 
     long_response = "z" * 200
-    flow = _Flow(req_text="req", res_text=long_response, path="/BattleService/GetBattle3?battleId=999")
+    flow = _Flow(
+        req_text="req",
+        res_text=long_response,
+        path="/BattleService/GetBattle3?battleId=999",
+    )
     addon.ApiFlowAddon().response(flow)
 
     assert len(out) == 1
@@ -190,17 +216,23 @@ def test_response_body_is_not_truncated(monkeypatch: pytest.MonkeyPatch) -> None
     assert payload["response_body_preview"] == long_response
 
 
-def test_captures_all_when_allowlists_are_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_captures_all_when_allowlists_are_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _set_options(monkeypatch, body_max_chars=100, capture_hosts="", capture_paths="")
     out = _capture_payload(monkeypatch)
 
-    flow = _Flow(req_text="req", res_text="res", host="other.host", path="/Some/OtherEndpoint")
+    flow = _Flow(
+        req_text="req", res_text="res", host="other.host", path="/Some/OtherEndpoint"
+    )
     addon.ApiFlowAddon().response(flow)
 
     assert len(out) == 1
 
 
-def test_tls_clienthello_ignores_configured_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tls_clienthello_ignores_configured_hosts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         addon,
         "ctx",

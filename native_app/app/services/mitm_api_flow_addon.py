@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
 from mitmproxy import ctx, http, tls
@@ -57,8 +57,12 @@ def _normalize_path(value: str) -> str:
 
 class ApiFlowAddon:
     def load(self, loader):
-        loader.add_option("api_flow_session_id", str, "unknown", "Session id from host app")
-        loader.add_option("api_flow_body_max_chars", int, 4000, "Max body chars per event")
+        loader.add_option(
+            "api_flow_session_id", str, "unknown", "Session id from host app"
+        )
+        loader.add_option(
+            "api_flow_body_max_chars", int, 4000, "Max body chars per event"
+        )
         loader.add_option(
             "api_flow_ignore_hosts",
             str,
@@ -87,7 +91,9 @@ class ApiFlowAddon:
 
     def _is_ignored_host(self, host: str) -> bool:
         raw_hosts = str(ctx.options.api_flow_ignore_hosts or "")
-        configured = [token.strip().lower() for token in raw_hosts.split(",") if token.strip()]
+        configured = [
+            token.strip().lower() for token in raw_hosts.split(",") if token.strip()
+        ]
         if not configured:
             return False
         for configured_host in configured:
@@ -97,9 +103,13 @@ class ApiFlowAddon:
         return False
 
     def _should_capture_flow(self, flow: http.HTTPFlow) -> bool:
-        host_allowlist = {token.lower() for token in _split_csv(getattr(ctx.options, "api_flow_capture_hosts", ""))}
+        host_allowlist = {
+            token.lower()
+            for token in _split_csv(getattr(ctx.options, "api_flow_capture_hosts", ""))
+        }
         path_allowlist = {
-            _normalize_path(token) for token in _split_csv(getattr(ctx.options, "api_flow_capture_paths", ""))
+            _normalize_path(token)
+            for token in _split_csv(getattr(ctx.options, "api_flow_capture_paths", ""))
         }
 
         if host_allowlist:
@@ -118,17 +128,25 @@ class ApiFlowAddon:
         if not self._should_capture_flow(flow):
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         max_chars = int(ctx.options.api_flow_body_max_chars)
 
-        request_text = _truncate(_safe_text(flow.request.get_text(strict=False)), max_chars)
+        request_text = _truncate(
+            _safe_text(flow.request.get_text(strict=False)), max_chars
+        )
         response_text = _safe_text(flow.response.get_text(strict=False))
-        request_headers = {str(k): str(v) for k, v in flow.request.headers.items(multi=True)}
-        response_headers = {str(k): str(v) for k, v in flow.response.headers.items(multi=True)}
+        request_headers = {
+            str(k): str(v) for k, v in flow.request.headers.items(multi=True)
+        }
+        response_headers = {
+            str(k): str(v) for k, v in flow.response.headers.items(multi=True)
+        }
 
         duration_ms = None
         if flow.request.timestamp_start and flow.response.timestamp_end:
-            duration_ms = int((flow.response.timestamp_end - flow.request.timestamp_start) * 1000)
+            duration_ms = int(
+                (flow.response.timestamp_end - flow.request.timestamp_start) * 1000
+            )
 
         payload = {
             "session_id": str(ctx.options.api_flow_session_id),
@@ -162,7 +180,7 @@ class ApiFlowAddon:
         if not self._should_capture_flow(flow):
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         max_chars = int(ctx.options.api_flow_body_max_chars)
         payload = {
             "session_id": str(ctx.options.api_flow_session_id),
@@ -177,9 +195,13 @@ class ApiFlowAddon:
             "url_full": flow.request.pretty_url,
             "status_code": None,
             "duration_ms": None,
-            "request_headers_json": {str(k): str(v) for k, v in flow.request.headers.items(multi=True)},
+            "request_headers_json": {
+                str(k): str(v) for k, v in flow.request.headers.items(multi=True)
+            },
             "response_headers_json": {},
-            "request_body_preview": _truncate(_safe_text(flow.request.get_text(strict=False)), max_chars),
+            "request_body_preview": _truncate(
+                _safe_text(flow.request.get_text(strict=False)), max_chars
+            ),
             "response_body_preview": "",
             "request_size_bytes": len(flow.request.raw_content or b""),
             "response_size_bytes": 0,

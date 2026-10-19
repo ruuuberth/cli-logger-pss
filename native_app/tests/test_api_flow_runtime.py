@@ -24,23 +24,33 @@ class _Repo:
     def get_startup_sync_snapshot(self) -> dict[str, int]:
         return dict(self.snapshot)
 
-    def backfill_response_body_cleaned(self, batch_size: int = 100, max_event_id: int | None = None) -> int:
+    def backfill_response_body_cleaned(
+        self, batch_size: int = 100, max_event_id: int | None = None
+    ) -> int:
         self.sync_calls.append(("cleaned", max_event_id))
         return 0
 
-    def sync_battle_replays_from_api_flow(self, batch_size: int = 500, max_event_id: int | None = None) -> int:
+    def sync_battle_replays_from_api_flow(
+        self, batch_size: int = 500, max_event_id: int | None = None
+    ) -> int:
         self.sync_calls.append(("replays", max_event_id))
         return 0
 
-    def sync_battle_replay_children(self, batch_size: int = 200, max_replay_id: int | None = None) -> int:
+    def sync_battle_replay_children(
+        self, batch_size: int = 200, max_replay_id: int | None = None
+    ) -> int:
         self.sync_calls.append(("children", max_replay_id))
         return 0
 
-    def backfill_room_attributes(self, batch_size: int = 200, max_replay_id: int | None = None) -> int:
+    def backfill_room_attributes(
+        self, batch_size: int = 200, max_replay_id: int | None = None
+    ) -> int:
         self.sync_calls.append(("rooms", max_replay_id))
         return 0
 
-    def backfill_matchup_history_and_prune(self, batch_size_pairs: int = 200) -> dict[str, int]:
+    def backfill_matchup_history_and_prune(
+        self, batch_size_pairs: int = 200
+    ) -> dict[str, int]:
         self.matchup_backfill_calls += 1
         return {
             "inserted_logs": 0,
@@ -161,7 +171,9 @@ def test_flush_pending_purges_and_resets_failures() -> None:
 
 
 def test_pending_limit_discards_oldest_events() -> None:
-    runtime = ApiFlowRuntime(repository=_Repo(save_return=0), capture_manager=_CaptureManager())
+    runtime = ApiFlowRuntime(
+        repository=_Repo(save_return=0), capture_manager=_CaptureManager()
+    )
     runtime.pending_max_events = 3
 
     for item_id in [1, 2, 3, 4, 5]:

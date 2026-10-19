@@ -1,11 +1,13 @@
 """Tests for the H2H per-player fleet breakdown (ships/rooms/crew attribution)."""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.services.api_flow_storage as storage_module
 from app.models.database import Base
 from app.models.pss_models import (
     ApiFlowEvent,
@@ -17,12 +19,13 @@ from app.models.pss_models import (
     RoomDesign,
     ShipDesign,
 )
-import app.services.api_flow_storage as storage_module
 
 
 def _build_repo(monkeypatch):
     test_engine = create_engine("sqlite:///:memory:")
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    TestingSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=test_engine
+    )
     Base.metadata.create_all(test_engine)
     monkeypatch.setattr(storage_module, "SessionLocal", TestingSessionLocal)
     monkeypatch.setattr(storage_module, "engine", test_engine)
@@ -61,36 +64,55 @@ def _insert_replay(
     return replay
 
 
-def _insert_ship(db, replay, *, side: str, ship_id: int, design_id: int, level: int | None, power: int | None):
-    db.add(BattleReplayShip(
-        battle_replay_id=replay.id,
-        side=side,
-        ship_id=ship_id,
-        ship_design_id=design_id,
-        ship_name=f"Ship{design_id}",
-        ship_level=level,
-        power_score=power,
-    ))
+def _insert_ship(
+    db,
+    replay,
+    *,
+    side: str,
+    ship_id: int,
+    design_id: int,
+    level: int | None,
+    power: int | None,
+):
+    db.add(
+        BattleReplayShip(
+            battle_replay_id=replay.id,
+            side=side,
+            ship_id=ship_id,
+            ship_design_id=design_id,
+            ship_name=f"Ship{design_id}",
+            ship_level=level,
+            power_score=power,
+        )
+    )
 
 
-def _insert_room(db, replay, *, side: str, room_id: int | None, design_id: int | None = 600):
-    db.add(BattleReplayRoom(
-        battle_replay_id=replay.id,
-        side=side,
-        room_id=room_id,
-        room_design_id=design_id,
-    ))
+def _insert_room(
+    db, replay, *, side: str, room_id: int | None, design_id: int | None = 600
+):
+    db.add(
+        BattleReplayRoom(
+            battle_replay_id=replay.id,
+            side=side,
+            room_id=room_id,
+            room_design_id=design_id,
+        )
+    )
 
 
-def _insert_character(db, replay, *, side: str, character_id: int, design_id: int, level: int):
-    db.add(BattleReplayCharacter(
-        battle_replay_id=replay.id,
-        side=side,
-        character_id=character_id,
-        character_design_id=design_id,
-        character_name=f"Crew{design_id}",
-        level=level,
-    ))
+def _insert_character(
+    db, replay, *, side: str, character_id: int, design_id: int, level: int
+):
+    db.add(
+        BattleReplayCharacter(
+            battle_replay_id=replay.id,
+            side=side,
+            character_id=character_id,
+            character_design_id=design_id,
+            character_name=f"Crew{design_id}",
+            level=level,
+        )
+    )
 
 
 def _seed_designs(db):
@@ -101,28 +123,51 @@ def _seed_designs(db):
 
 def test_fleet_breakdown_attributes_sides_per_battle(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     _seed_designs(db)
 
     # Battle 1: 10 attacks 20 -> attacker side belongs to player 10
-    r1 = _insert_replay(db, battle_id=101, attacker_user_id=10, defender_user_id=20,
-                         captured_at=now - timedelta(minutes=2))
-    _insert_ship(db, r1, side="attacker", ship_id=11, design_id=500, level=8, power=4200)
-    _insert_ship(db, r1, side="defender", ship_id=21, design_id=500, level=6, power=3900)
+    r1 = _insert_replay(
+        db,
+        battle_id=101,
+        attacker_user_id=10,
+        defender_user_id=20,
+        captured_at=now - timedelta(minutes=2),
+    )
+    _insert_ship(
+        db, r1, side="attacker", ship_id=11, design_id=500, level=8, power=4200
+    )
+    _insert_ship(
+        db, r1, side="defender", ship_id=21, design_id=500, level=6, power=3900
+    )
     _insert_room(db, r1, side="attacker", room_id=111, design_id=600)
     _insert_room(db, r1, side="defender", room_id=211, design_id=600)
-    _insert_character(db, r1, side="attacker", character_id=112, design_id=700, level=12)
+    _insert_character(
+        db, r1, side="attacker", character_id=112, design_id=700, level=12
+    )
     _insert_character(db, r1, side="defender", character_id=212, design_id=700, level=9)
 
     # Battle 2: 20 attacks 10 -> attacker side NOW belongs to player 20
-    r2 = _insert_replay(db, battle_id=102, attacker_user_id=20, defender_user_id=10,
-                         captured_at=now - timedelta(minutes=1), outcome_type="Defender Won")
-    _insert_ship(db, r2, side="attacker", ship_id=21, design_id=500, level=7, power=4100)
-    _insert_ship(db, r2, side="defender", ship_id=11, design_id=500, level=9, power=4300)
+    r2 = _insert_replay(
+        db,
+        battle_id=102,
+        attacker_user_id=20,
+        defender_user_id=10,
+        captured_at=now - timedelta(minutes=1),
+        outcome_type="Defender Won",
+    )
+    _insert_ship(
+        db, r2, side="attacker", ship_id=21, design_id=500, level=7, power=4100
+    )
+    _insert_ship(
+        db, r2, side="defender", ship_id=11, design_id=500, level=9, power=4300
+    )
     _insert_room(db, r2, side="defender", room_id=111, design_id=600)
-    _insert_character(db, r2, side="attacker", character_id=212, design_id=700, level=10)
+    _insert_character(
+        db, r2, side="attacker", character_id=212, design_id=700, level=10
+    )
 
     db.commit()
     db.close()
@@ -167,15 +212,31 @@ def test_fleet_breakdown_attributes_sides_per_battle(monkeypatch) -> None:
 
 def test_fleet_breakdown_respects_date_and_outcome_filters(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
-    r1 = _insert_replay(db, battle_id=201, attacker_user_id=10, defender_user_id=20,
-                         captured_at=now - timedelta(days=10), outcome_type="Attacker Won")
-    _insert_ship(db, r1, side="attacker", ship_id=11, design_id=500, level=5, power=1000)
-    r2 = _insert_replay(db, battle_id=202, attacker_user_id=10, defender_user_id=20,
-                         captured_at=now - timedelta(days=1), outcome_type="Defender Won")
-    _insert_ship(db, r2, side="attacker", ship_id=11, design_id=500, level=6, power=1100)
+    r1 = _insert_replay(
+        db,
+        battle_id=201,
+        attacker_user_id=10,
+        defender_user_id=20,
+        captured_at=now - timedelta(days=10),
+        outcome_type="Attacker Won",
+    )
+    _insert_ship(
+        db, r1, side="attacker", ship_id=11, design_id=500, level=5, power=1000
+    )
+    r2 = _insert_replay(
+        db,
+        battle_id=202,
+        attacker_user_id=10,
+        defender_user_id=20,
+        captured_at=now - timedelta(days=1),
+        outcome_type="Defender Won",
+    )
+    _insert_ship(
+        db, r2, side="attacker", ship_id=11, design_id=500, level=6, power=1100
+    )
     db.commit()
     db.close()
 
@@ -197,17 +258,31 @@ def test_fleet_breakdown_respects_date_and_outcome_filters(monkeypatch) -> None:
 def test_fleet_breakdown_skips_missing_ship_metrics(monkeypatch) -> None:
     """A fallback ship row (no XML) must not drag averages toward zero."""
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
     # Complete capture: level 8, power 4200
-    r1 = _insert_replay(db, battle_id=401, attacker_user_id=10, defender_user_id=20,
-                         captured_at=now - timedelta(minutes=2))
-    _insert_ship(db, r1, side="attacker", ship_id=11, design_id=500, level=8, power=4200)
+    r1 = _insert_replay(
+        db,
+        battle_id=401,
+        attacker_user_id=10,
+        defender_user_id=20,
+        captured_at=now - timedelta(minutes=2),
+    )
+    _insert_ship(
+        db, r1, side="attacker", ship_id=11, design_id=500, level=8, power=4200
+    )
     # Fallback-style capture: same ship, level/power unset (missing XML)
-    r2 = _insert_replay(db, battle_id=402, attacker_user_id=10, defender_user_id=20,
-                         captured_at=now - timedelta(minutes=1))
-    _insert_ship(db, r2, side="attacker", ship_id=11, design_id=500, level=None, power=None)
+    r2 = _insert_replay(
+        db,
+        battle_id=402,
+        attacker_user_id=10,
+        defender_user_id=20,
+        captured_at=now - timedelta(minutes=1),
+    )
+    _insert_ship(
+        db, r2, side="attacker", ship_id=11, design_id=500, level=None, power=None
+    )
     db.commit()
     db.close()
 
@@ -226,11 +301,16 @@ def test_fleet_breakdown_excludes_rows_without_primary_ids(monkeypatch) -> None:
     used to merge into a single fabricated bucket with inflated usage.
     """
     repo, SessionLocal = _build_repo(monkeypatch)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db = SessionLocal()
-    r1 = _insert_replay(db, battle_id=501, attacker_user_id=10, defender_user_id=20,
-                         captured_at=now - timedelta(minutes=2))
+    r1 = _insert_replay(
+        db,
+        battle_id=501,
+        attacker_user_id=10,
+        defender_user_id=20,
+        captured_at=now - timedelta(minutes=2),
+    )
     # Two rooms without RoomId in the SAME replay (partial capture)
     _insert_room(db, r1, side="attacker", room_id=None, design_id=600)
     _insert_room(db, r1, side="attacker", room_id=None, design_id=601)
@@ -239,7 +319,11 @@ def test_fleet_breakdown_excludes_rows_without_primary_ids(monkeypatch) -> None:
     # Fallback ship without ShipId
     db.add(BattleReplayShip(battle_replay_id=r1.id, side="attacker", ship_id=None))
     # Crew without CharacterId
-    db.add(BattleReplayCharacter(battle_replay_id=r1.id, side="attacker", character_id=None))
+    db.add(
+        BattleReplayCharacter(
+            battle_replay_id=r1.id, side="attacker", character_id=None
+        )
+    )
     db.commit()
     db.close()
 
@@ -257,8 +341,13 @@ def test_fleet_breakdown_excludes_rows_without_primary_ids(monkeypatch) -> None:
 def test_fleet_breakdown_returns_none_for_unknown_pair(monkeypatch) -> None:
     repo, SessionLocal = _build_repo(monkeypatch)
     db = SessionLocal()
-    _insert_replay(db, battle_id=301, attacker_user_id=10, defender_user_id=20,
-                   captured_at=datetime.now(timezone.utc))
+    _insert_replay(
+        db,
+        battle_id=301,
+        attacker_user_id=10,
+        defender_user_id=20,
+        captured_at=datetime.now(UTC),
+    )
     db.commit()
     db.close()
 

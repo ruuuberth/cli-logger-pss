@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
-
+from typing import Any
 
 _NUMERIC_PARENS_RE = re.compile(r"\s*\(\d+\)\s*$")
 _ITEM_LEVEL_PATTERNS = (
@@ -34,7 +34,9 @@ class CatalogoResolver:
         self._item_records_cache: list[dict[str, str]] | None = None
         self._resolved_design_cache: dict[tuple[str, str, str], str] = {}
         self._resolved_item_cache: dict[tuple[str, str], str] = {}
-        self._resolved_action_condition_cache: dict[tuple[str, str], tuple[str, str]] = {}
+        self._resolved_action_condition_cache: dict[
+            tuple[str, str], tuple[str, str]
+        ] = {}
         self._warned: set[str] = set()
         self._last_status: str | None = None
 
@@ -66,7 +68,9 @@ class CatalogoResolver:
 
     def resolve_design_name(self, design_id: Any, current_name: Any, kind: str) -> str:
         design_id_text = str(design_id) if design_id is not None else ""
-        current_name_text = str(current_name).strip() if current_name is not None else ""
+        current_name_text = (
+            str(current_name).strip() if current_name is not None else ""
+        )
         cache_key = (kind, design_id_text, current_name_text)
         cached = self._resolved_design_cache.get(cache_key)
         if cached is not None:
@@ -95,8 +99,13 @@ class CatalogoResolver:
         self._resolved_design_cache[cache_key] = "Sin traduccion"
         return "Sin traduccion"
 
-    def resolve_action_condition(self, action_id: Any, condition_id: Any) -> tuple[str, str]:
-        cache_key = (str(action_id) if action_id is not None else "", str(condition_id) if condition_id is not None else "")
+    def resolve_action_condition(
+        self, action_id: Any, condition_id: Any
+    ) -> tuple[str, str]:
+        cache_key = (
+            str(action_id) if action_id is not None else "",
+            str(condition_id) if condition_id is not None else "",
+        )
         cached = self._resolved_action_condition_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -120,13 +129,23 @@ class CatalogoResolver:
             self._emit_status("local")
         else:
             self._emit_status("placeholder")
-        action_label = self.format_name(action_name) if action_name else self._format_raw_id(action_id)
-        condition_label = self.format_name(condition_name) if condition_name else self._format_raw_id(condition_id)
+        action_label = (
+            self.format_name(action_name)
+            if action_name
+            else self._format_raw_id(action_id)
+        )
+        condition_label = (
+            self.format_name(condition_name)
+            if condition_name
+            else self._format_raw_id(condition_id)
+        )
         resolved = (action_label, condition_label)
         self._resolved_action_condition_cache[cache_key] = resolved
         return resolved
 
-    def resolve_item_name(self, item_design_id: Any, fallback: str | None = None) -> str:
+    def resolve_item_name(
+        self, item_design_id: Any, fallback: str | None = None
+    ) -> str:
         item_design_text = str(item_design_id) if item_design_id is not None else ""
         cache_key = (item_design_text, fallback or "")
         cached = self._resolved_item_cache.get(cache_key)
@@ -158,7 +177,9 @@ class CatalogoResolver:
         self._resolved_item_cache[cache_key] = "Sin traduccion"
         return "Sin traduccion"
 
-    def resolve_item_name_from_base(self, item_name_en_base: str, fallback: str | None = None) -> str:
+    def resolve_item_name_from_base(
+        self, item_name_en_base: str, fallback: str | None = None
+    ) -> str:
         target = self._normalize_item_name_base(item_name_en_base)
         if not target:
             return self.format_name(fallback) if fallback else "Sin traduccion"
@@ -168,8 +189,11 @@ class CatalogoResolver:
                 name_en = self._normalize_item_name_base(record.get("name_en"))
                 if name_en == target:
                     self._emit_status("local")
-                    return self._normalize_item_name_base(record.get("name")) or self.format_name(
-                        record.get("name_en"), fallback=record.get("name_en") or "Sin traduccion"
+                    return self._normalize_item_name_base(
+                        record.get("name")
+                    ) or self.format_name(
+                        record.get("name_en"),
+                        fallback=record.get("name_en") or "Sin traduccion",
                     )
         self._emit_status("placeholder")
         if fallback:
@@ -271,7 +295,6 @@ class CatalogoResolver:
         return mapping
 
     def _load_item_records(self) -> list[dict[str, str]]:
-        cache_key = "ItemDesignRecords"
         if self._item_records_cache is not None:
             return self._item_records_cache
         if self.base_dir is None:
@@ -318,7 +341,9 @@ class CatalogoResolver:
         self._item_records_cache = records
         return records
 
-    def _load_catalog_map(self, path: Path, tag: str, id_attr: str, name_attr: str) -> dict[str, str]:
+    def _load_catalog_map(
+        self, path: Path, tag: str, id_attr: str, name_attr: str
+    ) -> dict[str, str]:
         try:
             raw = path.read_text(encoding="utf-8", errors="replace").strip()
             if not raw:
@@ -354,6 +379,7 @@ class CatalogoResolver:
             return cache[design_id_int]
         try:
             from sqlalchemy.exc import SQLAlchemyError
+
             from app.models.pss_models import CrewDesign, RoomDesign, ShipDesign
         except Exception:
             return None

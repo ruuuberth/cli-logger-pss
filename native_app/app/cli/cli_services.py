@@ -1,12 +1,12 @@
 """CLI Services - Intermediary layer to expose backend services without Qt dependencies"""
+
 from __future__ import annotations
 
-from datetime import datetime
 import logging
-from typing import Any, Optional
-from pathlib import Path
+from datetime import datetime
+from typing import Any
 
-from app.dto.api_flow_dto import ApiFlowPageDTO, ApiFlowRowDTO
+from app.dto.api_flow_dto import ApiFlowPageDTO
 from app.services.api_flow_list_service import ApiFlowListService
 from app.services.catalogo import CatalogoResolver
 from app.services.character_inspector_resolver import CharacterInspectorResolver
@@ -43,7 +43,7 @@ class ApiFlowCliService:
                 trophy_min=trophy_min,
                 trophy_max=trophy_max,
             )
-            
+
             # Convert to pure DTO
             dto_page = ApiFlowPageDTO.from_service_model(service_page)
             return dto_page
@@ -72,7 +72,7 @@ class ApiFlowCliService:
             self.logger.error(f"Error clearing events: {e}")
             raise
 
-    def get_battle_detail(self, battle_replay_id: int) -> Optional[dict]:
+    def get_battle_detail(self, battle_replay_id: int) -> dict | None:
         """Get detailed battle information"""
         try:
             detail = self.list_service.get_battle_detail(battle_replay_id)
@@ -91,7 +91,7 @@ class ApiFlowCliService:
         limit: int = 1000,
         *,
         trend_bucket: str = "day",
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Get H2H comparative report data"""
         try:
             return self.list_service.get_h2h_report_data(
@@ -127,7 +127,9 @@ class ApiFlowCliService:
 class CharacterCliService:
     """Provides character/crew functionality for CLI"""
 
-    def __init__(self, list_service: Any = None, catalogo: CatalogoResolver | None = None):
+    def __init__(
+        self, list_service: Any = None, catalogo: CatalogoResolver | None = None
+    ):
         self.list_service = list_service or ApiFlowListService()
         self.logger = logging.getLogger(__name__)
         self.catalogo = catalogo
@@ -159,7 +161,9 @@ class CharacterCliService:
             self.logger.error(f"Error listing characters: {e}")
             raise
 
-    def inspect_character(self, character_id: int, battle_replay_id: int, side: str = "") -> dict:
+    def inspect_character(
+        self, character_id: int, battle_replay_id: int, side: str = ""
+    ) -> dict:
         """Get character details for inspection"""
         try:
             detail = self.list_service.get_battle_detail(battle_replay_id)
@@ -197,7 +201,9 @@ class CharacterCliService:
 class RoomCliService:
     """Provides room functionality for CLI"""
 
-    def __init__(self, list_service: Any = None, catalogo: CatalogoResolver | None = None):
+    def __init__(
+        self, list_service: Any = None, catalogo: CatalogoResolver | None = None
+    ):
         self.list_service = list_service or ApiFlowListService()
         self.logger = logging.getLogger(__name__)
         self.catalogo = catalogo
@@ -205,8 +211,11 @@ class RoomCliService:
     def _resolvers(self):
         from app.services.battle_inspector_resolver import BattleInspectorResolver
         from app.services.room_item_mapping import RoomItemMappingResolver
+
         return (
-            BattleInspectorResolver(self.catalogo or CatalogoResolver(CatalogoResolver.default_base_dir())),
+            BattleInspectorResolver(
+                self.catalogo or CatalogoResolver(CatalogoResolver.default_base_dir())
+            ),
             RoomItemMappingResolver(catalogo=self.catalogo, logger=self.logger),
         )
 
@@ -259,11 +268,16 @@ class RoomCliService:
                 action_type_id = a.get("action_id")
                 condition_id = a.get("condition_id")
                 if self.catalogo is not None:
-                    action_label, condition_label = self.catalogo.resolve_action_condition(
-                        action_type_id, condition_id
+                    action_label, condition_label = (
+                        self.catalogo.resolve_action_condition(
+                            action_type_id, condition_id
+                        )
                     )
                 else:
-                    action_label, condition_label = (str(action_type_id), str(condition_id))
+                    action_label, condition_label = (
+                        str(action_type_id),
+                        str(condition_id),
+                    )
                 room_action_label = mapping.resolve_action_label(
                     room_design_id, action_type_id, fallback_action_name=action_label
                 )
