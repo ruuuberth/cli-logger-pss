@@ -394,3 +394,49 @@ def test_union_headers_empty_returns_empty() -> None:
     from app.reporting.report_generator import _union_headers
 
     assert _union_headers([]) == []
+
+
+# --- Regression for #37: path traversal via user-controlled title ---
+
+
+def test_get_output_filename_sanitizes_path_traversal_title(tmp_path) -> None:
+    """Title with .. and path separators must not escape output_path."""
+    gen = _generator(tmp_path, title="../../../etc/passwd")
+    result = gen._get_output_filename("xlsx")
+
+    assert result.parent == tmp_path
+    assert ".." not in result.name
+    assert "/" not in result.name
+    assert "\\" not in result.name
+
+
+def test_get_output_filename_sanitizes_mixed_traversal(tmp_path) -> None:
+    """Mixed separators and .. segments are all neutralized."""
+    gen = _generator(tmp_path, title="..\\..\\windows\\system32\\config\\sam")
+    result = gen._get_output_filename("xlsx")
+
+    assert result.parent == tmp_path
+    assert ".." not in result.name
+    assert "/" not in result.name
+    assert "\\" not in result.name
+
+
+def test_get_output_filename_keeps_safe_title_unchanged(tmp_path) -> None:
+    """A normal user title is only lowercased and space-replaced."""
+    gen = _generator(tmp_path, title="Reporte Batallas")
+    result = gen._get_output_filename("xlsx")
+
+    assert result == tmp_path / "reporte_batallas.xlsx"
+
+
+def test_generate_does_not_write_outside_output_path(tmp_path, monkeypatch) -> None:
+    """Even a malicious title must produce the file inside output_path."""
+    gen = _generator(tmp_path, title="../../../outside.xlsx")
+    gen.add_sheet("Resumen", [{"A": 1}])
+
+    output_file = gen.generate()
+
+    assert output_file.parent == tmp_path
+    assert output_file.exists()
+    # No file created outside output_path
+    assert not Path("/outside.xlsx").exists()

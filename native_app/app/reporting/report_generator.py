@@ -71,6 +71,26 @@ def _union_headers(rows: list[dict[str, Any]]) -> list[str]:
     return headers
 
 
+_PATH_SEPARATORS = ("/", "\\", os.sep)
+
+
+def _sanitize_title(title: str) -> str:
+    """Sanitize a user-controlled report title into a safe filename base.
+
+    Removes path-traversal components (``..``) and path separators (``/``,
+    ``\\``, OS-specific) so the resulting filename can never escape
+    ``output_path`` when joined. Spaces are collapsed to ``_`` and the
+    result is lowercased, matching the previous behavior for safe titles.
+    """
+    sanitized = title
+    for sep in _PATH_SEPARATORS:
+        sanitized = sanitized.replace(sep, "")
+    # Collapse any remaining ``..`` segments (e.g. after separator removal)
+    while ".." in sanitized:
+        sanitized = sanitized.replace("..", "")
+    return sanitized.replace(" ", "_").lower()
+
+
 @dataclass
 class ReportConfig:
     """Configuration for report generation"""
@@ -102,7 +122,7 @@ class ReportGenerator(ABC):
             if self.config.include_timestamp
             else ""
         )
-        base_name = self.config.title.replace(" ", "_").lower()
+        base_name = _sanitize_title(self.config.title)
 
         if timestamp:
             filename = f"{base_name}_{timestamp}.{extension}"
