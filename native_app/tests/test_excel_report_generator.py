@@ -139,11 +139,36 @@ def test_duplicate_sheet_name_raises(tmp_path) -> None:
     gen.add_sheet("Batallas", [{"A": 1}])
     with pytest.raises(ValueError, match="Batallas"):
         gen.add_sheet("Batallas", [{"A": 2}])
-    # default sheet colliding with a named sheet must also raise
-    gen2 = _generator(tmp_path)
-    gen2.add_sheet("Data", [{"A": 1}])
-    with pytest.raises(ValueError, match="Data"):
-        gen2.add_rows([{"A": 2}])
+
+
+def test_add_rows_accumulates_across_multiple_calls(tmp_path) -> None:
+    """Regression for #38: repeated add_rows must accumulate, not raise."""
+    gen = _generator(tmp_path)
+    gen.add_rows([{"Battle ID": "b1", "Resultado": "VICTORY"}])
+    gen.add_rows([{"Battle ID": "b2", "Resultado": "DEFEAT"}])  # used to raise
+    output_file = gen.generate()
+
+    wb = load_workbook(output_file)
+    assert wb.sheetnames == ["Data"]
+    ws = wb["Data"]
+    assert ws.cell(row=1, column=1).value == "Battle ID"
+    assert ws.cell(row=2, column=1).value == "b1"
+    assert ws.cell(row=3, column=1).value == "b2"
+    assert ws.cell(row=3, column=2).value == "DEFEAT"
+
+
+def test_add_rows_accumulates_into_sheet_created_via_add_sheet(tmp_path) -> None:
+    """add_rows appends to the default sheet however it was created."""
+    gen = _generator(tmp_path)
+    gen.add_sheet("Data", [{"A": 1}])
+    gen.add_rows([{"A": 2}])
+    assert gen._sheets["Data"] == [{"A": 1}, {"A": 2}]
+    output_file = gen.generate()
+
+    wb = load_workbook(output_file)
+    ws = wb["Data"]
+    assert ws.cell(row=2, column=1).value == 1
+    assert ws.cell(row=3, column=1).value == 2
 
 
 def test_too_long_sheet_name_raises(tmp_path) -> None:

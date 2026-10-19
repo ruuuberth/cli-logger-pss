@@ -165,8 +165,16 @@ class ExcelReportGenerator(ReportGenerator):
         self._sheets[name] = list(rows)
 
     def add_rows(self, rows: list[dict[str, Any]]) -> None:
-        """Add rows to the default sheet (backward-compatible entry point)."""
-        self.add_sheet(self.DEFAULT_SHEET, rows)
+        """Add rows to the default sheet, accumulating across calls (#38).
+
+        Matches the base class contract (``self.data.extend``): repeated
+        calls append instead of raising. ``add_sheet`` keeps its strict
+        duplicate-name error for direct calls.
+        """
+        if self.DEFAULT_SHEET in self._sheets:
+            self._sheets[self.DEFAULT_SHEET].extend(rows)
+        else:
+            self.add_sheet(self.DEFAULT_SHEET, rows)
 
     def _write_sheet(self, ws, rows: list[dict[str, Any]]) -> None:
         """Write headers and rows with styling into a worksheet."""
