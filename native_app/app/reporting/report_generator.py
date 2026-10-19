@@ -101,15 +101,50 @@ class ReportConfig:
 
 
 class ReportGenerator(ABC):
-    """Base class for report generators"""
+    """Base class for report generators.
+
+    Shared write surface (issue #39): every format stores rows in
+    registration-ordered ``_sheets`` (sheet name -> rows). ``add_rows``
+    accumulates into the default sheet; ``add_sheet`` registers a named
+    sheet and rejects duplicates. Excel writes one worksheet per sheet;
+    single-table formats (CSV/JSON) flatten every sheet into one table
+    at generate time, so data added either way lands in the file.
+    """
+
+    DEFAULT_SHEET = "Data"
 
     def __init__(self, config: ReportConfig):
         self.config = config
-        self.data: list[dict[str, Any]] = []
+        # Single source of truth: sheet name -> rows (insertion-ordered).
+        self._sheets: dict[str, list[dict[str, Any]]] = {}
 
     def add_rows(self, rows: list[dict[str, Any]]) -> None:
-        """Add rows to the report"""
-        self.data.extend(rows)
+        """Add rows to the default sheet, accumulating across calls (#38).
+
+        Matches the previous ``self.data.extend`` contract: repeated
+        calls append instead of raising. ``add_sheet`` keeps its strict
+        duplicate-name error for direct calls.
+        """
+        if self.DEFAULT_SHEET in self._sheets:
+            self._sheets[self.DEFAULT_SHEET].extend(rows)
+        else:
+            self.add_sheet(self.DEFAULT_SHEET, rows)
+
+    def add_sheet(self, name: str, rows: list[dict[str, Any]]) -> None:
+        """Add rows to a named sheet (created on first call for that name).
+
+        Per-sheet emptiness is the caller's choice: an empty ``rows`` list
+        still registers the sheet. Subclasses may tighten validation (Excel
+        rejects invalid sheet-name characters and >31-char names).
+        """
+        name = name or self.DEFAULT_SHEET
+        if name in self._sheets:
+            raise ValueError(f"Ya existe una hoja con el nombre: {name}")
+        self._sheets[name] = list(rows)
+
+    def _flattened_rows(self) -> list[dict[str, Any]]:
+        """All rows from every sheet in registration order (single-table formats)."""
+        return [row for rows in self._sheets.values() for row in rows]
 
     @abstractmethod
     def generate(self) -> Path:
@@ -135,24 +170,16 @@ class ReportGenerator(ABC):
 class ExcelReportGenerator(ReportGenerator):
     """Generate reports in Excel format (.xlsx)"""
 
-    DEFAULT_SHEET = "Data"
     _INVALID_SHEET_CHARS = set("[]:*?/\\")
     _MAX_SHEET_NAME_LENGTH = 31
 
-    def __init__(self, config: ReportConfig):
-        super().__init__(config)
-        # Single source of truth: sheet name -> rows (insertion-ordered).
-        self._sheets: dict[str, list[dict[str, Any]]] = {}
-
     def add_sheet(self, name: str, rows: list[dict[str, Any]]) -> None:
-        """Add rows to a named sheet (created on first call for that name).
+        """Validate an Excel-specific sheet name, then register it.
 
-        Per-sheet emptiness is the caller's choice: an empty ``rows`` list
-        still registers the sheet.
+        Excel rejects names with ``[]:*?/\\`` and longer than 31 chars
+        (format constraints; single-table formats accept them).
         """
         name = name or self.DEFAULT_SHEET
-        if name in self._sheets:
-            raise ValueError(f"Ya existe una hoja con el nombre: {name}")
         if len(name) > self._MAX_SHEET_NAME_LENGTH:
             raise ValueError(
                 f"Nombre de hoja demasiado largo (máx. {self._MAX_SHEET_NAME_LENGTH} caracteres): {name!r}"
@@ -162,19 +189,7 @@ class ExcelReportGenerator(ReportGenerator):
             raise ValueError(
                 f"Nombre de hoja contiene caracteres no válidos ({''.join(invalid)}): {name!r}"
             )
-        self._sheets[name] = list(rows)
-
-    def add_rows(self, rows: list[dict[str, Any]]) -> None:
-        """Add rows to the default sheet, accumulating across calls (#38).
-
-        Matches the base class contract (``self.data.extend``): repeated
-        calls append instead of raising. ``add_sheet`` keeps its strict
-        duplicate-name error for direct calls.
-        """
-        if self.DEFAULT_SHEET in self._sheets:
-            self._sheets[self.DEFAULT_SHEET].extend(rows)
-        else:
-            self.add_sheet(self.DEFAULT_SHEET, rows)
+        super().add_sheet(name, rows)
 
     def _write_sheet(self, ws, rows: list[dict[str, Any]]) -> None:
         """Write headers and rows with styling into a worksheet."""
@@ -254,34 +269,34 @@ class CsvReportGenerator(ReportGenerator):
     """Generate reports in CSV format"""
 
     def generate(self) -> Path:
-        """Generate CSV report"""
+        """Generate CSV report (all sheets flattened into one table)"""
 
-        if not self.data:
+        rows = self._flattened_rows()
+        if not rows:
             raise ValueError("No hay datos para reportar")
 
         output_file = self._get_output_filename("csv")
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Get headers
-        headers = _union_headers(self.data)
+        headers = _union_headers(rows)
 
         # Write CSV (to temp, then publish atomically)
-        return _atomic_write(
-            output_file, lambda p: _write_csv_rows(p, self.data, headers)
-        )
+        return _atomic_write(output_file, lambda p: _write_csv_rows(p, rows, headers))
 
 
 class JsonReportGenerator(ReportGenerator):
     """Generate reports in JSON format"""
 
     def generate(self) -> Path:
-        """Generate JSON report"""
+        """Generate JSON report (all sheets flattened into one table)"""
 
-        if not self.data:
+        rows = self._flattened_rows()
+        if not rows:
             raise ValueError("No hay datos para reportar")
 
         output_file = self._get_output_filename("json")
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Write JSON (to temp, then publish atomically)
-        return _atomic_write(output_file, lambda p: _write_json_rows(p, self.data))
+        return _atomic_write(output_file, lambda p: _write_json_rows(p, rows))
