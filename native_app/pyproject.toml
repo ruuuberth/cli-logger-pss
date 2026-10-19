@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff==0.17.1"]
 
 [project.scripts]
 pss-native = "app.main:main"
