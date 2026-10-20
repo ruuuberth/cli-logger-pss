@@ -42,6 +42,7 @@ class _Request(_Message):
         method: str = "GET",
         scheme: str = "https",
         host: str = "api.pixelstarships.com",
+        pretty_host: str | None = None,
         port: int = 443,
         path: str = "/BattleService/GetBattle3?battleId=1",
         pretty_url: str = "https://api.pixelstarships.com/BattleService/GetBattle3?battleId=1",
@@ -56,6 +57,10 @@ class _Request(_Message):
         self.method = method
         self.scheme = scheme
         self.host = host
+        # In transparent mode `host` is the original-destination IP and the
+        # real hostname lives only in the Host header (mitmproxy exposes it
+        # as pretty_host). None mimics fakes that predate the attribute.
+        self.pretty_host = pretty_host
         self.port = port
         self.path = path
         self.pretty_url = pretty_url
@@ -89,11 +94,13 @@ class _Flow:
         res_text: str,
         error: str | None = None,
         host: str = "api.pixelstarships.com",
+        pretty_host: str | None = None,
         path: str = "/BattleService/GetBattle3?battleId=1",
     ):
         self.request = _Request(
             text=req_text,
             host=host,
+            pretty_host=pretty_host,
             path=path,
             pretty_url=f"https://{host}{path}",
         )
@@ -172,6 +179,65 @@ def test_drops_event_when_host_not_allowed(monkeypatch: pytest.MonkeyPatch) -> N
     out = _capture_payload(monkeypatch)
 
     flow = _Flow(req_text="req", res_text="res", host="other.host")
+    addon.ApiFlowAddon().response(flow)
+
+    assert out == []
+
+
+def test_captures_flow_in_transparent_mode_with_ip_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for #46: transparent mode must match on the Host header.
+
+    In transparent mode flow.request.host is the original-destination IP
+    (e.g. a CloudFront edge) and the real hostname lives only in the Host
+    header, exposed by mitmproxy as pretty_host. The allowlist must match
+    against it or every event is dropped.
+    """
+    _set_options(monkeypatch, body_max_chars=100)
+    out = _capture_payload(monkeypatch)
+
+    flow = _Flow(
+        req_text="req",
+        res_text="res",
+        host="3.171.153.86",
+        pretty_host="api.pixelstarships.com",
+    )
+    addon.ApiFlowAddon().response(flow)
+
+    assert len(out) == 1
+    payload = json.loads(out[0][len("API_FLOW_EVENT ") :])
+    assert payload["host"] == "3.171.153.86"
+
+
+def test_captures_flow_when_pretty_host_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback contract: an empty pretty_host falls back to host (#46)."""
+    _set_options(monkeypatch, body_max_chars=100)
+    out = _capture_payload(monkeypatch)
+
+    flow = _Flow(req_text="req", res_text="res", host="api.pixelstarships.com")
+    flow.request.pretty_host = ""
+
+    addon.ApiFlowAddon().response(flow)
+
+    assert len(out) == 1
+
+
+def test_drops_event_when_pretty_host_not_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """pretty_host is authoritative: a mismatch drops even if host is an IP."""
+    _set_options(monkeypatch, body_max_chars=100)
+    out = _capture_payload(monkeypatch)
+
+    flow = _Flow(
+        req_text="req",
+        res_text="res",
+        host="3.171.153.86",
+        pretty_host="other.host",
+    )
     addon.ApiFlowAddon().response(flow)
 
     assert out == []

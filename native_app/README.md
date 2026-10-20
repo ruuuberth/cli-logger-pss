@@ -73,6 +73,7 @@ materializar filas ORM completas cuando no hace falta.
 - `MITMPROXY_BINARY`
 - `MITMPROXY_LISTEN_HOST`
 - `MITMPROXY_LISTEN_PORT`
+- `MITMPROXY_MODE` — modo del listener de mitmproxy. `regular` (default): proxy explícito, sin cambios en el comando. `transparent`: añade `--mode transparent`, necesario para capturas en el mismo dispositivo redirigidas con iptables (issue #46).
 - `API_FLOW_BODY_MAX_CHARS`
 - `API_FLOW_RETENTION_DAYS`
 - `API_FLOW_REPLAYS_PER_PAIR`

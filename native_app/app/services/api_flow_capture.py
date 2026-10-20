@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 _EVENT_PREFIX = "API_FLOW_EVENT "
 EXPECTED_MITM_ADDON_SHA256 = (
-    "10fd8fd818df752705031344c199d6617adc435d503bca5064034a691f630851"
+    "03e9fed14fe3c24bb4f52ba670017f7c22d9a6599d7cf0060a508b52a405047e"
 )
 
 # Allowlist of trusted mitmdump binary paths for security hardening
@@ -169,6 +169,14 @@ class ApiFlowCaptureManager:
                 "--set",
                 f"api_flow_capture_paths={','.join(settings.API_FLOW_CAPTURE_PATH_ALLOWLIST)}",
             ]
+            # Transparent mode (issue #46): on-device captures redirected with
+            # iptables arrive at the listener without proxy awareness, so the
+            # real hostname only lives in the Host header. `regular` is
+            # mitmdump's default mode — omit the flag to keep the command
+            # line (and captured behavior) unchanged.
+            capture_mode = str(settings.MITMPROXY_MODE or "regular").strip().lower()
+            if capture_mode and capture_mode != "regular":
+                cmd.extend(["--mode", capture_mode])
             ignore_regex = self._build_ignore_hosts_regex(
                 settings.API_FLOW_IGNORE_HOSTS
             )

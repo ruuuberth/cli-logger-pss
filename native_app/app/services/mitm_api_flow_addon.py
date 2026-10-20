@@ -113,7 +113,13 @@ class ApiFlowAddon:
         }
 
         if host_allowlist:
-            request_host = (flow.request.host or "").strip().lower()
+            # In transparent mode flow.request.host is the original-destination
+            # IP (e.g. a CloudFront edge); the real hostname lives only in the
+            # Host header, exposed by mitmproxy as pretty_host. In regular
+            # proxy mode pretty_host equals host, so behavior is unchanged.
+            request_host = (
+                (flow.request.pretty_host or flow.request.host or "").strip().lower()
+            )
             if request_host not in host_allowlist:
                 return False
 

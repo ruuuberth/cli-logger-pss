@@ -37,10 +37,13 @@ Si quieres ajustar comportamiento avanzado, usa `native_app/.env`:
 - `MITMPROXY_BINARY=mitmdump`
 - `MITMPROXY_LISTEN_HOST=127.0.0.1`
 - `MITMPROXY_LISTEN_PORT=8081`
+- `MITMPROXY_MODE=regular`
 - `API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"]`
 - `API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"]`
 
 Con esto la captura queda enfocada en batallas y evita ruido de otros servicios.
+`MITMPROXY_MODE=transparent` redirige el listener a modo transparente (`--mode transparent`)
+para capturas en el mismo dispositivo con iptables (issue #46).
 
 Formato recomendado para listas en `.env`: JSON array.
 Ejemplo: `API_FLOW_IGNORE_HOSTS=["host1","host2"]`

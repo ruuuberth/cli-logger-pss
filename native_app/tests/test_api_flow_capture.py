@@ -76,6 +76,7 @@ def test_start_capture_passes_allowlist_options(monkeypatch) -> None:
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
@@ -90,6 +91,59 @@ def test_start_capture_passes_allowlist_options(monkeypatch) -> None:
     assert "--set" in cmd
     assert "api_flow_capture_hosts=api.pixelstarships.com" in cmd
     assert "api_flow_capture_paths=/BattleService/GetBattle3" in cmd
+
+
+def _start_capture_with_settings(monkeypatch, capture_settings) -> list[str]:
+    """Run start_capture with the given settings mock; return the mitmdump argv."""
+    manager = ApiFlowCaptureManager()
+    _mock_mitmproxy_binary_resolution(monkeypatch)
+    monkeypatch.setattr("app.services.api_flow_capture.threading.Thread", _DummyThread)
+
+    captured_cmd = {}
+
+    def _fake_popen(cmd, stdout=None, stderr=None, text=None, bufsize=None):
+        captured_cmd["cmd"] = list(cmd)
+        return _DummyProcess()
+
+    monkeypatch.setattr("app.services.api_flow_capture.subprocess.Popen", _fake_popen)
+    monkeypatch.setattr("app.services.api_flow_capture.settings", capture_settings)
+    manager.start_capture()
+    return captured_cmd["cmd"]
+
+
+def _base_capture_settings(**overrides) -> SimpleNamespace:
+    defaults = dict(
+        API_FLOW_ENABLED=True,
+        MITMPROXY_BINARY="mitmdump",
+        MITMPROXY_LISTEN_HOST="127.0.0.1",
+        MITMPROXY_LISTEN_PORT=8081,
+        API_FLOW_BODY_MAX_CHARS=4000,
+        API_FLOW_IGNORE_HOSTS=[],
+        API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
+        API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"],
+    )
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def test_start_capture_regular_mode_omits_mode_flag(monkeypatch) -> None:
+    """Default MITMPROXY_MODE='regular' keeps the command line unchanged (#46)."""
+    cmd = _start_capture_with_settings(
+        monkeypatch, _base_capture_settings(MITMPROXY_MODE="regular")
+    )
+
+    assert "--mode" not in cmd
+
+
+def test_start_capture_transparent_mode_appends_mode_flag(monkeypatch) -> None:
+    """MITMPROXY_MODE='transparent' adds `--mode transparent` for iptables
+    redirect captures where the game is not proxy-aware (issue #46)."""
+    cmd = _start_capture_with_settings(
+        monkeypatch, _base_capture_settings(MITMPROXY_MODE="transparent")
+    )
+
+    mode_idx = cmd.index("--mode")
+    assert cmd[mode_idx + 1] == "transparent"
 
 
 def test_start_capture_uses_source_addon_when_file_exists(
@@ -114,6 +168,7 @@ def test_start_capture_uses_source_addon_when_file_exists(
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
@@ -154,6 +209,7 @@ def test_start_capture_in_frozen_mode_uses_temp_addon(
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
@@ -189,6 +245,7 @@ def test_start_capture_logs_resolved_addon_and_binary(monkeypatch, caplog) -> No
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
@@ -239,6 +296,7 @@ def test_start_capture_fallbacks_to_temp_addon_when_source_missing(
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
@@ -271,6 +329,7 @@ def test_start_capture_rejects_mei_addon_path(monkeypatch) -> None:
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
@@ -303,6 +362,7 @@ def test_start_capture_fails_on_sha_mismatch(monkeypatch) -> None:
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],
@@ -384,6 +444,7 @@ def test_start_capture_raises_clear_error_when_no_addon_source(monkeypatch) -> N
             MITMPROXY_BINARY="mitmdump",
             MITMPROXY_LISTEN_HOST="127.0.0.1",
             MITMPROXY_LISTEN_PORT=8081,
+            MITMPROXY_MODE="regular",
             API_FLOW_BODY_MAX_CHARS=4000,
             API_FLOW_IGNORE_HOSTS=[],
             API_FLOW_CAPTURE_HOST_ALLOWLIST=["api.pixelstarships.com"],

@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     MITMPROXY_BINARY: str = "mitmdump"
     MITMPROXY_LISTEN_HOST: str = "127.0.0.1"
     MITMPROXY_LISTEN_PORT: int = 8081
+    # mitmproxy listener mode. "regular" = explicit proxy (default, unchanged
+    # command line). "transparent" appends `--mode transparent` for on-device
+    # captures redirected with iptables (issue #46) where the game is not
+    # proxy-aware and traffic must be intercepted at the socket layer.
+    MITMPROXY_MODE: str = "regular"
     API_FLOW_BODY_MAX_CHARS: int = 4000
     API_FLOW_RETENTION_DAYS: int = 7
     API_FLOW_MAX_DB_MB: int = 512
