@@ -39,9 +39,7 @@ def test_default_sheet_constant_is_shared_across_formats() -> None:
         assert cls.DEFAULT_SHEET == "Data"
 
 
-def test_csv_accepts_add_sheet_and_flattens_in_registration_order(
-    tmp_path,
-) -> None:
+def test_csv_accepts_add_sheet_and_flattens_in_registration_order(tmp_path) -> None:
     gen = _generator(CsvReportGenerator, tmp_path)
     gen.add_sheet("Resumen", [{"id": 1}])
     gen.add_rows([{"id": 2}])
@@ -50,9 +48,7 @@ def test_csv_accepts_add_sheet_and_flattens_in_registration_order(
     assert rows == [{"id": "1"}, {"id": "2"}]
 
 
-def test_json_accepts_add_sheet_and_flattens_in_registration_order(
-    tmp_path,
-) -> None:
+def test_json_accepts_add_sheet_and_flattens_in_registration_order(tmp_path) -> None:
     gen = _generator(JsonReportGenerator, tmp_path)
     gen.add_sheet("Resumen", [{"id": 1}])
     gen.add_rows([{"id": 2}])
@@ -71,6 +67,24 @@ def test_csv_add_rows_accumulates_across_calls(tmp_path) -> None:
     assert [r["id"] for r in rows] == ["1", "2"]
 
 
+def test_csv_no_data_raises_on_generate(tmp_path) -> None:
+    """Empty-data guard preserved after the move from self.data to _flattened_rows."""
+    gen = _generator(CsvReportGenerator, tmp_path)
+    gen.add_rows([])
+
+    with pytest.raises(ValueError):
+        gen.generate()
+
+
+def test_json_empty_rows_sheet_raises_on_generate(tmp_path) -> None:
+    """A registered but empty sheet flattens to nothing and still guards."""
+    gen = _generator(JsonReportGenerator, tmp_path)
+    gen.add_sheet("Data", [])
+
+    with pytest.raises(ValueError):
+        gen.generate()
+
+
 def test_csv_duplicate_sheet_name_raises(tmp_path) -> None:
     gen = _generator(CsvReportGenerator, tmp_path)
     gen.add_sheet("Resumen", [{"id": 1}])
@@ -82,6 +96,11 @@ def test_csv_accepts_sheet_names_invalid_for_excel(tmp_path) -> None:
     """Charset/length validation belongs to Excel, not the shared surface."""
     gen = _generator(CsvReportGenerator, tmp_path)
     gen.add_sheet("My[Sheet]:extra", [{"id": 1}])
+    gen.add_sheet("N" * 32, [{"id": 2}])
+
+    # Excel would reject both names; the shared surface must preserve them verbatim
+    assert "My[Sheet]:extra" in gen._sheets
+    assert "N" * 32 in gen._sheets
 
     rows = list(csv.DictReader(StringIO(gen.generate().read_text(encoding="utf-8"))))
-    assert rows == [{"id": "1"}]
+    assert [r["id"] for r in rows] == ["1", "2"]

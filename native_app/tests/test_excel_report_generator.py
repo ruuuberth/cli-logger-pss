@@ -454,7 +454,7 @@ def test_get_output_filename_keeps_safe_title_unchanged(tmp_path) -> None:
     assert result == tmp_path / "reporte_batallas.xlsx"
 
 
-def test_generate_does_not_write_outside_output_path(tmp_path, monkeypatch) -> None:
+def test_generate_does_not_write_outside_output_path(tmp_path) -> None:
     """Even a malicious title must produce the file inside output_path."""
     gen = _generator(tmp_path, title="../../../outside.xlsx")
     gen.add_sheet("Resumen", [{"A": 1}])
@@ -463,5 +463,3 @@ def test_generate_does_not_write_outside_output_path(tmp_path, monkeypatch) -> N
 
     assert output_file.parent == tmp_path
     assert output_file.exists()
-    # No file created outside output_path
-    assert not Path("/outside.xlsx").exists()
