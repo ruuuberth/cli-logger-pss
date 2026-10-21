@@ -173,9 +173,10 @@ class ApiFlowCaptureManager:
             # iptables arrive at the listener without proxy awareness, so the
             # real hostname only lives in the Host header. `regular` is
             # mitmdump's default mode — omit the flag to keep the command
-            # line (and captured behavior) unchanged.
-            capture_mode = str(settings.MITMPROXY_MODE or "regular").strip().lower()
-            if capture_mode and capture_mode != "regular":
+            # line (and captured behavior) unchanged. Settings validates the
+            # closed contract (#48), so the value is exact here.
+            capture_mode = settings.MITMPROXY_MODE
+            if capture_mode != "regular":
                 cmd.extend(["--mode", capture_mode])
             ignore_regex = self._build_ignore_hosts_regex(
                 settings.API_FLOW_IGNORE_HOSTS
@@ -227,7 +228,7 @@ class ApiFlowCaptureManager:
                 f"Captura activa en {settings.MITMPROXY_LISTEN_HOST}:{settings.MITMPROXY_LISTEN_PORT}"
             )
             self._emit_status(
-                "Capture policy: hosts="
+                f"Capture policy: mode={capture_mode} hosts="
                 f"{','.join(settings.API_FLOW_CAPTURE_HOST_ALLOWLIST) or '*'} "
                 "paths="
                 f"{','.join(settings.API_FLOW_CAPTURE_PATH_ALLOWLIST) or '*'} "

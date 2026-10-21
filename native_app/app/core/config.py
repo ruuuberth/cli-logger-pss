@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
@@ -90,7 +90,9 @@ class Settings(BaseSettings):
     # command line). "transparent" appends `--mode transparent` for on-device
     # captures redirected with iptables (issue #46) where the game is not
     # proxy-aware and traffic must be intercepted at the socket layer.
-    MITMPROXY_MODE: str = "regular"
+    # Closed contract (#48): anything else fails at startup instead of
+    # silently killing capture later.
+    MITMPROXY_MODE: Literal["regular", "transparent"] = "regular"
     API_FLOW_BODY_MAX_CHARS: int = 4000
     API_FLOW_RETENTION_DAYS: int = 7
     API_FLOW_MAX_DB_MB: int = 512
