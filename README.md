@@ -42,8 +42,10 @@ Si quieres ajustar comportamiento avanzado, usa `native_app/.env`:
 - `API_FLOW_CAPTURE_PATH_ALLOWLIST=["/BattleService/GetBattle3"]`
 
 Con esto la captura queda enfocada en batallas y evita ruido de otros servicios.
-`MITMPROXY_MODE=transparent` redirige el listener a modo transparente (`--mode transparent`)
-para capturas en el mismo dispositivo con iptables (issue #46).
+
+`MITMPROXY_MODE=transparent` hace que el listener arranque en modo transparente
+(`--mode transparent`), útil cuando la captura se redirige con iptables en el
+mismo dispositivo y el juego no sabe que hay un proxy (issue #46).
 
 Formato recomendado para listas en `.env`: JSON array.
 Ejemplo: `API_FLOW_IGNORE_HOSTS=["host1","host2"]`
