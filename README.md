@@ -24,7 +24,7 @@ cd native_app
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-cp ../.env.dev.example .env
+cp ../.env.example .env
 pss-native
 ```
 
@@ -51,7 +51,7 @@ Ejemplo: `API_FLOW_IGNORE_HOSTS=["host1","host2"]`
 ## Seguridad
 
 - No se deben commitear archivos `.env` reales.
-- Solo se permiten `.env.example` y `.env.dev.example`.
+- Solo se permite `.env.example`.
 - Secret scan (`gitleaks`) corre en `develop` y `main`.
 
 ## Logs en produccion

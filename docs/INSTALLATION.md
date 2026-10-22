@@ -14,7 +14,7 @@ cd native_app
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-cp ../.env.dev.example .env
+cp ../.env.example .env
 ```
 
 ## Ejecutar

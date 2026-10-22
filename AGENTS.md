@@ -28,7 +28,7 @@ cd native_app && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 ./scripts/build.sh
 
 # Config
-cp ../.env.dev.example .env   # .env lives INSIDE native_app/
+cp ../.env.example .env   # .env lives INSIDE native_app/
 ```
 
 ## Quick Commands (Windows)

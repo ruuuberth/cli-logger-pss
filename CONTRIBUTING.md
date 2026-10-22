@@ -66,4 +66,4 @@ Mientras no exista GitHub Pro/Team en este repo privado, aplica el protocolo tem
 ## Seguridad
 
 - No commitear archivos `.env` reales.
-- Solo se aceptan `.env.example` y `.env.dev.example`.
+- Solo se aceptan `.env.example`.

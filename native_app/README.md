@@ -8,7 +8,7 @@ Paquete nativo de captura y normalización de replays de batalla.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-cp ../.env.dev.example .env
+cp ../.env.example .env
 pss-native
 ```
 
@@ -112,7 +112,7 @@ python -m app.main
 # luego seleccionar: 2 -> Generar Reportes
 ```
 
-Variables de entorno útiles para reportes (ejemplos en `.env.dev.example`):
+Variables de entorno útiles para reportes (ejemplos en `.env.example`):
 
 - `REPORT_OUTPUT_DIR` : ruta por defecto para reportes
 - `REPORT_DEFAULT_FORMAT` : `excel|csv|json`
@@ -120,7 +120,7 @@ Variables de entorno útiles para reportes (ejemplos en `.env.dev.example`):
 
 ## DB local
 
-Con `.env.dev.example`:
+Con `.env.example`:
 - URL: `sqlite:///./pss_logger_dev.db`
 - archivo: `native_app/pss_logger_dev.db`
 

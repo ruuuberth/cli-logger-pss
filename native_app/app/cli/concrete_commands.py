@@ -1180,9 +1180,10 @@ class SettingsCommand(CliCommand):
         print(content)
 
     def _create_env_example(self) -> None:
-        example_path = Path(__file__).resolve().parents[2] / ".env.dev.example"
+        # parents[3] = repo root; the single template lives there, .env inside native_app/.
+        example_path = Path(__file__).resolve().parents[3] / ".env.example"
         if not example_path.exists():
-            print_error("No se encuentra .env.dev.example")
+            print_error("No se encuentra .env.example")
             return
 
         if self.env_path.exists():

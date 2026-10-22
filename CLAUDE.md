@@ -59,7 +59,7 @@ The build embeds `mitm_api_flow_addon.py` and a build-metadata JSON. It fails if
 ### Config
 The `.env` file lives **inside** `native_app/`:
 ```bash
-cp ../.env.dev.example .env
+cp ../.env.example .env
 ```
 List-valued settings (`API_FLOW_IGNORE_HOSTS`, `API_FLOW_CAPTURE_HOST_ALLOWLIST`, etc.) require **JSON array** syntax, e.g. `API_FLOW_IGNORE_HOSTS=["host1","host2"]`. CSV was removed in v0.4.0.
 
