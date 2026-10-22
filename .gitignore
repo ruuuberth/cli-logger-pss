@@ -66,3 +66,7 @@ Thumbs.db
 opencode.json
 opencode.json.bak
 pyrightconfig.json
+
+graphify-out/*
+.codebase-memory/*
+.cc-safety-net/*
