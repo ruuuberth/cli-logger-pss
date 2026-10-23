@@ -7,12 +7,10 @@ import json
 import logging
 import os
 import re
-import unicodedata
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from html import unescape
 from sqlite3 import OperationalError as SQLiteOperationalError
 from typing import Any
 
@@ -33,6 +31,13 @@ from app.models.pss_models import (
     PlayerMatchupStat,
     RoomDesign,
     ShipDesign,
+)
+from app.services.text_cleaning import (
+    clean_response_body,
+    normalize_text,
+    repair_mojibake_text,
+    try_parse_nested_xml,
+    xml_to_clean_dict,
 )
 
 logger = logging.getLogger(__name__)
@@ -1429,80 +1434,19 @@ class ApiFlowRepository:
         return text_value[:512] + "..."
 
     def _clean_response_body(self, response_body_preview: str | None) -> str | None:
-        if not response_body_preview:
-            return None
-
-        xml_text = str(response_body_preview).strip()
-        if not xml_text:
-            return None
-
-        try:
-            root = ET.fromstring(xml_text)
-        except Exception:
-            return self._normalize_text(unescape(xml_text))
-
-        cleaned_tree = self._xml_to_clean_dict(root)
-        return self._normalize_text(
-            json.dumps(cleaned_tree, ensure_ascii=False, indent=2)
-        )
+        return clean_response_body(response_body_preview)
 
     def _xml_to_clean_dict(self, node: ET.Element) -> dict[str, Any]:
-        attributes: dict[str, Any] = {}
-        for key, value in node.attrib.items():
-            decoded_value = self._normalize_text(unescape(str(value)))
-            if (
-                decoded_value is not None
-                and decoded_value.strip().startswith("<")
-                and decoded_value.strip().endswith(">")
-            ):
-                nested = self._try_parse_nested_xml(decoded_value)
-                attributes[key] = nested if nested is not None else decoded_value
-            else:
-                attributes[key] = decoded_value
-
-        children = [self._xml_to_clean_dict(child) for child in list(node)]
-        text_value = self._normalize_text(node.text)
-        result: dict[str, Any] = {"tag": node.tag}
-        if attributes:
-            result["attributes"] = attributes
-        if text_value:
-            result["text"] = text_value
-        if children:
-            result["children"] = children
-        return result
+        return xml_to_clean_dict(node)
 
     def _try_parse_nested_xml(self, raw_xml: str) -> dict[str, Any] | None:
-        try:
-            nested_root = ET.fromstring(raw_xml)
-            return self._xml_to_clean_dict(nested_root)
-        except Exception:
-            return None
+        return try_parse_nested_xml(raw_xml)
 
     def _normalize_text(self, value: Any) -> str | None:
-        if value is None:
-            return None
-        normalized = unicodedata.normalize("NFKC", str(value))
-        normalized = self._repair_mojibake_text(normalized)
-        normalized = (
-            normalized.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
-        )
-        normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
-        if not normalized:
-            return None
-        return normalized
+        return normalize_text(value)
 
     def _repair_mojibake_text(self, value: str) -> str:
-        text = str(value)
-        if not text:
-            return text
-        suspicious_markers = ("Ã", "Â", "æ", "ç", "ð", "ã", "œ", "š")
-        if not any(marker in text for marker in suspicious_markers):
-            return text
-        try:
-            repaired = text.encode("latin1").decode("utf-8")
-        except Exception:
-            return text
-        return repaired if repaired.strip() else text
+        return repair_mojibake_text(value)
 
     def _build_battle_replay_rows(
         self, rows: list[ApiFlowEvent]

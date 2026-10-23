@@ -7,14 +7,19 @@ from typing import Any
 from app.services.api_flow_storage import ApiFlowRepository
 from app.services.catalogo import CatalogoResolver
 from app.services.perf_metrics import profile_method
+from app.services.text_cleaning import clean_response_body
 
 logger = logging.getLogger(__name__)
 
 
 class BattleInspectorResolver:
-    def __init__(self, catalogo: CatalogoResolver) -> None:
+    def __init__(
+        self,
+        catalogo: CatalogoResolver,
+        repo: ApiFlowRepository | None = None,
+    ) -> None:
         self.catalogo = catalogo
-        self.repo = ApiFlowRepository()
+        self.repo = repo or ApiFlowRepository()
         self._room_actions_cache: dict[str, dict[str, list[dict[str, str]]]] = {}
 
     @profile_method(threshold_ms=50)
@@ -68,7 +73,7 @@ class BattleInspectorResolver:
         if cache_key in self._room_actions_cache:
             return self._room_actions_cache[cache_key]
 
-        cleaned = ApiFlowRepository._clean_response_body(full_body)
+        cleaned = clean_response_body(full_body)
         if not cleaned:
             self._room_actions_cache[cache_key] = {}
             return self._room_actions_cache[cache_key]
