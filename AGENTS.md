@@ -152,16 +152,6 @@ List values: **JSON array format required** (CSV support removed in v0.4.0).
 
 ---
 
-## Knowledge Graph (graphify)
-
-This project has a knowledge graph at `graphify-out/` (1458 nodes, 3404 edges, 85 communities).
-
-- For any question about this codebase, run `graphify query "<question>"` **before** grepping or reading source files.
-- `graphify path "<A>" "<B>"` for relationships between concepts; `graphify explain "<concept>"` for a focused concept.
-- `graphify-out/wiki/index.md` — run `graphify . --wiki` to generate a crawlable wiki for broad navigation.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-- `graphify-out/` is git-ignored; the committed `graphify-out/graph.json` is rewritten whole on every build (large diffs are expected).
-
 ## MCP Codebase Memory
 
 - Graph project: `C-Users-Administrador-Proyectos-Ruberth-CLI`
