@@ -12,8 +12,8 @@ from app.services.text_cleaning import (
 
 
 def test_normalize_text_repairs_common_mojibake() -> None:
-    assert normalize_text('æ¢¦ç\x86\x8a1') == '梦熊1'
-    assert normalize_text('ç\x9a®ç\x9a®030') == '皮皮030'
+    assert normalize_text("æ¢¦ç\x86\x8a1") == "梦熊1"
+    assert normalize_text("ç\x9a®ç\x9a®030") == "皮皮030"
 
 
 def test_normalize_text_returns_none_for_empty_values() -> None:
