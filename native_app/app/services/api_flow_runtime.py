@@ -166,7 +166,7 @@ class ApiFlowRuntime:
         self._emit_state(force=True)
 
     def _run_startup_sync_worker(self) -> None:
-        repo = ApiFlowRepository()
+        repo = self.repository
         result: dict[str, Any] = {"ok": True}
         try:
             snapshot = repo.get_startup_sync_snapshot()
