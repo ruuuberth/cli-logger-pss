@@ -29,6 +29,9 @@ def _build_repo(monkeypatch):
     Base.metadata.create_all(test_engine)
     monkeypatch.setattr(storage_module, "SessionLocal", TestingSessionLocal)
     monkeypatch.setattr(storage_module, "engine", test_engine)
+    import app.services.api_flow_h2h as h2h_module
+
+    monkeypatch.setattr(h2h_module, "SessionLocal", TestingSessionLocal)
     return storage_module.ApiFlowRepository(), TestingSessionLocal
 
 
