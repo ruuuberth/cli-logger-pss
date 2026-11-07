@@ -188,7 +188,6 @@ def test_startup_sync_runs_until_snapshot_limit(monkeypatch) -> None:
     capture = _CaptureManager()
     runtime = ApiFlowRuntime(repository=repo, capture_manager=capture)
     monkeypatch.setattr("app.services.api_flow_runtime.Thread", _ImmediateThread)
-    monkeypatch.setattr("app.services.api_flow_runtime.ApiFlowRepository", lambda: repo)
 
     payloads: list[dict] = []
     runtime.subscribe_startup_sync_finished(payloads.append)

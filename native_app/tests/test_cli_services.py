@@ -176,3 +176,18 @@ def test_room_inspect_missing_returns_error() -> None:
     service = RoomCliService(list_service=_FakeListService(_DETAIL))
     detail = service.inspect_room(999, 1, "attacker")
     assert "error" in detail
+
+
+def test_room_inspect_reuses_list_service_repository() -> None:
+    """RoomCliService must pass its list service's repository to the resolver.
+
+    One CLI view reads through one repository object, not two.
+    """
+    from app.services.api_flow_list_service import ApiFlowListService
+    from app.services.battle_inspector_resolver import BattleInspectorResolver
+
+    shared = ApiFlowListService()
+    service = RoomCliService(list_service=shared)
+    battle_resolver, _room_resolver = service._resolvers()
+    assert isinstance(battle_resolver, BattleInspectorResolver)
+    assert battle_resolver.repo is shared.repository

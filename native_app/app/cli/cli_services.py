@@ -214,7 +214,9 @@ class RoomCliService:
 
         return (
             BattleInspectorResolver(
-                self.catalogo or CatalogoResolver(CatalogoResolver.default_base_dir())
+                self.catalogo or CatalogoResolver(CatalogoResolver.default_base_dir()),
+                # fakes in tests may not expose .repository -> resolver falls back to its own
+                repo=getattr(self.list_service, "repository", None),
             ),
             RoomItemMappingResolver(catalogo=self.catalogo, logger=self.logger),
         )
