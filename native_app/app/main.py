@@ -126,6 +126,50 @@ def _run_daemon_status() -> int:
     return daemon.status()
 
 
+def _run_tui() -> int:
+    """Run the interactive TUI (issue #47) with the same bootstrap as the CLI."""
+    db_path = configure_environment()
+    from app.core.logging_setup import configure_logging
+
+    _configure_streams()
+    configure_logging(db_path.parent)
+    import logging
+
+    from app.models.database import (
+        Base,
+        engine,
+        ensure_sqlite_indexes,
+        ensure_sqlite_schema,
+        log_schema_health,
+    )
+    from app.services.api_flow_runtime import ApiFlowRuntime
+
+    Base.metadata.create_all(bind=engine)
+    ensure_sqlite_schema()
+    ensure_sqlite_indexes()
+    log_schema_health()
+
+    runtime = ApiFlowRuntime()
+    try:
+        runtime.start_capture()
+        logging.getLogger(__name__).info("event=capture_started status=tui_auto_start")
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "event=capture_auto_start_failed error=%s message=TUI_will_continue_without_capture",
+            e,
+        )
+
+    from app.tui import run_tui
+
+    try:
+        run_tui(capture_runtime=runtime)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        runtime.close()
+    return 0
+
+
 def main() -> int:
     # Check for daemon subcommands first
     if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
@@ -144,6 +188,10 @@ def main() -> int:
         else:
             print("Uso: pss-native --daemon [start|stop|status]")
             return 1
+
+    # Interactive TUI mode (issue #47): same env/DB bootstrap, Textual UI.
+    if len(sys.argv) > 1 and sys.argv[1] == "--tui":
+        return _run_tui()
 
     # Normal CLI mode
     db_path = configure_environment()

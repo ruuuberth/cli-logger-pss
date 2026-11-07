@@ -28,6 +28,17 @@ cp ../.env.example .env
 pss-native
 ```
 
+## TUI interactiva (opcional)
+
+```bash
+pss-native --tui
+```
+
+Interfaz Textual con Dashboard (estado de captura en vivo), explorador de
+batallas paginado con búsqueda e inspector de detalle (naves/salas/tripulación).
+
+Atajos: `n`/`p` paginar · `enter` detalle · `/`-campo de búsqueda + `enter` filtrar · `r` recargar · `s` captura on/off · `q` salir.
+
 ## Configuracion minima recomendada (opcional)
 
 La app funciona sin `.env` usando defaults.  
