@@ -21,6 +21,9 @@ cd native_app && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 # Run app
 .venv/bin/pss-native
 
+# Interactive TUI (Textual dashboard + battle explorer)
+.venv/bin/pss-native --tui
+
 # Daemon mode (background capture only)
 .venv/bin/pss-native --daemon start|stop|status
 
@@ -45,6 +48,9 @@ cd native_app && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 
 # Run app
 .venv/Scripts/pss-native
+
+# Interactive TUI (Textual dashboard + battle explorer)
+.venv/Scripts/pss-native.exe --tui
 
 # Daemon mode (background capture only)
 .venv/Scripts/pss-native.exe --daemon start|stop|status
@@ -80,6 +86,9 @@ native_app/
 │   │   ├── cli_manager.py   # Menu + 9 command handlers
 │   │   ├── concrete_commands.py  # QueryEvents, GenerateReport, GenerateH2HReport, InspectChar, InspectRoom, InspectBattle, CaptureTraffic, SystemMonitor, Settings
 │   │   └── cli_services.py  # Service wrappers over services
+│   ├── tui/                 # Textual TUI (`pss-native --tui`)
+│   │   ├── app.py           # Dashboard + battle explorer (workers, n/p paging)
+│   │   └── screens.py       # Battle detail screen (ships/rooms/crew)
 │   ├── core/
 │   │   ├── config.py        # Pydantic Settings (env + .env)
 │   │   └── build_info.py    # Version/git SHA from embedded metadata
