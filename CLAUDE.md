@@ -45,6 +45,9 @@ python3 -m venv .venv
 # Direct module (alternative from README)
 python -m app.main
 
+# Interactive TUI (Textual): dashboard, battle explorer, detail inspector
+.venv/bin/pss-native --tui
+
 # Daemon mode (background capture only)
 .venv/bin/pss-native --daemon start|stop|status
 ```
@@ -96,6 +99,8 @@ Capture is scoped by `API_FLOW_CAPTURE_HOST_ALLOWLIST` / `PATH_ALLOWLIST` (defau
 | `app/cli/cli_manager.py` | Rich menu, 9 commands |
 | `app/cli/concrete_commands.py` | Command implementations (query, reports, H2H, inspectors, capture, monitor, settings) |
 | `app/cli/cli_services.py` | Service wrappers over list service + catalog resolvers for the CLI |
+| `app/tui/app.py` | Textual app for `--tui`: dashboard (live capture state), paginated/searchable battle explorer; slow work in workers |
+| `app/tui/screens.py` | Battle detail screen (ships / rooms / crew), loaded inside the app |
 | `app/reporting/` | Excel/CSV/JSON report generators + templates |
 | `app/daemon_manager.py` | Background capture daemon |
 
