@@ -18,6 +18,7 @@ from textual.widgets import (
     DataTable,
     Footer,
     Header,
+    Input,
     Label,
     TabbedContent,
     TabPane,
@@ -40,6 +41,8 @@ class PssTuiApp(App):
         ("r", "reload", "Recargar"),
         ("n", "next_page", "Pág. siguiente"),
         ("p", "prev_page", "Pág. anterior"),
+        ("s", "toggle_capture", "Captura on/off"),
+        ("slash", "focus_search", "Buscar"),
     ]
 
     page: reactive[int] = reactive(0)
@@ -70,6 +73,10 @@ class PssTuiApp(App):
                     Label("", id="lbl-help"),
                 )
             with TabPane("Batallas", id="tab-battles"):
+                yield Input(
+                    placeholder="Buscar jugador o battle id y pulsar enter…",
+                    id="input-search",
+                )
                 yield DataTable(id="table-battles", cursor_type="row")
         yield Footer()
 
@@ -80,8 +87,10 @@ class PssTuiApp(App):
         )
         table.focus()
         self.query_one("#lbl-help", Label).update(
-            "q salir · n/p páginas · r recargar · enter detalle · (búsqueda y dashboard en vivo: siguientes PRs)"
+            "q salir · n/p páginas · r recargar · enter detalle · s captura · / buscar"
         )
+        self.set_interval(1.0, self._render_dashboard)
+        self._render_dashboard()
         self.action_reload()
 
     # -- data loading ------------------------------------------------------
@@ -125,6 +134,8 @@ class PssTuiApp(App):
         if page_dto.rows:
             status.update("")
             table.move_cursor(row=0)
+        elif self.search:
+            status.update(f"Sin resultados para '{self.search}'")
         else:
             status.update("Sin batallas capturadas todavía · r recargar")
 
@@ -134,7 +145,66 @@ class PssTuiApp(App):
         self.query_one("#lbl-status", Label).update(f"Error: {message}")
         self.notify(message, severity="error", title="Error")
 
+    def _render_dashboard(self) -> None:
+        """Refresh the dashboard labels from the runtime snapshot (UI thread)."""
+        if not self.is_mounted:
+            return
+        if self.runtime is None:
+            self.query_one("#lbl-capture", Label).update(
+                "Captura: no gestionada por esta sesión"
+            )
+            self.query_one("#lbl-events", Label).update(
+                f"Total en BD: {self.total_rows}"
+            )
+            return
+        state = self.runtime.snapshot_state()
+        self.query_one("#lbl-capture", Label).update(
+            f"Captura: {'ACTIVA' if state.capture_running else 'DETENIDA'}"
+            f"  ·  {state.capture_status or 'sin estado'}"
+            f"  ·  {state.session_host}:{state.session_port or '-'}"
+        )
+        sync = ""
+        if state.startup_sync_running:
+            sync = f"  ·  sync: {state.startup_sync_status or 'en curso'}"
+        self.query_one("#lbl-events", Label).update(
+            f"Eventos en vivo: {state.live_event_count}"
+            f"  ·  pendientes: {state.pending_count}"
+            f"  ·  perdidos: {state.dropped_pending_events}"
+            f"  ·  total en BD: {self.total_rows}{sync}"
+        )
+
+    def action_toggle_capture(self) -> None:
+        if self.runtime is None:
+            self.notify(
+                "La captura no está disponible en esta sesión", severity="warning"
+            )
+            return
+        self._toggle_capture_worker()
+
+    @work(thread=True, exclusive=True, group="capture")
+    def _toggle_capture_worker(self) -> None:
+        """Toggle mitmproxy off the UI thread, then refresh the dashboard."""
+        runtime = self.runtime
+        if runtime is None:
+            return
+        try:
+            runtime.toggle_capture()
+        except Exception as exc:
+            self.call_from_thread(self._show_error, f"captura: {exc}")
+        self.call_from_thread(self._render_dashboard)
+
     # -- paging --------------------------------------------------------------
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "input-search":
+            return
+        self.search = event.value.strip()
+        self.page = 0
+        self.action_reload()
+        self.query_one("#table-battles", DataTable).focus()
+
+    def action_focus_search(self) -> None:
+        self.query_one("#input-search", Input).focus()
 
     def _can_prev_page(self) -> bool:
         return self.page > 0
