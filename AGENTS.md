@@ -12,11 +12,15 @@
 # Setup
 cd native_app && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
-# Run tests (~4s)
+# Run tests (~23s locally: 246 passed, 2 skipped)
 .venv/bin/python -m pytest
 
 # Single test
 .venv/bin/python -m pytest tests/test_api_flow_capture.py
+
+# Lint (CI enforces both, from native_app/)
+.venv/bin/python -m ruff check app/ tests/
+.venv/bin/python -m ruff format --check app/ tests/
 
 # Run app
 .venv/bin/pss-native
@@ -37,11 +41,15 @@ cp ../.env.example .env   # .env lives INSIDE native_app/
 # Setup
 cd native_app && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 
-# Run tests (~4s)
+# Run tests (~23s locally: 246 passed, 2 skipped)
 .venv/Scripts/python.exe -m pytest
 
 # Single test
 .venv/Scripts/python.exe -m pytest tests/test_api_flow_capture.py
+
+# Lint
+.venv/Scripts/python.exe -m ruff check app/ tests/
+.venv/Scripts/python.exe -m ruff format --check app/ tests/
 
 # Run app
 .venv/Scripts/pss-native
@@ -82,8 +90,13 @@ native_app/
 │   │   └── cli_services.py  # Service wrappers over services
 │   ├── core/
 │   │   ├── config.py        # Pydantic Settings (env + .env)
+│   │   ├── logging_setup.py # APP_LOG_PATH / APP_LOG_LEVEL, rotating file log
 │   │   └── build_info.py    # Version/git SHA from embedded metadata
-│   ├── models/pss_models.py # All SQLAlchemy tables
+│   ├── models/
+│   │   ├── pss_models.py    # All SQLAlchemy tables
+│   │   └── database.py      # Engine/session, ensure_sqlite_schema, indexes
+│   ├── dto/                 # API flow DTOs
+│   ├── daemon_manager.py    # Background capture daemon (--daemon)
 │   ├── services/            # Capture, storage, list, inspectors, catalogs
 │   └── reporting/           # Excel/CSV/JSON generators
 ├── scripts/build.sh|.ps1    # PyInstaller one-file → portable ZIP
@@ -97,16 +110,20 @@ native_app/
 
 | Variable | Purpose |
 |----------|---------|
+| `DATABASE_URL` | SQLite URL; default `sqlite:///./pss_logger.db` |
 | `API_FLOW_ENABLED` | Enable capture (default true) |
 | `MITMPROXY_BINARY` | `mitmdump` or full path |
 | `MITMPROXY_LISTEN_HOST/PORT` | Proxy bind (default 127.0.0.1:8081) |
+| `MITMPROXY_MODE` | `regular` (default) or `transparent` (on-device iptables capture, #46); any other value fails at startup (#48) |
 | `API_FLOW_CAPTURE_HOST_ALLOWLIST` | JSON array, e.g. `["api.pixelstarships.com"]` |
 | `API_FLOW_CAPTURE_PATH_ALLOWLIST` | JSON array, e.g. `["/BattleService/GetBattle3"]` |
 | `API_FLOW_IGNORE_HOSTS` | JSON array of hosts to skip |
 | `API_FLOW_REPLAYS_PER_PAIR` | Normalized replays kept per player pair (default 1 = newest only; higher = fleet-breakdown usage history) |
 | `CLI_FORCE_ASCII` | Force ASCII output (Windows legacy) |
 
-List values: **JSON array format required** (CSV support removed in v0.4.0).
+List values: **JSON array format required** (CSV support removed in v0.4.0). Empty list = `FIELD=[]`; a bare `FIELD=` is invalid and fails at startup (#16).
+
+Logging (OS env vars, read by `core/logging_setup.py`): `APP_LOG_PATH` overrides the log file (default `~/.pss_logger/pss_logger.log`); `APP_LOG_LEVEL` sets level (default `INFO`).
 
 ---
 
@@ -114,7 +131,7 @@ List values: **JSON array format required** (CSV support removed in v0.4.0).
 
 | Trigger | Workflow | Notes |
 |---------|----------|-------|
-| PR → `develop` | `native-tests.yml` | Pytest suite (Linux, lightweight) |
+| PR/push → `develop` | `native-tests.yml` | Ruff lint (check + format) + pytest on Linux AND Windows |
 | PR → `main` | `native-build.yml` | Linux + Windows build + pytest (capture/build_info) |
 | PR/push `develop`, `main` | `secret-scan.yml` | Gitleaks |
 | Tag `v*` | `release.yml` | Stable release: portable ZIPs + SHA256SUMS |
@@ -138,7 +155,8 @@ List values: **JSON array format required** (CSV support removed in v0.4.0).
 
 - `pythonpath = ["."]` in pyproject.toml → run from `native_app/`
 - Tests use `tmp_path` fixtures, mock `ApiFlowRepository`
-- Windows-specific mitmproxy tests marked `@pytest.mark.skipif(sys.platform != "win32")`
+- Windows-specific mitmproxy tests marked `@pytest.mark.skipif(sys.platform != "win32")`; CI has a dedicated `pytest-windows` job so they actually run (issue #20)
+- Before a PR, run both ruff commands above — CI enforces `ruff check` and `ruff format --check` on `app/ tests/` for both OSes
 
 ---
 
