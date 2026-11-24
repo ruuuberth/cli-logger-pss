@@ -1,17 +1,51 @@
 """Tests for the TUI entry point and app shell (issue #47).
 
 Foundation slice: the app mounts, the services are injectable, and
-`pss-native --tui` dispatches. Data rendering (battle explorer, detail
-screen, live capture state) is added in the follow-up PRs.
+`pss-native --tui` dispatches. Explorer rendering, the detail screen and
+the live capture state are added in the follow-up PRs.
 """
 
 from __future__ import annotations
 
 import asyncio
 
-from app.dto.api_flow_dto import ApiFlowRowDTO  # noqa: F401  (import sanity)
+from app.dto.api_flow_dto import ApiFlowPageDTO, ApiFlowRowDTO
 from app.tui import run_tui
-from app.tui.app import PssTuiApp
+from app.tui.app import PAGE_SIZE, PssTuiApp
+
+
+def _row() -> ApiFlowRowDTO:
+    return ApiFlowRowDTO(
+        battle_replay_id=1,
+        api_flow_event_id=None,
+        captured_at_label="2026-01-01 00:00:00",
+        attacker_label="(100)A",
+        defender_label="(90)D",
+        outcome_label="win",
+        loot_label="M 1/0 | G 2/0",
+        trophy_delta_label="10/0",
+        battle_id_label="B1",
+        h2h_label="",
+        h2h_tooltip="",
+    )
+
+
+class _FakeService:
+    """Stands in for ApiFlowCliService at the TUI boundary."""
+
+    def __init__(self, total: int = 3) -> None:
+        self._total = total
+        self.calls: list[dict] = []
+
+    def query_events(self, search="", page=0, page_size=20, **kwargs):
+        self.calls.append({"search": search, "page": page, "page_size": page_size})
+        rows = [_row()] if self._total else []
+        return ApiFlowPageDTO(total=self._total, page=page, max_page=0, rows=rows)
+
+
+def _label_text(label) -> str:
+    content = label.content
+    return getattr(content, "plain", str(content))
 
 
 class TestPssTuiAppWiring:
@@ -27,15 +61,40 @@ class TestPssTuiAppWiring:
         assert app.service is service
 
 
-class TestTuiShellMounts:
-    def test_mount_renders_dashboard_labels(self) -> None:
-        from textual.widgets import Label
+class TestTuiExplorer:
+    def test_mount_renders_rows_and_labels(self) -> None:
+        from textual.widgets import DataTable
+
+        service = _FakeService(total=1)
 
         async def scenario() -> None:
-            app = PssTuiApp()
-            async with app.run_test():
-                for label_id in ("#lbl-capture", "#lbl-events", "#lbl-status"):
-                    assert app.query_one(label_id, Label) is not None
+            app = PssTuiApp(cli_service=service)
+            async with app.run_test() as pilot:
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                table = app.query_one("#table-battles", DataTable)
+                assert table.row_count == 1
+                assert service.calls[0] == {
+                    "search": "",
+                    "page": 0,
+                    "page_size": PAGE_SIZE,
+                }
+
+        asyncio.run(scenario())
+
+    def test_next_page_binding_queries_page_1(self) -> None:
+        service = _FakeService(total=PAGE_SIZE * 2)
+
+        async def scenario() -> None:
+            app = PssTuiApp(cli_service=service)
+            async with app.run_test() as pilot:
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                await pilot.press("n")
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                assert app.page == 1
+                assert service.calls[-1]["page"] == 1
 
         asyncio.run(scenario())
 
