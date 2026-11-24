@@ -17,7 +17,7 @@ $metadataJson = "{`"version`":`"$buildVersion`",`"git_sha`":`"$buildSha`",`"buil
 Set-Content -Path $metadataFile -Value $metadataJson -Encoding UTF8
 
 try {
-  python -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$RootDir" --collect-data app.services --add-data "$RootDir/app/services/mitm_api_flow_addon.py;app/services" --add-data "$metadataFile;app/resources" run.py
+  python -m PyInstaller --name pss-logger-native --windowed --onefile --paths "$RootDir" --collect-data app.services --collect-all textual --add-data "$RootDir/app/services/mitm_api_flow_addon.py;app/services" --add-data "$metadataFile;app/resources" run.py
 }
 finally {
   if (Test-Path $metadataFile) {
