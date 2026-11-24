@@ -7,6 +7,10 @@ name: Native Tests
 
 on:
   pull_request:
+    # `edited` lets a base-branch retarget (stacked PRs) re-trigger CI; the
+    # default types alone (opened/synchronize/reopened) skip it. Jobs guard
+    # on `changes.base` below so title/body edits don't waste a run.
+    types: [opened, synchronize, reopened, edited]
     branches:
       - develop
   push:
@@ -26,6 +30,9 @@ jobs:
     name: Pytest (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # On pull_request `edited`, only run when the base branch changed
+    # (retarget); skip title/body/label edits. Non-edited events always run.
+    if: github.event.action != 'edited' || github.event.changes.base != null
 
     steps:
       - name: Checkout
@@ -69,6 +76,9 @@ jobs:
     name: Pytest (Windows)
     runs-on: windows-latest
     timeout-minutes: 15
+    # On pull_request `edited`, only run when the base branch changed
+    # (retarget); skip title/body/label edits. Non-edited events always run.
+    if: github.event.action != 'edited' || github.event.changes.base != null
 
     steps:
       - name: Checkout
