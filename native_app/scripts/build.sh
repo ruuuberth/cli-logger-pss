@@ -22,6 +22,7 @@ python3 -m PyInstaller \
   --onefile \
   --paths "$ROOT_DIR" \
   --collect-data app.services \
+  --collect-all textual \
   --add-data "$ROOT_DIR/app/services/mitm_api_flow_addon.py:app/services" \
   --add-data "$BUILD_METADATA_FILE:app/resources" \
   run.py

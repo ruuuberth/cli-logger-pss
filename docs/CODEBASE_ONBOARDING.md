@@ -6,6 +6,7 @@
 - Menú CLI (Rich): `native_app/app/cli/cli_manager.py` (9 comandos)
 - Comandos concretos: `native_app/app/cli/concrete_commands.py`
 - Wrappers de servicios para la CLI: `native_app/app/cli/cli_services.py`
+- TUI Textual (`--tui`): `native_app/app/tui/app.py` (dashboard + explorador) y `native_app/app/tui/screens.py` (detalle). Solo renderiza: reutiliza `cli_services` y `ApiFlowRuntime`, sin lógica de negocio propia.
 - Captura runtime: `native_app/app/services/api_flow_capture.py`
 - Coordinador runtime del flujo: `native_app/app/services/api_flow_runtime.py`
 - Daemon de captura en background: `native_app/app/daemon_manager.py`
@@ -85,6 +86,7 @@ cd native_app
 .venv/bin/python -m pytest -q          # suite completa (~4s)
 python -m app.main                     # arranca la CLI
 pss-native                             # entry point instalado
+pss-native --tui                       # TUI interactiva (Textual)
 pss-native --daemon start|stop|status  # daemon de captura
 python scripts/migrate_battle_replays_normalized.py
 ```
