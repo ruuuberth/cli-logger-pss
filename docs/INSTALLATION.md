@@ -25,6 +25,8 @@ source .venv/bin/activate
 pss-native
 ```
 
+Interfaz TUI opcional (Textual): `pss-native --tui` (misma base de datos y captura).
+
 ## Proxy del juego
 
 Configura el cliente/juego con proxy local:
