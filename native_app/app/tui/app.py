@@ -80,7 +80,7 @@ class PssTuiApp(App):
         )
         table.focus()
         self.query_one("#lbl-help", Label).update(
-            "q salir · n/p páginas · r recargar · (detalle y búsqueda: siguientes PRs)"
+            "q salir · n/p páginas · r recargar · enter detalle · (búsqueda y dashboard en vivo: siguientes PRs)"
         )
         self.action_reload()
 
@@ -153,6 +153,24 @@ class PssTuiApp(App):
         if self._can_next_page():
             self.page += 1
             self.action_reload()
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.data_table.id != "table-battles":
+            return
+        raw_key = event.row_key.value
+        if not raw_key:
+            return
+        try:
+            battle_replay_id = int(raw_key)
+        except ValueError:
+            return
+        from app.tui.screens import BattleDetailScreen
+
+        self.push_screen(
+            BattleDetailScreen(
+                battle_replay_id, self.service, self.characters, self.rooms
+            )
+        )
 
 
 def run_tui(capture_runtime: ApiFlowRuntime | None = None) -> None:

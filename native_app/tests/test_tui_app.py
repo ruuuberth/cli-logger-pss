@@ -33,14 +33,34 @@ def _row() -> ApiFlowRowDTO:
 class _FakeService:
     """Stands in for ApiFlowCliService at the TUI boundary."""
 
-    def __init__(self, total: int = 3) -> None:
+    def __init__(self, total: int = 3, detail: dict | None = None) -> None:
         self._total = total
         self.calls: list[dict] = []
+        self.detail = detail
 
     def query_events(self, search="", page=0, page_size=20, **kwargs):
         self.calls.append({"search": search, "page": page, "page_size": page_size})
         rows = [_row()] if self._total else []
         return ApiFlowPageDTO(total=self._total, page=page, max_page=0, rows=rows)
+
+    def get_battle_detail(self, battle_replay_id: int) -> dict | None:
+        return self.detail
+
+
+class _FakeInspectors:
+    def list_rooms(self, battle_replay_id: int) -> list[dict]:
+        return [
+            {
+                "id": 9,
+                "side": "attacker",
+                "design_name": "Bridge",
+                "row": 1,
+                "column": 2,
+            }
+        ]
+
+    def list_characters(self, battle_replay_id: int) -> list[dict]:
+        return [{"id": 7, "side": "attacker", "name": "Crew", "level": 5}]
 
 
 def _label_text(label) -> str:
@@ -95,6 +115,52 @@ class TestTuiExplorer:
                 await pilot.pause()
                 assert app.page == 1
                 assert service.calls[-1]["page"] == 1
+
+        asyncio.run(scenario())
+
+
+class TestBattleDetailScreen:
+    def test_enter_opens_detail_and_escape_dismisses(self) -> None:
+        from textual.widgets import DataTable
+
+        detail = {
+            "replay": {
+                "battle_id": "B1",
+                "captured_at": "2026-01-01",
+                "outcome_type": "win",
+            },
+            "ships": [{"id": 1, "side": "attacker", "ship_design_name": "Falcon"}],
+            "rooms": [{"id": 2, "side": "attacker", "room_design_name": "Bridge"}],
+            "characters": [{"id": 3, "side": "attacker", "character_name": "Crew"}],
+        }
+        service = _FakeService(total=1, detail=detail)
+
+        async def scenario() -> None:
+            app = PssTuiApp(
+                cli_service=service,
+                character_service=_FakeInspectors(),
+                room_service=_FakeInspectors(),
+            )
+            async with app.run_test() as pilot:
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause()
+
+                from app.tui.screens import BattleDetailScreen
+
+                screen = app.screen
+                assert isinstance(screen, BattleDetailScreen)
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                assert screen.query_one("#table-ships", DataTable).row_count == 1
+                assert screen.query_one("#table-rooms", DataTable).row_count == 1
+                assert screen.query_one("#table-crew", DataTable).row_count == 1
+                assert "B1" in _label_text(screen.query_one("#lbl-summary"))
+
+                await pilot.press("escape")
+                await pilot.pause()
+                assert not isinstance(app.screen, BattleDetailScreen)
 
         asyncio.run(scenario())
 
